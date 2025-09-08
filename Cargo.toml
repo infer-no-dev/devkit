@@ -1,22 +1,24 @@
 [package]
-name = "agentic-dev-env"
+name = "devkit"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-description = "An agentic development environment optimized for writing code by prompt on large, existing codebases"
+authors = ["Infer No Dev <contact@infer-no-dev.com>"]
+description = "AI-powered development toolkit - just describe what you want, no manual coding needed"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/agentic-dev-env"
-keywords = ["ai", "agent", "development", "code-generation", "rust"]
+repository = "https://github.com/infer-no-dev/devkit"
+keywords = ["ai", "agent", "development", "code-generation", "cli"]
 categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
+tokio-stream = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 clap = { version = "4.0", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-requwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 notify = "6.0"
 crossterm = "0.27"
 ratatui = "0.28"
@@ -34,3 +36,20 @@ thiserror = "1.0"
 async-trait = "0.1"
 uuid = { version = "1.0", features = ["v4"] }
 dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+md5 = "0.7"
+indicatif = "0.17"
+atty = "0.2"
+
+# Main binary
+[[bin]]
+name = "devkit"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3.0"
+env_logger = "0.11"
+tracing-test = "0.2"
+num_cpus = "1.0"
+rand = { version = "0.8", features = ["std_rng"] }
+futures = "0.3"

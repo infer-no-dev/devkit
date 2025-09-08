@@ -1,0 +1,56 @@
+{
+  "session_id": "ec99288f-e93f-48ea-a303-cd59e751bbce",
+  "created_at": {
+    "secs_since_epoch": 1757260737,
+    "nanos_since_epoch": 653393609
+  },
+  "project_path": ".",
+  "history": [
+    {
+      "timestamp": {
+        "secs_since_epoch": 1757263762,
+        "nanos_since_epoch": 333604165
+      },
+      "role": "User",
+      "content": "create Hello World",
+      "result": null,
+      "entry_type": "Generate"
+    },
+    {
+      "timestamp": {
+        "secs_since_epoch": 1757263791,
+        "nanos_since_epoch": 943624615
+      },
+      "role": "Assistant",
+      "content": "Agent-generated code successfully",
+      "result": null,
+      "entry_type": "Generate"
+    }
+  ],
+  "artifacts": {
+    "artifact_1": {
+      "id": "artifact_1",
+      "name": "create_hello_world",
+      "language": "rust",
+      "code": "// hello.rs\n\n/// A simple program to print \"Hello, world!\" to the console.\n///\n/// This example demonstrates a basic Rust program structure,\n/// including main(), entry point of the program, and println!.\n\nfn main() {\n    /// Print \"Hello, world!\" to the console.\n    println!(\"Hello, world!\");\n}",
+      "file_path": null,
+      "created_at": {
+        "secs_since_epoch": 1757263791,
+        "nanos_since_epoch": 943608610
+      },
+      "modified_at": {
+        "secs_since_epoch": 1757263791,
+        "nanos_since_epoch": 943609735
+      },
+      "confidence": 0.8999999999999999,
+      "versions": []
+    }
+  },
+  "config": {
+    "auto_save": false,
+    "default_language": null,
+    "show_confidence": true,
+    "verbose": false,
+    "max_history": 100
+  }
+}

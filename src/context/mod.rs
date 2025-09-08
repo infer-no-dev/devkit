@@ -7,10 +7,13 @@ pub mod analyzer;
 pub mod indexer;
 pub mod repository;
 pub mod symbols;
+pub mod semantic;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+
+use semantic::{SemanticAnalyzer, SemanticAnalysis};
 
 /// Complete context information about a codebase
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +23,7 @@ pub struct CodebaseContext {
     pub symbols: symbols::SymbolIndex,
     pub dependencies: Vec<Dependency>,
     pub repository_info: Option<repository::RepositoryInfo>,
+    pub semantic_analysis: Option<SemanticAnalysis>,
     pub metadata: ContextMetadata,
 }
 
@@ -48,7 +52,7 @@ pub struct FileRelationship {
 }
 
 /// Types of relationships between files
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum RelationshipType {
     Imports,
     Extends,
@@ -93,6 +97,37 @@ pub struct ContextMetadata {
     pub languages: HashMap<String, usize>,
     pub analysis_duration_ms: u64,
     pub indexed_symbols: usize,
+    pub semantic_patterns_found: usize,
+    pub semantic_relationships: usize,
+}
+
+impl Default for ContextMetadata {
+    fn default() -> Self {
+        Self {
+            analysis_timestamp: std::time::SystemTime::UNIX_EPOCH,
+            total_files: 0,
+            total_lines: 0,
+            languages: HashMap::new(),
+            analysis_duration_ms: 0,
+            indexed_symbols: 0,
+            semantic_patterns_found: 0,
+            semantic_relationships: 0,
+        }
+    }
+}
+
+impl Default for CodebaseContext {
+    fn default() -> Self {
+        Self {
+            root_path: PathBuf::from("."),
+            files: Vec::new(),
+            symbols: symbols::SymbolIndex::new(),
+            dependencies: Vec::new(),
+            repository_info: None,
+            semantic_analysis: None,
+            metadata: ContextMetadata::default(),
+        }
+    }
 }
 
 /// Context manager for analyzing and maintaining codebase context
@@ -101,7 +136,9 @@ pub struct ContextManager {
     analyzer: analyzer::CodebaseAnalyzer,
     indexer: indexer::SymbolIndexer,
     repository: repository::RepositoryAnalyzer,
+    semantic_analyzer: SemanticAnalyzer,
     cache: HashMap<PathBuf, CodebaseContext>,
+    semantic_cache: HashMap<PathBuf, SemanticAnalysis>,
 }
 
 /// Configuration for context analysis
@@ -119,22 +156,22 @@ pub struct AnalysisConfig {
 /// Errors that can occur during context analysis
 #[derive(Debug, thiserror::Error)]
 pub enum ContextError {
-    #[error(\"Path not found: {0}\")]
+    #[error("Path not found: {0}")]
     PathNotFound(PathBuf),
     
-    #[error(\"Permission denied: {0}\")]
+    #[error("Permission denied: {0}")]
     PermissionDenied(String),
     
-    #[error(\"Analysis failed: {0}\")]
+    #[error("Analysis failed: {0}")]
     AnalysisFailed(String),
     
-    #[error(\"Indexing failed: {0}\")]
+    #[error("Indexing failed: {0}")]
     IndexingFailed(String),
     
-    #[error(\"Repository analysis failed: {0}\")]
+    #[error("Repository analysis failed: {0}")]
     RepositoryAnalysisFailed(String),
     
-    #[error(\"Cache error: {0}\")]
+    #[error("Cache error: {0}")]
     CacheError(String),
 }
 
@@ -145,7 +182,9 @@ impl ContextManager {
             analyzer: analyzer::CodebaseAnalyzer::new()?,
             indexer: indexer::SymbolIndexer::new(),
             repository: repository::RepositoryAnalyzer::new()?,
+            semantic_analyzer: SemanticAnalyzer::new(),
             cache: HashMap::new(),
+            semantic_cache: HashMap::new(),
         })
     }
     
@@ -180,6 +219,41 @@ impl ContextManager {
         // Get repository information if available
         let repository_info = self.repository.analyze(&path).await.ok();
         
+        // Perform semantic analysis if deep analysis is enabled
+        let semantic_analysis = if config.deep_analysis {
+            // Create a preliminary context for semantic analysis
+            let temp_context = CodebaseContext {
+                root_path: path.clone(),
+                files: files.clone(),
+                symbols: symbols.clone(),
+                dependencies: dependencies.clone(),
+                repository_info: repository_info.clone(),
+                semantic_analysis: None,
+                metadata: ContextMetadata::default(), // Temporary metadata
+            };
+            
+            // Check semantic cache first
+            if let Some(cached_semantic) = self.semantic_cache.get(&path) {
+                Some(cached_semantic.clone())
+            } else {
+                match self.semantic_analyzer.analyze(&temp_context).await {
+                    Ok(analysis) => {
+                        // Cache semantic analysis
+                        if config.cache_results {
+                            self.semantic_cache.insert(path.clone(), analysis.clone());
+                        }
+                        Some(analysis)
+                    }
+                    Err(err) => {
+                        eprintln!("Warning: Semantic analysis failed: {}", err);
+                        None
+                    }
+                }
+            }
+        } else {
+            None
+        };
+        
         let analysis_duration = start_time.elapsed();
         
         // Build metadata
@@ -190,6 +264,8 @@ impl ContextManager {
             languages: Self::count_languages(&files),
             analysis_duration_ms: analysis_duration.as_millis() as u64,
             indexed_symbols: symbols.total_symbols(),
+            semantic_patterns_found: semantic_analysis.as_ref().map(|s| s.patterns.len()).unwrap_or(0),
+            semantic_relationships: semantic_analysis.as_ref().map(|s| s.relationships.len()).unwrap_or(0),
         };
         
         let context = CodebaseContext {
@@ -198,6 +274,7 @@ impl ContextManager {
             symbols,
             dependencies,
             repository_info,
+            semantic_analysis,
             metadata,
         };
         
@@ -293,22 +370,88 @@ impl ContextManager {
         }
         language_counts
     }
+    
+    /// Get semantic analysis for a codebase if available
+    pub fn get_semantic_analysis<'a>(&self, context: &'a CodebaseContext) -> Option<&'a SemanticAnalysis> {
+        context.semantic_analysis.as_ref()
+    }
+    
+    /// Perform standalone semantic analysis on existing context
+    pub async fn analyze_semantics(
+        &mut self,
+        context: &CodebaseContext,
+    ) -> Result<SemanticAnalysis, ContextError> {
+        self.semantic_analyzer.analyze(context).await
+            .map_err(|e| ContextError::AnalysisFailed(format!("Semantic analysis failed: {}", e)))
+    }
+    
+    /// Get context suggestions based on semantic analysis
+    pub fn get_context_suggestions(
+        &self,
+        context: &CodebaseContext,
+        query: &str,
+    ) -> Vec<semantic::ContextSuggestion> {
+        if let Some(semantic_analysis) = &context.semantic_analysis {
+            // Simple keyword matching for suggestions - could be enhanced with AI
+            semantic_analysis.context_suggestions.iter()
+                .filter(|suggestion| {
+                    suggestion.description.to_lowercase().contains(&query.to_lowercase()) ||
+                    suggestion.rationale.to_lowercase().contains(&query.to_lowercase())
+                })
+                .cloned()
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+    
+    /// Clear semantic cache
+    pub fn clear_semantic_cache(&mut self) {
+        self.semantic_cache.clear();
+    }
 }
 
 impl Default for AnalysisConfig {
     fn default() -> Self {
         Self {
-            include_patterns: vec![\"**/*\".to_string()],
+            include_patterns: vec!["**/*".to_string()],
             exclude_patterns: vec![
-                \"**/target/**\".to_string(),
-                \"**/node_modules/**\".to_string(),
-                \"**/.git/**\".to_string(),
-                \"**/.cache/**\".to_string(),
+                // Build directories
+                "**/target/**".to_string(),
+                "**/build/**".to_string(),
+                "**/dist/**".to_string(),
+                "**/out/**".to_string(),
+                "**/bin/**".to_string(),
+                // Package managers and dependencies
+                "**/node_modules/**".to_string(),
+                "**/__pycache__/**".to_string(),
+                "**/venv/**".to_string(),
+                "**/env/**".to_string(),
+                // Version control and cache
+                "**/.git/**".to_string(),
+                "**/.svn/**".to_string(),
+                "**/.hg/**".to_string(),
+                "**/.cache/**".to_string(),
+                "**/.tmp/**".to_string(),
+                "**/tmp/**".to_string(),
+                // IDE and editor files
+                "**/.idea/**".to_string(),
+                "**/.vscode/**".to_string(),
+                "**/.vs/**".to_string(),
+                "**/*.swp".to_string(),
+                "**/*.swo".to_string(),
+                "**/*~".to_string(),
+                // OS files
+                "**/.DS_Store".to_string(),
+                "**/Thumbs.db".to_string(),
+                // Log and debug files
+                "**/*.log".to_string(),
+                "**/logs/**".to_string(),
             ],
-            max_file_size_mb: 10,
+            max_file_size_mb: 5, // Reduced from 10MB to 5MB for better performance
             follow_symlinks: false,
             analyze_dependencies: true,
-            deep_analysis: true,
+            deep_analysis: false, // Changed to false for better performance
             cache_results: true,
         }
     }

@@ -12,7 +12,6 @@ pub mod detector;
 pub mod executor;
 
 use std::collections::HashMap;
-use std::process::Output;
 
 /// Supported shell types
 #[derive(Debug, Clone, PartialEq)]
@@ -55,19 +54,19 @@ pub struct CommandResult {
 /// Errors that can occur during shell operations
 #[derive(Debug, thiserror::Error)]
 pub enum ShellError {
-    #[error(\"Shell detection failed: {0}\")]
+    #[error("Shell detection failed: {0}")]
     DetectionFailed(String),
     
-    #[error(\"Command execution failed: {0}\")]
+    #[error("Command execution failed: {0}")]
     ExecutionFailed(String),
     
-    #[error(\"Unsupported shell: {0}\")]
+    #[error("Unsupported shell: {0}")]
     UnsupportedShell(String),
     
-    #[error(\"Timeout occurred while executing command\")]
+    #[error("Timeout occurred while executing command")]
     Timeout,
     
-    #[error(\"Permission denied: {0}\")]
+    #[error("Permission denied: {0}")]
     PermissionDenied(String),
 }
 
@@ -154,8 +153,8 @@ impl ShellManager {
     /// Check if a command exists in the current environment
     pub async fn command_exists(&self, command: &str) -> bool {
         let check_command = match self.current_shell {
-            ShellType::PowerShell => format!(\"Get-Command {} -ErrorAction SilentlyContinue\", command),
-            _ => format!(\"command -v {}\", command),
+            ShellType::PowerShell => format!("Get-Command {} -ErrorAction SilentlyContinue", command),
+            _ => format!("command -v {}", command),
         };
         
         self.execute_command(&check_command, None)
@@ -167,16 +166,16 @@ impl ShellManager {
     /// Get shell-specific command syntax
     pub fn get_command_syntax(&self, operation: CommandOperation) -> String {
         match (&self.current_shell, operation) {
-            (ShellType::PowerShell, CommandOperation::ListFiles) => \"Get-ChildItem\".to_string(),
-            (_, CommandOperation::ListFiles) => \"ls\".to_string(),
+            (ShellType::PowerShell, CommandOperation::ListFiles) => "Get-ChildItem".to_string(),
+            (_, CommandOperation::ListFiles) => "ls".to_string(),
             (ShellType::PowerShell, CommandOperation::ChangeDirectory(path)) => {
-                format!(\"Set-Location '{}'\", path)
+                format!("Set-Location '{}'", path)
             },
-            (_, CommandOperation::ChangeDirectory(path)) => format!(\"cd '{}'\", path),
+            (_, CommandOperation::ChangeDirectory(path)) => format!("cd '{}'", path),
             (ShellType::PowerShell, CommandOperation::Echo(text)) => {
-                format!(\"Write-Output '{}'\", text)
+                format!("Write-Output '{}'", text)
             },
-            (_, CommandOperation::Echo(text)) => format!(\"echo '{}'\", text),
+            (_, CommandOperation::Echo(text)) => format!("echo '{}'", text),
         }
     }
 }
@@ -204,11 +203,11 @@ impl Default for ShellConfig {
 impl std::fmt::Display for ShellType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ShellType::Bash => write!(f, \"bash\"),
-            ShellType::Zsh => write!(f, \"zsh\"),
-            ShellType::Fish => write!(f, \"fish\"),
-            ShellType::PowerShell => write!(f, \"powershell\"),
-            ShellType::Unknown(name) => write!(f, \"unknown({})\", name),
+            ShellType::Bash => write!(f, "bash"),
+            ShellType::Zsh => write!(f, "zsh"),
+            ShellType::Fish => write!(f, "fish"),
+            ShellType::PowerShell => write!(f, "powershell"),
+            ShellType::Unknown(name) => write!(f, "unknown({})", name),
         }
     }
 }

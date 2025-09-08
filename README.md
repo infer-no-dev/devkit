@@ -1,149 +1,202 @@
-# Agentic Development Environment
+# devkit
 
-An intelligent, multi-agent development environment built in Rust, optimized for writing code by prompt on large, existing codebases. This tool leverages AI agents to assist with code generation, debugging, and command execution while providing a seamless integration with your existing development workflow.
+> **From Infer No Dev** - Just describe what you want, no manual coding needed.
 
-## Features
+An AI-powered development toolkit that turns natural language into code. Built in Rust for developers who are too lazy to write code manually (and that's a good thing).
 
-### 🤖 Multi-Agent Architecture
-- Multiple AI agents running concurrently
-- Unified notification panel for agent interactions
-- Context-aware agent coordination
+## 🎯 What It Does
 
-### 🔍 Intelligent Code Generation
-- Advanced code generation flow detection
-- Context-aware prompting using codebase analysis
-- Support for large, existing codebases
+Instead of writing code yourself, just tell `devkit` what you want:
 
-### 🧠 Natural Language Processing
-- Automatic detection between natural language prompts and commands
-- Natural language to code translation
-- Debugging assistance through conversational interface
+```bash
+devkit generate "create a REST API endpoint for user authentication"
+devkit test "generate unit tests for the payment processing module"  
+devkit optimize "analyze this codebase for performance bottlenecks"
+devkit analyze "what does this legacy code actually do?"
+```
 
-### 🔗 Rich Context Integration
-- Codebase context analysis using tree-sitter
-- Image and URL context support
-- Documentation integration and indexing
-- Git repository awareness
+## ✨ Features
 
-### 🖥️ Cross-Shell Compatibility
-- Support for zsh, bash, fish, and PowerShell
-- Native shell integration and command execution
+### 🤖 **Multi-Agent Intelligence**
+- **Analysis Agent**: Understands your existing codebase
+- **Code Generation Agent**: Creates new code from descriptions  
+- **Test Generation Agent**: Writes comprehensive test suites
+- **Optimization Agent**: Finds performance improvements
+- **Debugging Agent**: Helps track down issues
 
-### ⚡ Performance & Customization
-- Built with Rust for maximum performance
-- Fully customizable appearance and behavior
-- Configurable prompts and settings
-- Custom keybindings support
+### 🧠 **Smart Context Awareness**
+- Analyzes your entire codebase for context
+- Understands project structure and dependencies
+- Maintains consistency with existing code patterns
+- Git repository awareness and integration
 
-### 📱 User Interface
-- Intuitive block-based input/output grouping
-- Advanced cursor navigation
-- Customizable keybindings
-- Real-time agent status monitoring
+### 🔥 **Multi-Language Support**
+Generates high-quality code in:
+- Rust, Python, JavaScript, TypeScript
+- Go, Java, and more
+- Automatically detects target language from context
 
-## Architecture
+### ⚡ **Built for Speed**
+- Written in Rust for maximum performance
+- Concurrent agent processing
+- Optimized for large codebases
+- Fast analysis and generation
 
-The project is structured with the following core modules:
-
-- **Agent System**: Multi-agent coordination and management
-- **Code Generation**: Advanced code analysis and generation
-- **Context Management**: Codebase indexing and context extraction
-- **Shell Integration**: Cross-platform shell compatibility
-- **UI Components**: Terminal-based user interface
-- **Configuration**: User preferences and settings management
-
-## Getting Started
-
-### Prerequisites
-
-- Rust 1.89.0 or later
-- Git
-- One of: zsh, bash, fish, or PowerShell
+## 🚀 Quick Start
 
 ### Installation
 
+#### 🚀 Quick Install (Recommended)
+
+**Linux & macOS:**
+```bash
+curl -sSL https://raw.githubusercontent.com/infer-no-dev/devkit/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+# Download and run the install script (coming soon)
+# For now, use manual installation below
+```
+
+#### 📦 Package Managers
+
+**Cargo (Rust):**
+```bash
+cargo install devkit
+```
+
+**Homebrew (macOS/Linux):**
+```bash
+# Coming soon
+brew install devkit
+```
+
+#### 💾 Manual Installation
+
+1. **Download pre-built binary:**
+   - Visit the [releases page](https://github.com/infer-no-dev/devkit/releases)
+   - Download the appropriate binary for your platform:
+     - `devkit-x86_64-unknown-linux-gnu.tar.gz` (Linux x64)
+     - `devkit-aarch64-unknown-linux-gnu.tar.gz` (Linux ARM64)
+     - `devkit-x86_64-apple-darwin.tar.gz` (macOS Intel)
+     - `devkit-aarch64-apple-darwin.tar.gz` (macOS Apple Silicon)
+     - `devkit-x86_64-pc-windows-msvc.zip` (Windows x64)
+
+2. **Extract and install:**
+   ```bash
+   # Linux/macOS
+   tar -xzf devkit-*.tar.gz
+   chmod +x devkit
+   mv devkit ~/.local/bin/  # or /usr/local/bin/ for system-wide
+   
+   # Windows
+   # Extract ZIP and add to PATH
+   ```
+
+#### 🔨 Build from Source
+
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/agentic-dev-env.git
-cd agentic-dev-env
+git clone https://github.com/infer-no-dev/devkit.git
+cd devkit
 
-# Build the project
+# Build release binary
 cargo build --release
 
-# Run the development environment
-cargo run
+# The binary will be at ./target/release/devkit
+# Move to PATH
+mv target/release/devkit ~/.local/bin/
 ```
 
-### Configuration
-
-The application can be configured through:
-- `config.toml` - Main configuration file
-- Command-line arguments
-- Environment variables
-- Interactive setup wizard
-
-## Usage
-
-### Basic Commands
+#### ✅ Verify Installation
 
 ```bash
-# Start the agentic development environment
-agentic-dev-env
-
-# Initialize in an existing project
-agentic-dev-env init
-
-# Configure settings
-agentic-dev-env config
-
-# Help and documentation
-agentic-dev-env --help
+devkit --version
+devkit --help
 ```
 
-### Natural Language Interaction
+> **Note:** Make sure `~/.local/bin` is in your `$PATH`. Add this to your shell profile:
+> ```bash
+> export PATH="$HOME/.local/bin:$PATH"
+> ```
 
-The environment automatically detects natural language prompts and can:
-- Generate code based on descriptions
-- Debug existing code issues
-- Suggest improvements and refactoring
-- Execute shell commands from natural language
+### Basic Usage
 
-## Development
+```bash
+# Initialize in your project
+devkit init
 
-### Project Structure
+# Generate code from natural language
+devkit generate "create a function to calculate compound interest"
 
+# Analyze existing code
+devkit analyze ./src/main.rs
+
+# Generate tests
+devkit test "create tests for the user authentication module"
+
+# Get optimization suggestions  
+devkit optimize "analyze performance of the database queries"
+
+# Interactive mode
+devkit interactive
 ```
-src/
-├── main.rs              # Application entry point
-├── agents/              # Multi-agent system
-├── codegen/            # Code generation engine
-├── context/            # Context management
-├── shell/              # Shell integration
-├── ui/                 # User interface
-└── config/             # Configuration management
-```
 
-### Contributing
+## 🛠️ Commands
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests where appropriate
-5. Submit a pull request
+### Core Commands
+- `devkit generate <description>` - Generate code from natural language
+- `devkit analyze <path>` - Analyze and understand existing code
+- `devkit test <description>` - Generate comprehensive test suites
+- `devkit optimize <description>` - Get performance optimization suggestions
+- `devkit interactive` - Start conversational development mode
 
-## License
+### Setup Commands
+- `devkit init` - Initialize devkit in your project
+- `devkit config` - Configure settings and preferences
+- `devkit version` - Show version and system information
 
-This project is dual-licensed under the MIT OR Apache-2.0 license.
+## 🏗️ How It Works
 
-## Roadmap
+1. **Understand**: Analyzes your codebase structure, dependencies, and patterns
+2. **Infer**: Uses AI agents to understand what you actually want
+3. **Generate**: Creates code that fits seamlessly into your existing project
+4. **Optimize**: Suggests improvements and catches potential issues
 
-- [ ] Advanced code completion
-- [ ] Plugin system architecture
-- [ ] Web interface option
-- [ ] Integration with popular IDEs
-- [ ] Cloud-based agent deployment
-- [ ] Advanced debugging capabilities
+## 💡 Philosophy
+
+We believe developers shouldn't waste time on repetitive coding tasks. Instead of manually writing boilerplate, tests, or debugging code, just describe what you want and let `devkit` handle the implementation.
+
+**Too lazy to code manually?** Perfect. That's exactly who this is for.
+
+## 🔧 Configuration
+
+`devkit` can be configured via:
+- `devkit.toml` - Project-specific settings
+- `~/.devkit/config.toml` - Global user preferences  
+- Command-line flags
+- Environment variables
+
+## 🤝 Contributing
+
+We welcome contributions! Whether it's:
+- New agent types
+- Language support
+- Bug fixes
+- Documentation improvements
+
+See `CONTRIBUTING.md` for guidelines.
+
+## 📄 License
+
+Licensed under either of:
+- Apache License, Version 2.0
+- MIT License
+
+at your option.
 
 ---
 
-Built with ❤️ in Rust for developers who want AI-powered coding assistance.
+**devkit** - Making developers productively lazy since 2024  
+Built with ❤️ by [Infer No Dev](https://github.com/infer-no-dev)
