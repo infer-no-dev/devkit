@@ -1,20 +1,21 @@
 //! User interface components for the terminal application.
 
 use std::io::{stdout, Stdout};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use tokio::time::interval;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
-    execute,
+    event::{self, Event, KeyCode, KeyModifiers, KeyEvent},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    execute,
 };
 use ratatui::{
+    layout::{Direction, Layout, Constraint, Rect},
+    Terminal,
     backend::CrosstermBackend,
-    layout::{Direction, Layout},
-    Terminal, Frame,
+    text::{Line, Span},
+    widgets::{Paragraph, Block, Borders},
+    Frame,
 };
-use tokio::time::{interval, Instant};
-
-// Submodules
 pub mod blocks;
 pub mod input;
 pub mod keybindings;
@@ -199,6 +200,31 @@ impl Application {
             _ => {}
         }
         
+        // Check for common key shortcuts first
+        match key {
+            KeyCode::F(1) => {
+                // F1 shows help
+                self.panel_manager.toggle_help();
+                return Ok(());
+            }
+            KeyCode::Char('?') if modifiers.is_empty() => {
+                // '?' shows help
+                self.panel_manager.toggle_help();
+                return Ok(());
+            }
+            KeyCode::Char('q') if modifiers.is_empty() => {
+                // 'q' quits
+                self.running = false;
+                return Ok(());
+            }
+            KeyCode::Tab if modifiers.is_empty() => {
+                // Tab cycles focus
+                self.cycle_panel_focus();
+                return Ok(());
+            }
+            _ => {}
+        }
+        
         // Handle input with KeyEvent
         let key_event = KeyEvent::new(key, modifiers);
         if let Ok(result) = self.input_handler.handle_key_event(key_event) {
@@ -303,15 +329,28 @@ impl Application {
     ) {
         let size = f.area();
         
+        // Create main layout with status bar at bottom
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints([
+                Constraint::Min(3), // Main content area
+                Constraint::Length(1), // Status bar
+            ])
+            .split(size);
+        
+        let main_area = main_chunks[0];
+        let status_area = main_chunks[1];
+        
         // Calculate layout constraints based on visible panels
         let constraints = panel_manager.calculate_layout_constraints();
         
-        // Create main layout
+        // Create main layout for panels
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .margin(0)
             .constraints(constraints)
-            .split(size);
+            .split(main_area);
         
         let mut chunk_idx = 0;
         
@@ -346,7 +385,10 @@ impl Application {
             }
         }
         
-        // Render help overlay if visible
+        // Render status bar
+        Self::render_status_bar(f, status_area, theme, input_handler);
+        
+        // Render help overlay if visible (use full size, not main_area)
         panel_manager.render_help_overlay(f, size, theme);
     }
     
@@ -465,6 +507,66 @@ impl Application {
     /// Set command sender for external command processing
     pub fn set_command_sender(&mut self, sender: tokio::sync::mpsc::UnboundedSender<String>) {
         self.command_sender = Some(sender);
+    }
+    
+    /// Cycle panel focus
+    fn cycle_panel_focus(&mut self) {
+        let panels = vec![
+            panels::PanelType::Input,
+            panels::PanelType::Output,
+            panels::PanelType::AgentStatus,
+            panels::PanelType::Notifications,
+        ];
+        
+        let current = self.panel_manager.get_focus();
+        let next_index = if let Some(current_type) = current {
+            panels.iter().position(|p| p == current_type)
+                .map(|i| (i + 1) % panels.len())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        
+        self.panel_manager.set_focus(Some(panels[next_index].clone()));
+    }
+    
+    /// Render the status bar
+    fn render_status_bar(
+        f: &mut Frame,
+        area: Rect,
+        theme: &Theme,
+        input_handler: &InputHandler,
+    ) {
+        use ratatui::widgets::{Paragraph};
+        use ratatui::text::{Line, Span};
+        use ratatui::style::{Style, Modifier};
+        
+        // Get current input context
+        let context = input_handler.current_context();
+        
+        // Create status text based on context
+        let status_text = match context {
+            keybindings::KeyContext::Input => {
+                "INPUT MODE: Type your command and press Enter | ESC: Cancel | ?: Help | q: Quit"
+            },
+            keybindings::KeyContext::Command => {
+                "COMMAND MODE: Type /command and press Enter | ESC: Cancel | ?: Help | q: Quit"
+            },
+            _ => {
+                "i: Input | :: Command | Tab: Cycle Panels | ?: Help | q: Quit | Ctrl+C: Exit"
+            }
+        };
+        
+        let status_line = Line::from(vec![
+            Span::styled(status_text, Style::default()
+                .fg(theme.primary_style().fg.unwrap_or(ratatui::style::Color::White))
+                .add_modifier(Modifier::DIM))
+        ]);
+        
+        let status_paragraph = Paragraph::new(vec![status_line])
+            .style(Style::default().bg(theme.border_style().bg.unwrap_or(ratatui::style::Color::Black)));
+        
+        f.render_widget(status_paragraph, area);
     }
 }
 

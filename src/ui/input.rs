@@ -51,6 +51,11 @@ impl InputHandler {
         }
     }
     
+    /// Get current input context
+    pub fn current_context(&self) -> &KeyContext {
+        &self.current_context
+    }
+    
     /// Handle a key event and return the result
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
         // First check for keybinding actions

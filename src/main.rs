@@ -60,7 +60,7 @@ struct Cli {
 /// Available subcommands
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the interactive development environment
+    /// Launch multi-agent development dashboard with visual UI
     Start {
         /// Project path to analyze
         #[arg(short, long)]
@@ -137,7 +137,7 @@ enum Commands {
         modify: bool,
     },
     
-    /// Start interactive conversational code generation mode
+    /// Start conversational AI chat mode for code generation
     Interactive {
         /// Project path to analyze for context
         #[arg(short, long)]
@@ -228,44 +228,130 @@ impl DevKit {
     
     /// Start the interactive UI
     async fn start_interactive(&mut self, project_path: Option<PathBuf>) -> Result<()> {
-        info!("Starting interactive mode");
+        info!("Starting interactive UI dashboard");
         
         // Analyze project if path provided
-        if let Some(path) = project_path {
+        let project_context = if let Some(ref path) = project_path {
             info!("Analyzing project at: {:?}", path);
             let analysis_config = AnalysisConfig::default();
-            let _context = self.context_manager
-                .analyze_codebase(path, analysis_config)
+            match self.context_manager
+                .analyze_codebase(path.clone(), analysis_config)
                 .await
-                .map_err(|e| anyhow::anyhow!("Failed to analyze codebase: {}", e))?;
-            info!("Project analysis complete");
-        }
+            {
+                Ok(context) => {
+                    info!("Project analysis complete: {} files, {} symbols", 
+                          context.files.len(), context.metadata.indexed_symbols);
+                    Some(context)
+                },
+                Err(e) => {
+                    info!("Could not analyze project context: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
         
-        // Initialize and run UI
-        let ui_config = UIConfig::default(); // This should be loaded from config
-        let _app = Application::new(ui_config)
+        // Create UI configuration from devkit config
+        let ui_config = UIConfig::default(); // TODO: Load from self.config_manager
+        let mut app = Application::new(ui_config)
             .map_err(|e| anyhow::anyhow!("Failed to initialize UI: {}", e))?;
         
-        info!("Starting UI application");
-        // Note: In a real implementation, you would set up the terminal backend here
-        // and run the main event loop. For now, we'll just simulate it.
+        // Initialize agent system for UI integration
+        self.agent_system.initialize().await;
         
-        println!("🚀 Agentic Development Environment Started!");
-        println!("");
-        println!("Features available:");
-        println!("  • Multi-agent system for concurrent AI assistance");
-        println!("  • Intelligent code generation from natural language");
-        println!("  • Cross-shell compatibility (bash, zsh, fish, powershell)");
-        println!("  • Codebase context analysis and indexing");
-        println!("  • Customizable UI with block-based input/output");
-        println!("");
-        println!("Press Ctrl+C to exit");
+        // Create communication channels
+        let (ui_tx, ui_rx) = tokio::sync::mpsc::unbounded_channel::<crate::ui::UIEvent>();
+        let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         
-        // Simulate running until interrupted
-        tokio::signal::ctrl_c().await?;
-        info!("Shutting down gracefully");
+        // Connect command sender to UI
+        app.set_command_sender(command_tx.clone());
         
-        Ok(())
+        // Add welcome notification with longer duration
+        let welcome_notification = crate::ui::notifications::Notification::info(
+            "DevKit Dashboard Started".to_string(),
+            "Multi-agent development environment is now active. Press '?' or F1 for help, 'i' for input mode, ':' for commands.".to_string(),
+        ).with_ttl(std::time::Duration::from_secs(30)); // 30 seconds
+        app.add_notification(welcome_notification);
+        
+        // Add a persistent help reminder
+        let help_notification = crate::ui::notifications::Notification::system_message(
+            "Press '?' or F1 to show keybindings help. Press 'q' or Ctrl+C to quit.".to_string(),
+        ).sticky(); // This won't auto-dismiss
+        app.add_notification(help_notification);
+        
+        // Add initial agent status
+        app.update_agent_status(
+            "CodeGeneration".to_string(),
+            crate::agents::AgentStatus::Idle,
+            None,
+            None,
+            None,
+        );
+        app.update_agent_status(
+            "Analysis".to_string(),
+            crate::agents::AgentStatus::Idle,
+            None,
+            None,
+            None,
+        );
+        app.update_agent_status(
+            "Debugging".to_string(),
+            crate::agents::AgentStatus::Idle,
+            None,
+            None,
+            None,
+        );
+        
+        // Create interactive session for command processing
+        let session = crate::interactive::InteractiveSession::new(project_path.clone());
+        let interactive_manager = crate::interactive::InteractiveManager::new(
+            session,
+            self.code_generator.clone(),
+            Some(self.agent_system.clone()),
+            project_context,
+        );
+        
+        // Spawn background tasks
+        let agent_monitor = Self::spawn_agent_monitor(
+            self.agent_system.clone(),
+            ui_tx.clone(),
+        );
+        
+        let command_processor = Self::spawn_command_processor(
+            interactive_manager,
+            command_rx,
+            ui_tx.clone(),
+        );
+        
+        let ui_event_handler = Self::spawn_ui_event_handler(ui_rx);
+        
+        info!("Starting UI dashboard with multi-agent system");
+        
+        // Run the main UI event loop
+        let ui_result = tokio::select! {
+            result = app.run() => result,
+            _ = tokio::signal::ctrl_c() => {
+                info!("Received shutdown signal");
+                Ok(())
+            }
+        };
+        
+        // Cleanup background tasks
+        agent_monitor.abort();
+        command_processor.abort();
+        ui_event_handler.abort();
+        
+        match ui_result {
+            Ok(_) => {
+                info!("UI dashboard ended successfully");
+                Ok(())
+            }
+            Err(e) => {
+                error!("UI dashboard error: {}", e);
+                Err(anyhow::anyhow!("UI dashboard failed: {}", e))
+            }
+        }
     }
     
     /// Initialize a new project
@@ -823,6 +909,170 @@ impl DevKit {
         }
         
         Ok(())
+    }
+    
+    /// Spawn agent monitoring task
+    fn spawn_agent_monitor(
+        agent_system: Arc<AgentSystem>,
+        ui_sender: tokio::sync::mpsc::UnboundedSender<crate::ui::UIEvent>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
+            
+            loop {
+                interval.tick().await;
+                
+                // Get real-time agent status updates
+                let agents_info = agent_system.get_agents_info().await;
+                
+                for agent_info in agents_info {
+                    let _ = ui_sender.send(crate::ui::UIEvent::AgentStatusUpdate {
+                        agent_name: agent_info.name.clone(),
+                        status: agent_info.status.clone(),
+                        task: None, // TODO: Add current task info when available
+                        priority: None, // TODO: Add priority info when available
+                        progress: None, // TODO: Add progress tracking when available
+                    });
+                }
+                
+                // Send periodic system status
+                let agent_statuses = agent_system.get_agent_statuses().await;
+                if !agent_statuses.is_empty() {
+                    let status_count = agent_statuses.len();
+                    let active_count = agent_statuses.iter()
+                        .filter(|(_, status)| !matches!(status, crate::agents::AgentStatus::Idle))
+                        .count();
+                    
+                    if active_count > 0 {
+                        let status_notification = crate::ui::notifications::Notification::info(
+                            "Agent Activity".to_string(),
+                            format!("{} of {} agents active", active_count, status_count),
+                        );
+                        let _ = ui_sender.send(crate::ui::UIEvent::Notification(status_notification));
+                    }
+                }
+            }
+        })
+    }
+    
+    /// Spawn command processing task
+    fn spawn_command_processor(
+        interactive_manager: crate::interactive::InteractiveManager,
+        mut command_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+        ui_sender: tokio::sync::mpsc::UnboundedSender<crate::ui::UIEvent>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                // Send user input to UI
+                let _ = ui_sender.send(crate::ui::UIEvent::Output {
+                    content: command.clone(),
+                    block_type: "user".to_string(),
+                });
+                
+                // Process command based on type
+                let response = if command.starts_with("/") {
+                    Self::process_system_command(&command[1..], &ui_sender).await
+                } else {
+                    Self::process_natural_language_command(&command, &interactive_manager, &ui_sender).await
+                };
+                
+                // Send response to UI
+                let _ = ui_sender.send(crate::ui::UIEvent::Output {
+                    content: response,
+                    block_type: "agent".to_string(),
+                });
+            }
+        })
+    }
+    
+    /// Spawn UI event handler task
+    fn spawn_ui_event_handler(
+        mut ui_rx: tokio::sync::mpsc::UnboundedReceiver<crate::ui::UIEvent>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            while let Some(_event) = ui_rx.recv().await {
+                // UI events are handled directly by the Application instance
+                // This task is mainly for future extension of event handling
+                // For now, we just consume events to prevent channel blocking
+            }
+        })
+    }
+    
+    /// Process system commands (starting with /)
+    async fn process_system_command(
+        command: &str,
+        ui_sender: &tokio::sync::mpsc::UnboundedSender<crate::ui::UIEvent>,
+    ) -> String {
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        let cmd = parts.get(0).unwrap_or(&"");
+        
+        match *cmd {
+            "help" => {
+                r#"Available Commands:
+  /help     - Show this help message
+  /status   - Show system status
+  /clear    - Clear output
+  /quit     - Exit dashboard
+
+Natural Language Commands:
+  - "generate a function to..."
+  - "explain this code"
+  - "optimize this algorithm"
+  - "add tests for..."
+  - "debug this issue"
+
+Press Ctrl+C to exit at any time."#.to_string()
+            }
+            "status" => {
+                "DevKit Dashboard Status: Active\nAgent System: Running\nUI: Connected".to_string()
+            }
+            "clear" => {
+                // Send multiple newlines to clear output
+                let _ = ui_sender.send(crate::ui::UIEvent::Output {
+                    content: "\n\n\n\n\n\n\n\n\n\n".to_string(),
+                    block_type: "system".to_string(),
+                });
+                "Output cleared".to_string()
+            }
+            "quit" => {
+                let _ = ui_sender.send(crate::ui::UIEvent::Quit);
+                "Shutting down dashboard...".to_string()
+            }
+            _ => format!("Unknown command: /{}. Type /help for available commands.", cmd),
+        }
+    }
+    
+    /// Process natural language commands through agents
+    async fn process_natural_language_command(
+        command: &str,
+        _interactive_manager: &crate::interactive::InteractiveManager,
+        ui_sender: &tokio::sync::mpsc::UnboundedSender<crate::ui::UIEvent>,
+    ) -> String {
+        // For now, we'll provide a simple response indicating the command was received
+        // In a full implementation, this would route to the appropriate agent
+        
+        let _ = ui_sender.send(crate::ui::UIEvent::Notification(
+            crate::ui::notifications::Notification::info(
+                "Command Processing".to_string(),
+                format!("Processing: {}", command),
+            )
+        ));
+        
+        // Simulate processing time
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        
+        // Classify and route command (simplified version)
+        if command.to_lowercase().contains("generate") || command.to_lowercase().contains("create") {
+            "🔧 Code generation request received. This would be processed by the CodeGeneration agent.".to_string()
+        } else if command.to_lowercase().contains("explain") || command.to_lowercase().contains("what") {
+            "📚 Code explanation request received. This would be processed by the Analysis agent.".to_string()
+        } else if command.to_lowercase().contains("debug") || command.to_lowercase().contains("fix") {
+            "🐛 Debug request received. This would be processed by the Debugging agent.".to_string()
+        } else if command.to_lowercase().contains("optimize") {
+            "⚡ Optimization request received. This would be processed by the Analysis agent.".to_string()
+        } else {
+            "💬 General query received. Processing with available agents...".to_string()
+        }
     }
 }
 

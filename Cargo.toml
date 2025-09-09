@@ -46,6 +46,22 @@ atty = "0.2"
 name = "devkit"
 path = "src/main.rs"
 
+[[example]]
+name = "test_agents"
+path = "test_agents.rs"
+
+[[example]]
+name = "test_shell"
+path = "test_shell.rs"
+
+[[example]]
+name = "test_integration"
+path = "test_integration_fixed.rs"
+
+[[example]]
+name = "test_system_bus"
+path = "test_system_bus.rs"
+
 [dev-dependencies]
 tempfile = "3.0"
 env_logger = "0.11"

@@ -35,7 +35,7 @@ impl From<GenerationError> for CodeGenError {
 }
 
 /// Main code generation engine
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CodeGen {
     templates: HashMap<String, CodeTemplate>,
     ai_manager: Option<Arc<AIManager>>,

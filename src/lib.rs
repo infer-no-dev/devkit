@@ -7,10 +7,12 @@ pub mod agents;
 pub mod ai;
 pub mod codegen;
 pub mod context;
-pub mod config;
-pub mod interactive;
 pub mod shell;
 pub mod ui;
+pub mod config;
+pub mod system_bus;
+pub mod integrations;
+pub mod interactive;
 pub mod cli;
 
 #[cfg(test)]

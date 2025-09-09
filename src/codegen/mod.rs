@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Main code generation engine
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CodeGenerator {
     analyzer: analyzer::CodeAnalyzer,
     generator: generator::CodeGen,

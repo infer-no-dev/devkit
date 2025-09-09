@@ -4,7 +4,7 @@
 //! handling configuration, and providing a unified interface for the rest of the application.
 
 use super::{AIClient, AIError, AIProvider, ChatRequest, ChatResponse, ChatStreamChunk, ModelInfo};
-use super::client::{OllamaClient, OllamaConfig};
+use super::client::{OllamaClient, OllamaConfig, OpenAIClient, OpenAIConfig, AnthropicClient, AnthropicConfig};
 use crate::config::{AIModelConfig, Config};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,8 +40,52 @@ impl AIManager {
         let ollama_client = OllamaClient::new(ollama_config);
         clients.insert(AIProvider::Ollama, Box::new(ollama_client));
 
-        // TODO: Initialize other providers (OpenAI, Anthropic) when requested
-        // This would be done based on the presence of their configurations
+        // Initialize OpenAI client if configuration is provided
+        if let Some(openai_config) = &config.openai {
+            if let Some(api_key) = &openai_config.api_key {
+                let openai_client_config = OpenAIConfig {
+                    api_key: api_key.clone(),
+                    base_url: openai_config.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
+                    organization: openai_config.organization.clone(),
+                    timeout: std::time::Duration::from_secs(120),
+                    max_retries: 3,
+                };
+                
+                match OpenAIClient::new(openai_client_config) {
+                    Ok(openai_client) => {
+                        clients.insert(AIProvider::OpenAI, Box::new(openai_client));
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to initialize OpenAI client: {}", e);
+                    }
+                }
+            } else {
+                eprintln!("Warning: OpenAI configuration provided but no API key found");
+            }
+        }
+
+        // Initialize Anthropic client if configuration is provided
+        if let Some(anthropic_config) = &config.anthropic {
+            if let Some(api_key) = &anthropic_config.api_key {
+                let anthropic_client_config = AnthropicConfig {
+                    api_key: api_key.clone(),
+                    base_url: anthropic_config.base_url.clone().unwrap_or_else(|| "https://api.anthropic.com".to_string()),
+                    timeout: std::time::Duration::from_secs(120),
+                    max_retries: 3,
+                };
+                
+                match AnthropicClient::new(anthropic_client_config) {
+                    Ok(anthropic_client) => {
+                        clients.insert(AIProvider::Anthropic, Box::new(anthropic_client));
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to initialize Anthropic client: {}", e);
+                    }
+                }
+            } else {
+                eprintln!("Warning: Anthropic configuration provided but no API key found");
+            }
+        }
 
         let default_provider = match config.default_provider.as_str() {
             "ollama" => AIProvider::Ollama,
@@ -135,6 +179,16 @@ impl AIManager {
                     self.config.ollama.default_model.clone()
                         .unwrap_or_else(|| self.config.default_model.clone())
                 }
+                AIProvider::OpenAI => {
+                    self.config.openai.as_ref()
+                        .map(|c| c.default_model.clone())
+                        .unwrap_or_else(|| "gpt-3.5-turbo".to_string())
+                }
+                AIProvider::Anthropic => {
+                    self.config.anthropic.as_ref()
+                        .map(|c| c.default_model.clone())
+                        .unwrap_or_else(|| "claude-3-haiku-20240307".to_string())
+                }
                 _ => self.config.default_model.clone(),
             };
         }
@@ -167,6 +221,16 @@ impl AIManager {
                 AIProvider::Ollama => {
                     self.config.ollama.default_model.clone()
                         .unwrap_or_else(|| self.config.default_model.clone())
+                }
+                AIProvider::OpenAI => {
+                    self.config.openai.as_ref()
+                        .map(|c| c.default_model.clone())
+                        .unwrap_or_else(|| "gpt-3.5-turbo".to_string())
+                }
+                AIProvider::Anthropic => {
+                    self.config.anthropic.as_ref()
+                        .map(|c| c.default_model.clone())
+                        .unwrap_or_else(|| "claude-3-haiku-20240307".to_string())
                 }
                 _ => self.config.default_model.clone(),
             };
@@ -275,6 +339,32 @@ impl AIManager {
     /// Check if a provider is available
     pub fn is_provider_available(&self, provider: &AIProvider) -> bool {
         self.clients.contains_key(provider)
+    }
+
+    /// Helper method for simple text generation (used by agents)
+    pub async fn generate_response(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+        max_tokens: Option<u32>,
+        temperature: Option<f32>,
+    ) -> Result<String, AIError> {
+        let mut parameters = super::ModelParameters::default();
+        parameters.temperature = Some(temperature.unwrap_or(self.config.temperature as f32) as f64);
+        parameters.max_tokens = max_tokens.map(|t| t as usize).or(Some(self.config.max_tokens));
+        
+        let request = ChatRequest {
+            model: String::new(), // Will be filled with default
+            messages: vec![
+                super::ChatMessage::system(system_prompt),
+                super::ChatMessage::user(user_prompt),
+            ],
+            parameters: Some(parameters),
+            stream: false,
+        };
+
+        let response = self.chat_completion_default(request).await?;
+        Ok(response.message.content)
     }
 }
 
