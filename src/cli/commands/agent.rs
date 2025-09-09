@@ -69,7 +69,7 @@ async fn list_agents(
                     json!({
                         "id": info.id,
                         "name": info.name,
-                        "type": info.agent_type,
+                        "type": "Agent",
                         "status": format!("{:?}", info.status),
                         "capabilities": info.capabilities
                     })
@@ -109,7 +109,7 @@ async fn show_agent_status(
     let filtered_statuses: Vec<_> = if let Some(id) = agent_id {
         statuses.into_iter().filter(|(name, _)| name.contains(id)).collect()
     } else {
-        statuses
+        statuses.into_iter().collect()
     };
     
     // Use the format from runner if not provided
@@ -146,22 +146,23 @@ async fn show_agent_status(
             println!();
             
             for (name, status) in filtered_statuses {
-                let status_str = match status {
+                let status_str = match &status {
                     crate::agents::AgentStatus::Idle => "🟢 Idle",
-                    crate::agents::AgentStatus::Processing(_) => "🟡 Processing",
-                    crate::agents::AgentStatus::WaitingForInput => "🔵 Waiting for Input",
-                    crate::agents::AgentStatus::Error(_) => "🔴 Error",
+                    crate::agents::AgentStatus::Processing { task_id: _ } => "🟡 Processing",
+                    crate::agents::AgentStatus::Busy => "🔵 Busy",
+                    crate::agents::AgentStatus::Error { message: _ } => "🔴 Error",
                     crate::agents::AgentStatus::Offline => "⚫ Offline",
+                    crate::agents::AgentStatus::ShuttingDown => "🟠 Shutting Down",
                 };
                 
                 println!("  {} - {}", name, status_str);
                 
-                if let crate::agents::AgentStatus::Processing(task) = &status {
-                    println!("    Currently processing: {}", task);
+                if let crate::agents::AgentStatus::Processing { task_id } = &status {
+                    println!("    Currently processing task: {}", task_id);
                 }
                 
-                if let crate::agents::AgentStatus::Error(error) = &status {
-                    runner.print_error(&format!("    Error: {}", error));
+                if let crate::agents::AgentStatus::Error { message } = &status {
+                    runner.print_error(&format!("    Error: {}", message));
                 }
             }
         }
@@ -282,14 +283,15 @@ async fn show_agent_logs(
 fn print_agent_info(_runner: &CliRunner, info: &AgentInfo, verbose: bool) {
     let status_emoji = match info.status {
         crate::agents::AgentStatus::Idle => "🟢",
-        crate::agents::AgentStatus::Processing(_) => "🟡",
-        crate::agents::AgentStatus::WaitingForInput => "🔵",
-        crate::agents::AgentStatus::Error(_) => "🔴",
+        crate::agents::AgentStatus::Processing { task_id: _ } => "🟡",
+        crate::agents::AgentStatus::Busy => "🔵",
+        crate::agents::AgentStatus::Error { message: _ } => "🔴",
         crate::agents::AgentStatus::Offline => "⚫",
+        crate::agents::AgentStatus::ShuttingDown => "🟠",
     };
     
     println!("  {} {} ({})", status_emoji, info.name, info.id);
-    println!("     Type: {}", info.agent_type);
+    println!("     Type: Agent");
     println!("     Status: {:?}", info.status);
     
     if verbose && !info.capabilities.is_empty() {

@@ -1,0 +1,280 @@
+//! Agent task definitions and related types
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
+
+/// Task that can be assigned to an agent
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentTask {
+    /// Unique task identifier
+    pub id: String,
+    
+    /// Type of task (e.g., "generate_code", "analyze_file", "refactor")
+    pub task_type: String,
+    
+    /// Human-readable description of the task
+    pub description: String,
+    
+    /// Task context and parameters
+    pub context: serde_json::Value,
+    
+    /// Task priority level
+    pub priority: TaskPriority,
+    
+    /// Optional deadline for task completion
+    pub deadline: Option<chrono::DateTime<chrono::Utc>>,
+    
+    /// Task metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl AgentTask {
+    /// Create a new agent task
+    pub fn new(task_type: String, description: String, context: serde_json::Value) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            task_type,
+            description,
+            context,
+            priority: TaskPriority::Normal,
+            deadline: None,
+            metadata: HashMap::new(),
+        }
+    }
+    
+    /// Create a task with specific priority
+    pub fn with_priority(mut self, priority: TaskPriority) -> Self {
+        self.priority = priority;
+        self
+    }
+    
+    /// Create a task with deadline
+    pub fn with_deadline(mut self, deadline: chrono::DateTime<chrono::Utc>) -> Self {
+        self.deadline = Some(deadline);
+        self
+    }
+    
+    /// Add metadata to the task
+    pub fn with_metadata(mut self, key: String, value: serde_json::Value) -> Self {
+        self.metadata.insert(key, value);
+        self
+    }
+}
+
+/// Priority levels for agent tasks
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum TaskPriority {
+    /// Low priority tasks (background processing)
+    Low = 1,
+    /// Normal priority tasks (default)
+    Normal = 2,
+    /// High priority tasks (user-initiated)
+    High = 3,
+    /// Critical priority tasks (system-critical)
+    Critical = 4,
+}
+
+impl Default for TaskPriority {
+    fn default() -> Self {
+        TaskPriority::Normal
+    }
+}
+
+impl std::fmt::Display for TaskPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskPriority::Low => write!(f, "Low"),
+            TaskPriority::Normal => write!(f, "Normal"),
+            TaskPriority::High => write!(f, "High"),
+            TaskPriority::Critical => write!(f, "Critical"),
+        }
+    }
+}
+
+/// Result of agent task processing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentResult {
+    /// Task ID this result corresponds to
+    pub task_id: String,
+    
+    /// Agent ID that processed the task
+    pub agent_id: String,
+    
+    /// Whether the task was successful
+    pub success: bool,
+    
+    /// Result output or error message
+    pub output: String,
+    
+    /// Generated artifacts (files, code, etc.)
+    pub artifacts: Vec<AgentArtifact>,
+    
+    /// Processing duration in milliseconds
+    pub processing_duration_ms: u64,
+    
+    /// Suggested follow-up actions
+    pub next_actions: Vec<String>,
+    
+    /// Result metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl AgentResult {
+    /// Create a successful result
+    pub fn success(task_id: String, agent_id: String, output: String) -> Self {
+        Self {
+            task_id,
+            agent_id,
+            success: true,
+            output,
+            artifacts: Vec::new(),
+            processing_duration_ms: 0,
+            next_actions: Vec::new(),
+            metadata: HashMap::new(),
+        }
+    }
+    
+    /// Create a failure result
+    pub fn failure(task_id: String, agent_id: String, error: String) -> Self {
+        Self {
+            task_id,
+            agent_id,
+            success: false,
+            output: error,
+            artifacts: Vec::new(),
+            processing_duration_ms: 0,
+            next_actions: Vec::new(),
+            metadata: HashMap::new(),
+        }
+    }
+    
+    /// Add an artifact to the result
+    pub fn with_artifact(mut self, artifact: AgentArtifact) -> Self {
+        self.artifacts.push(artifact);
+        self
+    }
+    
+    /// Add processing duration
+    pub fn with_duration(mut self, duration: std::time::Duration) -> Self {
+        self.processing_duration_ms = duration.as_millis() as u64;
+        self
+    }
+    
+    /// Add next action suggestion
+    pub fn with_next_action(mut self, action: String) -> Self {
+        self.next_actions.push(action);
+        self
+    }
+    
+    /// Add metadata
+    pub fn with_metadata(mut self, key: String, value: serde_json::Value) -> Self {
+        self.metadata.insert(key, value);
+        self
+    }
+}
+
+/// Artifact generated by an agent
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentArtifact {
+    /// Artifact identifier
+    pub id: String,
+    
+    /// Artifact name/filename
+    pub name: String,
+    
+    /// Type of artifact (e.g., "source_code", "documentation", "config")
+    pub artifact_type: String,
+    
+    /// Artifact content
+    pub content: String,
+    
+    /// Optional file path if this should be saved to disk
+    pub file_path: Option<String>,
+    
+    /// MIME type of the content
+    pub mime_type: Option<String>,
+    
+    /// Artifact metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl AgentArtifact {
+    /// Create a new artifact
+    pub fn new(name: String, artifact_type: String, content: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+            artifact_type,
+            content,
+            file_path: None,
+            mime_type: None,
+            metadata: HashMap::new(),
+        }
+    }
+    
+    /// Create a source code artifact
+    pub fn source_code(name: String, content: String, language: String) -> Self {
+        let mut artifact = Self::new(name, "source_code".to_string(), content);
+        artifact.metadata.insert("language".to_string(), serde_json::Value::String(language));
+        artifact
+    }
+    
+    /// Create a file artifact
+    pub fn file(name: String, content: String, file_path: String) -> Self {
+        let mut artifact = Self::new(name, "file".to_string(), content);
+        artifact.file_path = Some(file_path);
+        artifact
+    }
+    
+    /// Set file path for the artifact
+    pub fn with_file_path(mut self, path: String) -> Self {
+        self.file_path = Some(path);
+        self
+    }
+    
+    /// Set MIME type for the artifact
+    pub fn with_mime_type(mut self, mime_type: String) -> Self {
+        self.mime_type = Some(mime_type);
+        self
+    }
+    
+    /// Add metadata to the artifact
+    pub fn with_metadata(mut self, key: String, value: serde_json::Value) -> Self {
+        self.metadata.insert(key, value);
+        self
+    }
+}
+
+/// Task execution context
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskContext {
+    /// Current working directory
+    pub working_directory: String,
+    
+    /// Environment variables
+    pub environment: HashMap<String, String>,
+    
+    /// Available tools and capabilities
+    pub available_tools: Vec<String>,
+    
+    /// Project information
+    pub project_info: Option<serde_json::Value>,
+    
+    /// User preferences
+    pub user_preferences: HashMap<String, serde_json::Value>,
+}
+
+impl Default for TaskContext {
+    fn default() -> Self {
+        Self {
+            working_directory: std::env::current_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "/".to_string()),
+            environment: HashMap::new(),
+            available_tools: Vec::new(),
+            project_info: None,
+            user_preferences: HashMap::new(),
+        }
+    }
+}

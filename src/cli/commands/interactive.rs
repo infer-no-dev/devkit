@@ -244,6 +244,8 @@ impl InteractiveManager {
                     .as_secs()
             }),
             priority: TaskPriority::Normal,
+            deadline: None,
+            metadata: std::collections::HashMap::new(),
         };
         
         // Send task to agent system
@@ -312,7 +314,7 @@ Press Ctrl+C to exit at any time."#.to_string()
             output.push_str(&format!("{}. {} ({}) - Status: {:?}\n",
                 i + 1,
                 agent_info.name,
-                agent_info.agent_type,
+                agent_info.id,
                 agent_info.status
             ));
             

@@ -192,15 +192,15 @@ impl DevKit {
         // Initialize core systems
         let agent_system = AgentSystem::new();
         
-        // Initialize specialized agents
-        let code_gen_agent = crate::agents::agent_types::CodeGenerationAgent::new().with_ai_manager(ai_manager.clone());
-        let analysis_agent = crate::agents::agent_types::AnalysisAgent::new();
-        let debugging_agent = crate::agents::agent_types::DebuggingAgent::new();
+        // Initialize specialized agents with AI capabilities
+        let code_gen_agent = crate::agents::agent_types::CodeGenerationAgent::with_ai_manager(ai_manager.clone());
+        let analysis_agent = crate::agents::agent_types::AnalysisAgent::with_ai_manager(ai_manager.clone());
+        let refactoring_agent = crate::agents::agent_types::RefactoringAgent::with_ai_manager(ai_manager.clone());
         
         // Register agents with the system
         agent_system.register_agent(Box::new(code_gen_agent)).await;
         agent_system.register_agent(Box::new(analysis_agent)).await;
-        agent_system.register_agent(Box::new(debugging_agent)).await;
+        agent_system.register_agent(Box::new(refactoring_agent)).await;
         info!("Agent system initialized with 3 specialized agents");
         
         let context_manager = ContextManager::new()
@@ -296,7 +296,7 @@ impl DevKit {
             None,
         );
         app.update_agent_status(
-            "Debugging".to_string(),
+            "Refactoring".to_string(),
             crate::agents::AgentStatus::Idle,
             None,
             None,

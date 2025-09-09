@@ -246,6 +246,8 @@ impl AgentSystemAdapter {
                             description: prompt,
                             context: serde_json::json!({"source": "ui_command", "args": args}),
                             priority: TaskPriority::High,
+                            deadline: None,
+                            metadata: std::collections::HashMap::new(),
                         };
                         
                         // Notify task started
@@ -292,6 +294,8 @@ impl AgentSystemAdapter {
             description: prompt,
             context: serde_json::json!({"source": "api_request"}),
             priority: TaskPriority::High,
+            deadline: None,
+            metadata: std::collections::HashMap::new(),
         };
         
         match self.agent_system.submit_task(task).await {
@@ -308,6 +312,8 @@ impl AgentSystemAdapter {
             description: format!("Analyze code at path: {}", path),
             context: serde_json::json!({"path": path, "source": "api_request"}),
             priority: TaskPriority::High,
+            deadline: None,
+            metadata: std::collections::HashMap::new(),
         };
         
         match self.agent_system.submit_task(task).await {

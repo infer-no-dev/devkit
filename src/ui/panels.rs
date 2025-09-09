@@ -217,10 +217,11 @@ impl AgentDisplayInfo {
     pub fn status_style(&self, theme: &Theme) -> Style {
         match self.status {
             AgentStatus::Idle => theme.secondary_style(),
-            AgentStatus::Processing(_) => theme.info_style(),
-            AgentStatus::Error(_) => theme.error_style(),
-            AgentStatus::WaitingForInput => theme.warning_style(),
+            AgentStatus::Processing { task_id: _ } => theme.info_style(),
+            AgentStatus::Error { message: _ } => theme.error_style(),
+            AgentStatus::Busy => theme.warning_style(),
             AgentStatus::Offline => theme.muted_style(),
+            AgentStatus::ShuttingDown => theme.warning_style(),
         }
     }
 
@@ -250,10 +251,11 @@ impl AgentDisplayInfo {
             // Status with icon
             let status_icon = match self.status {
                 AgentStatus::Idle => "💤",
-                AgentStatus::Processing(_) => "⚙️",
-                AgentStatus::Error(_) => "❌",
-                AgentStatus::WaitingForInput => "⌨️",
+                AgentStatus::Processing { task_id: _ } => "⚙️",
+                AgentStatus::Error { message: _ } => "❌",
+                AgentStatus::Busy => "⌨️",
                 AgentStatus::Offline => "⭕",
+                AgentStatus::ShuttingDown => "🟠",
             };
             
             let status_line = Line::from(vec![
@@ -281,7 +283,7 @@ impl AgentDisplayInfo {
                 }
 
                 // Progress bar (only if processing)
-                if matches!(self.status, AgentStatus::Processing(_)) && self.progress > 0.0 {
+                if matches!(self.status, AgentStatus::Processing { task_id: _ }) && self.progress > 0.0 {
                     let progress_text = format!("  Progress: {:.1}%", self.progress * 100.0);
                     lines.push(Line::from(Span::styled(progress_text, theme.value_style())));
                 }

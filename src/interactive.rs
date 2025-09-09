@@ -840,6 +840,8 @@ impl InteractiveManager {
                 "requirements": []
             }),
             priority: crate::agents::TaskPriority::High,
+            deadline: None,
+            metadata: std::collections::HashMap::new(),
         };
         
         println!("🤖 Using AI agent for code generation...");
@@ -926,6 +928,8 @@ impl InteractiveManager {
                 "optimization_focus": content
             }),
             priority: crate::agents::TaskPriority::Normal,
+            deadline: None,
+            metadata: std::collections::HashMap::new(),
         };
         
         println!("🔍 Using analysis agent for code optimization...");
@@ -981,6 +985,8 @@ impl InteractiveManager {
                 "issue_description": content
             }),
             priority: crate::agents::TaskPriority::High,
+            deadline: None,
+            metadata: std::collections::HashMap::new(),
         };
         
         println!("🔧 Using debugging agent for issue analysis...");

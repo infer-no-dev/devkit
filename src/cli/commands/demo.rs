@@ -78,6 +78,8 @@ async fn run_analyze_demo(
             "analysis_type": "comprehensive"
         }),
         priority: TaskPriority::High,
+        deadline: None,
+        metadata: std::collections::HashMap::new(),
     };
     
     runner.print_info("Submitting analysis task to agent system...");
@@ -127,6 +129,8 @@ async fn run_generate_demo(
             "include_tests": true
         }),
         priority: TaskPriority::Normal,
+        deadline: None,
+        metadata: std::collections::HashMap::new(),
     };
     
     runner.print_info("Submitting code generation task...");

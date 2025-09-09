@@ -25,7 +25,6 @@ config.toml
 *.log
 
 # Agent data and cache
-agents/
 cache/
 temp/
 *.tmp

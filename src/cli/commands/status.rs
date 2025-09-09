@@ -254,7 +254,7 @@ async fn check_agent_status(runner: &mut CliRunner) -> Result<ComponentStatus, B
             details.insert("total_agents".to_string(), agent_statuses.len().to_string());
             
             let active_count = agent_statuses.iter()
-                .filter(|(_, status)| matches!(status, crate::agents::AgentStatus::Processing(_)))
+                .filter(|(_, status)| matches!(status, crate::agents::AgentStatus::Processing { task_id: _ }))
                 .count();
             details.insert("active_agents".to_string(), active_count.to_string());
             
