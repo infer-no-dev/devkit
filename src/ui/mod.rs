@@ -166,7 +166,54 @@ impl Application {
     
     /// Handle key events
     fn handle_key_event(&mut self, key: KeyCode, modifiers: KeyModifiers) -> Result<(), UIError> {
-        // Check for global keybindings first
+        // Create KeyEvent for input handler
+        let key_event = KeyEvent::new(key, modifiers);
+        
+        // Get current input context
+        let current_context = *self.input_handler.current_context();
+        
+        // In input or command mode, handle input keys first
+        if current_context == KeyContext::Input || current_context == KeyContext::Command {
+            if let Ok(result) = self.input_handler.handle_key_event(key_event) {
+                match result {
+                    input::InputResult::Command(cmd) => {
+                        // Process command
+                        self.process_command(cmd);
+                        // Switch back to normal mode after command
+                        self.input_handler.set_context(keybindings::KeyContext::Normal);
+                        return Ok(());
+                    }
+                    input::InputResult::Input(input) => {
+                        // Process input
+                        self.process_command(input);
+                        // Switch back to normal mode after input
+                        self.input_handler.set_context(keybindings::KeyContext::Normal);
+                        return Ok(());
+                    }
+                    input::InputResult::Action(action) => {
+                        // Handle action from input
+                        match action {
+                            Action::SwitchToNormalMode => {
+                                self.input_handler.set_context(keybindings::KeyContext::Normal);
+                                return Ok(());
+                            }
+                            _ => {}
+                        }
+                    }
+                    input::InputResult::Consumed => {
+                        // Key was consumed by input handler
+                        return Ok(());
+                    }
+                    _ => {
+                        // Fall through to global key handling
+                    }
+                }
+            }
+        }
+        
+        // Global key handling (only if not in input/command mode, or key wasn't consumed)
+        
+        // Check for global keybindings
         if let Some(action) = self.keybinding_manager.get_action(key, modifiers, &keybindings::Context::Global) {
             match action {
                 Action::Quit => {
@@ -185,34 +232,29 @@ impl Application {
             }
         }
         
-        // Check if we should handle input directly
+        // Check for common key shortcuts
         match key {
-            KeyCode::Char('i') if modifiers.is_empty() => {
+            KeyCode::Char('i') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // Switch to input mode
                 self.input_handler.set_context(keybindings::KeyContext::Input);
                 return Ok(());
             }
-            KeyCode::Char(':') if modifiers.is_empty() => {
+            KeyCode::Char(':') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // Switch to command mode
                 self.input_handler.set_context(keybindings::KeyContext::Command);
                 return Ok(());
             }
-            _ => {}
-        }
-        
-        // Check for common key shortcuts first
-        match key {
             KeyCode::F(1) => {
                 // F1 shows help
                 self.panel_manager.toggle_help();
                 return Ok(());
             }
-            KeyCode::Char('?') if modifiers.is_empty() => {
+            KeyCode::Char('?') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // '?' shows help
                 self.panel_manager.toggle_help();
                 return Ok(());
             }
-            KeyCode::Char('q') if modifiers.is_empty() => {
+            KeyCode::Char('q') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // 'q' quits
                 self.running = false;
                 return Ok(());
@@ -225,63 +267,36 @@ impl Application {
             _ => {}
         }
         
-        // Handle input with KeyEvent
-        let key_event = KeyEvent::new(key, modifiers);
-        if let Ok(result) = self.input_handler.handle_key_event(key_event) {
-            match result {
-                input::InputResult::Command(cmd) => {
-                    // Process command
-                    self.process_command(cmd);
-                    // Switch back to normal mode after command
-                    self.input_handler.set_context(keybindings::KeyContext::Normal);
+        // Handle panel-specific keys (only in normal mode)
+        if current_context == KeyContext::Normal {
+            match self.panel_manager.get_focus() {
+                Some(PanelType::AgentStatus) => {
+                    match key {
+                        KeyCode::Enter => {
+                            // Toggle expanded agent view (would need selected agent)
+                        }
+                        KeyCode::Char('s') => {
+                            // Cycle sort method
+                        }
+                        KeyCode::Char('i') => {
+                            self.panel_manager.agent_panel().toggle_show_inactive();
+                        }
+                        _ => {}
+                    }
                 }
-                input::InputResult::Input(input) => {
-                    // Process input
-                    self.process_command(input);
-                    // Switch back to normal mode after input
-                    self.input_handler.set_context(keybindings::KeyContext::Normal);
-                }
-                input::InputResult::Action(action) => {
-                    // Handle action from input
-                    match action {
-                        Action::SwitchToNormalMode => {
-                            self.input_handler.set_context(keybindings::KeyContext::Normal);
+                Some(PanelType::Notifications) => {
+                    match key {
+                        KeyCode::Char('c') => {
+                            self.panel_manager.notification_panel().clear_dismissible();
+                        }
+                        KeyCode::Char('d') => {
+                            // Dismiss selected notification (would need selection)
                         }
                         _ => {}
                     }
                 }
                 _ => {}
             }
-        }
-        
-        // Handle panel-specific keys
-        match self.panel_manager.get_focus() {
-            Some(PanelType::AgentStatus) => {
-                match key {
-                    KeyCode::Enter => {
-                        // Toggle expanded agent view (would need selected agent)
-                    }
-                    KeyCode::Char('s') => {
-                        // Cycle sort method
-                    }
-                    KeyCode::Char('i') => {
-                        self.panel_manager.agent_panel().toggle_show_inactive();
-                    }
-                    _ => {}
-                }
-            }
-            Some(PanelType::Notifications) => {
-                match key {
-                    KeyCode::Char('c') => {
-                        self.panel_manager.notification_panel().clear_dismissible();
-                    }
-                    KeyCode::Char('d') => {
-                        // Dismiss selected notification (would need selection)
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
         }
         
         Ok(())
@@ -381,7 +396,7 @@ impl Application {
         // Render input panel if visible
         if let Some(layout) = panel_manager.get_panel_layout(&PanelType::Input) {
             if layout.visible && chunk_idx < chunks.len() {
-                input_handler.render(f, chunks[chunk_idx], theme, &KeyContext::Global);
+                input_handler.render(f, chunks[chunk_idx], theme, input_handler.current_context());
             }
         }
         

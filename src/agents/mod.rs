@@ -4,6 +4,7 @@
 //! Agents can be specialized for different tasks like code generation, analysis, and debugging.
 
 pub mod agent_types;
+pub mod review;
 pub mod system;
 pub mod task;
 

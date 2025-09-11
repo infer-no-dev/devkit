@@ -137,6 +137,37 @@ enum Commands {
         modify: bool,
     },
     
+    /// Review code for issues and improvements
+    Review {
+        /// Path(s) to review (files or directories)
+        #[arg(value_name = "PATH")]
+        paths: Vec<PathBuf>,
+        
+        /// Focus areas for the review
+        #[arg(short, long)]
+        focus: Vec<String>,
+        
+        /// Minimum severity level to report
+        #[arg(long, default_value = "low")]
+        severity: String,
+        
+        /// Output format
+        #[arg(short, long, default_value = "text")]
+        output: String,
+        
+    /// Save results to file
+        #[arg(short = 's', long)]
+        save_to: Option<PathBuf>,
+        
+        /// Enable auto-fix for fixable issues
+        #[arg(long)]
+        auto_fix: bool,
+        
+        /// Show detailed progress information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    
     /// Start conversational AI chat mode for code generation
     Interactive {
         /// Project path to analyze for context
@@ -196,12 +227,14 @@ impl DevKit {
         let code_gen_agent = crate::agents::agent_types::CodeGenerationAgent::with_ai_manager(ai_manager.clone());
         let analysis_agent = crate::agents::agent_types::AnalysisAgent::with_ai_manager(ai_manager.clone());
         let refactoring_agent = crate::agents::agent_types::RefactoringAgent::with_ai_manager(ai_manager.clone());
+        let review_agent = crate::agents::agent_types::CodeReviewAgent::with_ai_manager(ai_manager.clone());
         
         // Register agents with the system
         agent_system.register_agent(Box::new(code_gen_agent)).await;
         agent_system.register_agent(Box::new(analysis_agent)).await;
         agent_system.register_agent(Box::new(refactoring_agent)).await;
-        info!("Agent system initialized with 3 specialized agents");
+        agent_system.register_agent(Box::new(review_agent)).await;
+        info!("Agent system initialized with 4 specialized agents");
         
         let context_manager = ContextManager::new()
             .map_err(|e| anyhow::anyhow!("Failed to initialize context manager: {}", e))?;
@@ -297,6 +330,13 @@ impl DevKit {
         );
         app.update_agent_status(
             "Refactoring".to_string(),
+            crate::agents::AgentStatus::Idle,
+            None,
+            None,
+            None,
+        );
+        app.update_agent_status(
+            "CodeReview".to_string(),
             crate::agents::AgentStatus::Idle,
             None,
             None,
@@ -839,6 +879,217 @@ impl DevKit {
         Ok(())
     }
     
+    /// Perform code review on specified paths
+    async fn review_code(
+        &mut self,
+        paths: Vec<PathBuf>,
+        focus: Vec<String>,
+        severity: String,
+        output: String,
+        save_to: Option<PathBuf>,
+        auto_fix: bool,
+        verbose: bool,
+    ) -> Result<()> {
+        use crate::agents::review::{ReviewConfig, ReviewCategory, ReviewSeverity};
+        
+        info!("Starting code review of {} paths", paths.len());
+        
+        // Default to current directory if no paths specified
+        let review_paths = if paths.is_empty() {
+            vec![PathBuf::from(".")]
+        } else {
+            paths
+        };
+        
+        // Validate paths exist
+        for path in &review_paths {
+            if !path.exists() {
+                return Err(anyhow::anyhow!("Path does not exist: {}", path.display()));
+            }
+        }
+        
+        // Build review configuration
+        let mut config = ReviewConfig::default();
+        
+        // Set focus areas if specified
+        if !focus.is_empty() {
+            config.focus_areas = focus.iter().map(|f| {
+                match f.to_lowercase().as_str() {
+                    "security" => ReviewCategory::Security,
+                    "performance" => ReviewCategory::Performance,
+                    "codesmells" | "code-smells" => ReviewCategory::CodeSmell,
+                    "documentation" | "docs" => ReviewCategory::Documentation,
+                    "testing" | "tests" => ReviewCategory::Testing,
+                    "maintainability" => ReviewCategory::Maintainability,
+                    "style" => ReviewCategory::Style,
+                    "bugs" => ReviewCategory::Bug,
+                    "vulnerabilities" | "vulns" => ReviewCategory::Vulnerability,
+                    _ => ReviewCategory::CodeSmell, // Default fallback
+                }
+            }).collect();
+        }
+        
+        // Set severity threshold
+        config.severity_threshold = match severity.to_lowercase().as_str() {
+            "info" => ReviewSeverity::Info,
+            "low" => ReviewSeverity::Low,
+            "medium" => ReviewSeverity::Medium,
+            "high" => ReviewSeverity::High,
+            "critical" => ReviewSeverity::Critical,
+            _ => ReviewSeverity::Low,
+        };
+        
+        config.enable_auto_fix = auto_fix;
+        
+        if verbose {
+            println!("📋 Review Configuration:");
+            println!("   Paths: {:?}", review_paths);
+            println!("   Focus areas: {} categories", config.focus_areas.len());
+            println!("   Severity threshold: {:?}", config.severity_threshold);
+            println!("   Auto-fix enabled: {}", config.enable_auto_fix);
+            println!();
+        }
+        
+        // Create a task for the review agent
+        let task = crate::agents::task::AgentTask {
+            id: uuid::Uuid::new_v4().to_string(),
+            task_type: "review_code".to_string(),
+            description: format!("Code review of {} paths", review_paths.len()),
+            context: serde_json::json!({
+                "paths": review_paths,
+                "config": config
+            }),
+            priority: crate::agents::task::TaskPriority::Normal,
+            deadline: Some(chrono::Utc::now() + chrono::Duration::minutes(30)),
+            metadata: std::collections::HashMap::new(),
+        };
+        
+        if verbose {
+            println!("🔍 Submitting review task to agent system...");
+        }
+        
+        // Submit task to agent system
+        let task_result = self.agent_system.submit_task(task).await
+            .map_err(|e| anyhow::anyhow!("Failed to submit review task: {}", e))?;
+        
+        if verbose {
+            println!("✅ Review completed in {:.2}s", task_result.processing_duration_ms as f64 / 1000.0);
+            println!();
+        }
+        
+        // Parse and display results
+        let review_result: crate::agents::review::ReviewResult = 
+            serde_json::from_str(&task_result.output)
+                .map_err(|e| anyhow::anyhow!("Failed to parse review result: {}", e))?;
+        
+        // Display results based on output format
+        match output.to_lowercase().as_str() {
+            "json" => {
+                let json_output = serde_json::to_string_pretty(&review_result)?;
+                println!("{}", json_output);
+            },
+            "text" | _ => {
+                self.display_review_results_text(&review_result);
+            }
+        }
+        
+        // Save to file if requested
+        if let Some(output_path) = save_to {
+            let content = match output.to_lowercase().as_str() {
+                "json" => serde_json::to_string_pretty(&review_result)?,
+                _ => format!("Code Review Report\n\nTotal Issues: {}\n\n{:#?}", 
+                           review_result.summary.total_issues, review_result),
+            };
+            
+            std::fs::write(&output_path, content)?;
+            println!("✅ Review results saved to: {}", output_path.display());
+        }
+        
+        // Show summary
+        self.display_review_summary(&review_result);
+        
+        Ok(())
+    }
+    
+    /// Display review results in text format
+    fn display_review_results_text(&self, result: &crate::agents::review::ReviewResult) {
+        if result.issues.is_empty() {
+            println!("✅ No issues found!");
+            return;
+        }
+        
+        println!("🔍 Found {} issues:", result.issues.len());
+        println!();
+        
+        for issue in &result.issues {
+            let severity_icon = match issue.severity {
+                crate::agents::review::ReviewSeverity::Critical => "🚨",
+                crate::agents::review::ReviewSeverity::High => "⚠️ ",
+                crate::agents::review::ReviewSeverity::Medium => "⚡",
+                crate::agents::review::ReviewSeverity::Low => "💡",
+                crate::agents::review::ReviewSeverity::Info => "ℹ️ ",
+            };
+            
+            let category_label = format!("{:?}", issue.category);
+            
+            println!("{} {} [{}] {}", 
+                     severity_icon,
+                     category_label,
+                     format!("{:?}", issue.severity),
+                     issue.title);
+            
+            println!("   📄 {}", issue.file_path.display());
+            
+            if let Some(line) = issue.line_start {
+                println!("   📍 Line {}", line);
+            }
+            
+            println!("   📝 {}", issue.description);
+            
+            if let Some(suggestion) = &issue.suggestion {
+                println!("   💭 Suggestion: {}", suggestion);
+            }
+            
+            if issue.auto_fixable {
+                println!("   🔧 Auto-fixable");
+            }
+            
+            println!();
+        }
+    }
+    
+    /// Display review summary
+    fn display_review_summary(&self, result: &crate::agents::review::ReviewResult) {
+        println!();
+        println!("📊 Review Summary:");
+        println!("   Files reviewed: {}", result.files_reviewed);
+        println!("   Total lines: {}", result.total_lines);
+        println!("   Total issues: {}", result.summary.total_issues);
+        println!("   Auto-fixable issues: {}", result.summary.auto_fixable_issues);
+        println!("   Review duration: {:.2}s", result.review_duration.as_secs_f64());
+        
+        if !result.summary.issues_by_severity.is_empty() {
+            println!();
+            println!("Issues by severity:");
+            for (severity, count) in &result.summary.issues_by_severity {
+                println!("   {}: {}", severity, count);
+            }
+        }
+        
+        if !result.summary.issues_by_category.is_empty() {
+            println!();
+            println!("Issues by category:");
+            for (category, count) in &result.summary.issues_by_category {
+                println!("   {}: {}", category, count);
+            }
+        }
+        
+        if let Some(most_common) = &result.summary.most_common_issue {
+            println!();
+            println!("Most common issue type: {}", most_common);
+        }
+    }
+    
     /// Start interactive conversational code generation mode
     async fn start_interactive_mode(
         &mut self,
@@ -1121,6 +1372,9 @@ async fn main() -> Result<()> {
         },
         Some(Commands::Generate { prompt, file, language, write_to_project, force, create_dirs, modify }) => {
             env.generate_code(prompt, file, language, write_to_project, force, create_dirs, modify).await?
+        },
+        Some(Commands::Review { paths, focus, severity, output, save_to, auto_fix, verbose }) => {
+            env.review_code(paths, focus, severity, output, save_to, auto_fix, verbose).await?
         },
         Some(Commands::Interactive { project, session, save_session }) => {
             env.start_interactive_mode(project, session, save_session).await?

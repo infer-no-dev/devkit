@@ -12,6 +12,7 @@ pub mod agent;
 pub mod config;
 pub mod inspect;
 pub mod profile;
+pub mod review;
 pub mod template;
 pub mod status;
 pub mod shell;

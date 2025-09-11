@@ -7,6 +7,9 @@ use crate::ai::AIManager;
 use std::sync::Arc;
 use serde_json::json;
 
+// Re-export the review agent
+pub use super::review::CodeReviewAgent;
+
 /// Agent specialized for code generation tasks
 #[derive(Debug)]
 pub struct CodeGenerationAgent {

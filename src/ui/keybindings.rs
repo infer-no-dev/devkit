@@ -71,7 +71,7 @@ pub struct KeyCombination {
 }
 
 /// Context in which keybindings are active
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum KeyContext {
     Global,          // Active in all modes
     Normal,          // Normal navigation mode
