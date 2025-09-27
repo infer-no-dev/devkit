@@ -1,6 +1,6 @@
 //! Command execution utilities for different shells.
 
-use crate::shell::{ShellType, ShellConfig, ShellError};
+use crate::shell::{ShellConfig, ShellError, ShellType};
 use std::collections::HashMap;
 use std::process::{Command, Output};
 use tokio::time::{timeout, Duration};
@@ -13,7 +13,7 @@ impl CommandExecutor {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Execute a command in the specified shell
     pub async fn execute(
         &self,
@@ -23,37 +23,39 @@ impl CommandExecutor {
         environment: &HashMap<String, String>,
     ) -> Result<Output, ShellError> {
         let mut cmd = self.build_command(command, shell_type, config)?;
-        
+
         // Set environment variables
         for (key, value) in environment {
             cmd.env(key, value);
         }
-        
+
         // Set environment variables from config
         for (key, value) in &config.environment_variables {
             cmd.env(key, value);
         }
-        
+
         // Set working directory if specified
         if let Some(working_dir) = &config.working_directory {
             cmd.current_dir(working_dir);
         }
-        
+
         // Execute with timeout
         let timeout_duration = Duration::from_secs(config.timeout_seconds);
-        
+
         let output = timeout(timeout_duration, async {
             tokio::task::spawn_blocking(move || cmd.output())
                 .await
                 .map_err(|e| ShellError::ExecutionFailed(format!("Task join error: {}", e)))?
-                .map_err(|e| ShellError::ExecutionFailed(format!("Command execution failed: {}", e)))
+                .map_err(|e| {
+                    ShellError::ExecutionFailed(format!("Command execution failed: {}", e))
+                })
         })
         .await
         .map_err(|_| ShellError::Timeout)??;
-        
+
         Ok(output)
     }
-    
+
     /// Build the appropriate command for the shell type
     fn build_command(
         &self,
@@ -92,9 +94,10 @@ impl CommandExecutor {
                     Ok(cmd)
                 }
             }
-            ShellType::Unknown(name) => {
-                Err(ShellError::UnsupportedShell(format!("Unknown shell: {}", name)))
-            }
+            ShellType::Unknown(name) => Err(ShellError::UnsupportedShell(format!(
+                "Unknown shell: {}",
+                name
+            ))),
         }
     }
 }

@@ -1,51 +1,54 @@
-use crate::cli::{CliRunner, InteractiveArgs};
-use crate::ui::{Application, UIConfig, UIEvent};
 use crate::agents::AgentSystem;
-use crate::interactive::{InteractiveSession, ConversationEntry, ConversationRole, EntryType};
+use crate::cli::{CliRunner, InteractiveArgs};
+use crate::interactive::{ConversationEntry, ConversationRole, EntryType, InteractiveSession};
 use crate::ui::notifications::Notification;
+use crate::ui::{Application, UIConfig, UIEvent};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, Duration};
 use uuid::Uuid;
 
-pub async fn run(runner: &mut CliRunner, _args: InteractiveArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(
+    runner: &mut CliRunner,
+    _args: InteractiveArgs,
+) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("Starting interactive mode...");
-    
+
     // Ensure we have necessary managers
     runner.ensure_context_manager().await?;
-    
+
     // Create interactive session
     let project_path = std::env::current_dir().ok();
     let session = InteractiveSession::new(project_path);
-    
+
     // Create UI configuration
     let ui_config = UIConfig::new()
         .with_theme("Dark".to_string())
         .with_tick_rate(Duration::from_millis(50));
-    
+
     // Initialize UI application
     let mut app = Application::new(ui_config)?;
-    
+
     // Create and initialize agent system
     let agent_system = Arc::new(AgentSystem::new());
-    agent_system.initialize().await;
-    
+    let _ = agent_system.initialize().await;
+
     // Create communication channels
     let (ui_tx, _ui_rx) = mpsc::unbounded_channel::<UIEvent>();
     let (command_tx, command_rx) = mpsc::unbounded_channel::<String>();
-    
+
     // Connect command sender to UI
     app.set_command_sender(command_tx.clone());
-    
+
     runner.print_info("Interactive mode initialized. Starting UI...");
-    
+
     // Add initial system notification
     let welcome_notification = Notification::info(
         "Welcome to Agentic Dev Environment".to_string(),
         "Interactive mode is now active. Type commands to interact with AI agents.".to_string(),
     );
     app.add_notification(welcome_notification);
-    
+
     // Create interactive manager to handle the session
     let interactive_manager = InteractiveManager::new(
         session,
@@ -54,11 +57,11 @@ pub async fn run(runner: &mut CliRunner, _args: InteractiveArgs) -> Result<(), B
         ui_tx.clone(),
         command_tx,
     );
-    
+
     // Spawn background tasks
     let agent_monitor = spawn_agent_monitor(agent_system.clone(), ui_tx.clone());
     let command_processor = spawn_command_processor(interactive_manager, command_rx);
-    
+
     // Run the main UI event loop
     let ui_result = tokio::select! {
         result = app.run() => result,
@@ -67,11 +70,11 @@ pub async fn run(runner: &mut CliRunner, _args: InteractiveArgs) -> Result<(), B
             Ok(())
         }
     };
-    
+
     // Cleanup background tasks
     agent_monitor.abort();
     command_processor.abort();
-    
+
     match ui_result {
         Ok(_) => {
             runner.print_info("Interactive mode ended successfully");
@@ -109,9 +112,12 @@ impl InteractiveManager {
             command_sender,
         })
     }
-    
+
     /// Process a user command
-    async fn process_command(&self, command: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_command(
+        &self,
+        command: String,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Add user input to session history
         let entry = ConversationEntry {
             timestamp: std::time::SystemTime::now(),
@@ -120,25 +126,25 @@ impl InteractiveManager {
             result: None,
             entry_type: self.classify_command(&command),
         };
-        
+
         {
             let mut session = self.session.write().await;
             session.add_history_entry(entry);
         }
-        
+
         // Send user input to UI
         let _ = self.ui_sender.send(UIEvent::Output {
             content: command.clone(),
             block_type: "user".to_string(),
         });
-        
+
         // Process different types of commands
         let response = if command.starts_with("/") {
             self.process_system_command(&command[1..]).await?
         } else {
             self.process_natural_language_command(&command).await?
         };
-        
+
         // Add response to session history
         let response_entry = ConversationEntry {
             timestamp: std::time::SystemTime::now(),
@@ -147,25 +153,25 @@ impl InteractiveManager {
             result: None,
             entry_type: EntryType::Chat,
         };
-        
+
         {
             let mut session = self.session.write().await;
             session.add_history_entry(response_entry);
         }
-        
+
         // Send response to UI
         let _ = self.ui_sender.send(UIEvent::Output {
             content: response,
             block_type: "agent".to_string(),
         });
-        
+
         Ok(())
     }
-    
+
     /// Classify command type for better processing
     fn classify_command(&self, command: &str) -> EntryType {
         let lower = command.to_lowercase();
-        
+
         if lower.contains("generate") || lower.contains("create") || lower.contains("write") {
             EntryType::Generate
         } else if lower.contains("test") {
@@ -182,12 +188,15 @@ impl InteractiveManager {
             EntryType::Chat
         }
     }
-    
+
     /// Process system commands (starting with /)
-    async fn process_system_command(&self, command: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_system_command(
+        &self,
+        command: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let parts: Vec<&str> = command.split_whitespace().collect();
         let cmd = parts.get(0).unwrap_or(&"");
-        
+
         match *cmd {
             "help" => Ok(self.get_help_text()),
             "status" => Ok(self.get_status().await),
@@ -211,14 +220,20 @@ impl InteractiveManager {
                 let _ = self.ui_sender.send(UIEvent::Quit);
                 Ok("Goodbye!".to_string())
             }
-            _ => Ok(format!("Unknown command: /{}. Type /help for available commands.", cmd)),
+            _ => Ok(format!(
+                "Unknown command: /{}. Type /help for available commands.",
+                cmd
+            )),
         }
     }
-    
+
     /// Process natural language commands through agents
-    async fn process_natural_language_command(&self, command: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_natural_language_command(
+        &self,
+        command: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         use crate::agents::{AgentTask, TaskPriority};
-        
+
         // Classify the command and route to appropriate agent
         let task_type = match self.classify_command(command) {
             EntryType::Generate => "generate_code",
@@ -229,7 +244,7 @@ impl InteractiveManager {
             EntryType::Refine => "refactor_code",
             _ => "general_chat",
         };
-        
+
         // Create agent task
         let task = AgentTask {
             id: format!("task_{}", Uuid::new_v4()),
@@ -247,7 +262,7 @@ impl InteractiveManager {
             deadline: None,
             metadata: std::collections::HashMap::new(),
         };
-        
+
         // Send task to agent system
         match self.agent_system.submit_task(task).await {
             Ok(result) => {
@@ -259,17 +274,17 @@ impl InteractiveManager {
                     priority: None,
                     progress: None,
                 });
-                
-                Ok(format!("Agent Response: {}\n\nArtifacts generated: {}", 
+
+                Ok(format!(
+                    "Agent Response: {}\n\nArtifacts generated: {}",
                     result.output,
-                    result.artifacts.len()))
+                    result.artifacts.len()
+                ))
             }
-            Err(e) => {
-                Ok(format!("Agent processing failed: {}", e))
-            }
+            Err(e) => Ok(format!("Agent processing failed: {}", e)),
         }
     }
-    
+
     /// Get help text for commands
     fn get_help_text(&self) -> String {
         r#"Available Commands:
@@ -287,78 +302,85 @@ Natural Language Commands:
   - "add tests for..."
   - "debug this issue"
 
-Press Ctrl+C to exit at any time."#.to_string()
+Press Ctrl+C to exit at any time."#
+            .to_string()
     }
-    
+
     /// Get system status
     async fn get_status(&self) -> String {
         let session = self.session.read().await;
-        format!("Session ID: {}\nProject: {:?}\nHistory entries: {}\nArtifacts: {}", 
+        format!(
+            "Session ID: {}\nProject: {:?}\nHistory entries: {}\nArtifacts: {}",
             session.session_id,
             session.project_path,
             session.history.len(),
             session.artifacts.len()
         )
     }
-    
+
     /// List active agents
     async fn list_agents(&self) -> String {
         let agents_info = self.agent_system.get_agents_info().await;
-        
+
         if agents_info.is_empty() {
             return "No agents currently active".to_string();
         }
-        
+
         let mut output = String::from("Active Agents:\n");
         for (i, agent_info) in agents_info.iter().enumerate() {
-            output.push_str(&format!("{}. {} ({}) - Status: {:?}\n",
+            output.push_str(&format!(
+                "{}. {} ({}) - Status: {:?}\n",
                 i + 1,
                 agent_info.name,
                 agent_info.id,
                 agent_info.status
             ));
-            
+
             if !agent_info.capabilities.is_empty() {
-                output.push_str(&format!("   Capabilities: {}\n", agent_info.capabilities.join(", ")));
+                output.push_str(&format!(
+                    "   Capabilities: {}\n",
+                    agent_info.capabilities.join(", ")
+                ));
             }
         }
-        
+
         output
     }
 }
 
 /// Spawn agent monitoring task
 fn spawn_agent_monitor(
-    agent_system: Arc<AgentSystem>, 
-    ui_sender: mpsc::UnboundedSender<UIEvent>
+    agent_system: Arc<AgentSystem>,
+    ui_sender: mpsc::UnboundedSender<UIEvent>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_millis(500));
-        
+
         loop {
             interval.tick().await;
-            
+
             // Get real-time agent status updates
             let agents_info = agent_system.get_agents_info().await;
-            
+
             for agent_info in agents_info {
                 let _ = ui_sender.send(UIEvent::AgentStatusUpdate {
                     agent_name: agent_info.name.clone(),
                     status: agent_info.status.clone(),
-                    task: None, // TODO: Add current task info
+                    task: None,     // TODO: Add current task info
                     priority: None, // TODO: Add priority info
                     progress: None, // TODO: Add progress tracking
                 });
             }
-            
+
             // Send periodic system status
             let agent_statuses = agent_system.get_agent_statuses().await;
             if !agent_statuses.is_empty() {
-                let status_summary = agent_statuses.iter()
+                let status_summary = agent_statuses
+                    .iter()
                     .map(|(name, status)| format!("{}: {:?}", name, status))
                     .collect::<Vec<_>>()
                     .join(", ");
-                    
+
                 // Send agent status as notification instead
                 let _ = ui_sender.send(UIEvent::Output {
                     content: format!("System Status: {}", status_summary),
@@ -372,7 +394,7 @@ fn spawn_agent_monitor(
 /// Spawn command processing task
 fn spawn_command_processor(
     manager: Arc<InteractiveManager>,
-    mut command_rx: mpsc::UnboundedReceiver<String>
+    mut command_rx: mpsc::UnboundedReceiver<String>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(command) = command_rx.recv().await {

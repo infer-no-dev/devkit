@@ -1,6 +1,6 @@
 //! Shell detection utilities.
 
-use crate::shell::{ShellType, ShellError};
+use crate::shell::{ShellError, ShellType};
 use std::env;
 
 /// Detector for identifying the current shell
@@ -10,7 +10,7 @@ impl ShellDetector {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Detect the current shell from environment variables
     pub fn detect_current_shell(&self) -> Result<ShellType, ShellError> {
         // Try to detect from SHELL environment variable
@@ -26,7 +26,7 @@ impl ShellDetector {
                 }
             }
         }
-        
+
         // Try to detect from parent process on Unix-like systems
         #[cfg(unix)]
         {
@@ -39,7 +39,7 @@ impl ShellDetector {
                 });
             }
         }
-        
+
         // Try to detect PowerShell on Windows
         #[cfg(windows)]
         {
@@ -47,29 +47,29 @@ impl ShellDetector {
                 return Ok(ShellType::PowerShell);
             }
         }
-        
+
         // Fallback to bash as default on Unix-like systems
         #[cfg(unix)]
         {
             Ok(ShellType::Bash)
         }
-        
+
         // Fallback to PowerShell on Windows
         #[cfg(windows)]
         {
             Ok(ShellType::PowerShell)
         }
     }
-    
+
     #[cfg(unix)]
     fn get_parent_process_name(&self) -> Result<String, ShellError> {
         use std::process::Command;
-        
+
         let output = Command::new("ps")
             .args(&["-o", "comm=", "-p", &std::process::id().to_string()])
             .output()
             .map_err(|e| ShellError::DetectionFailed(format!("Failed to execute ps: {}", e)))?;
-        
+
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let process_name = stdout.trim().to_string();
@@ -77,7 +77,9 @@ impl ShellDetector {
                 return Ok(process_name);
             }
         }
-        
-        Err(ShellError::DetectionFailed("Could not determine parent process".to_string()))
+
+        Err(ShellError::DetectionFailed(
+            "Could not determine parent process".to_string(),
+        ))
     }
 }

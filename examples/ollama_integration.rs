@@ -1,13 +1,13 @@
 //! Example demonstrating Ollama integration for code generation
-//! 
+//!
 //! This example shows how to set up and use the Ollama Local LLM integration
 //! for AI-powered code generation in the agentic development environment.
 
 use agentic_dev_env::ai::AIManager;
 use agentic_dev_env::codegen::{CodeGenerator, GenerationConfig, GenerationRequest};
-use std::sync::Arc;
 use agentic_dev_env::config::{AIModelConfig, OllamaConfig};
 use agentic_dev_env::context::CodebaseContext;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -51,7 +51,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🏥 Checking Ollama health...");
     let health_results = ai_manager.health_check_all().await;
     for (provider, is_healthy) in health_results {
-        let status = if is_healthy { "✅ Healthy" } else { "❌ Unhealthy" };
+        let status = if is_healthy {
+            "✅ Healthy"
+        } else {
+            "❌ Unhealthy"
+        };
         println!("Provider {:?}: {}", provider, status);
     }
 
@@ -64,7 +68,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("   You can install a model with: ollama pull llama3.2");
             } else {
                 println!("Found {} model(s):", models.len());
-                for model in models.iter().take(3) { // Show first 3 models
+                for model in models.iter().take(3) {
+                    // Show first 3 models
                     println!("  • {}", model.name);
                     if let Some(desc) = &model.description {
                         println!("    {}", desc);
@@ -82,14 +87,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up code generator with AI integration
     println!("🔧 Setting up Code Generator with AI integration...");
-    let mut code_generator = CodeGenerator::new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    let mut code_generator =
+        CodeGenerator::new().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
     code_generator.set_ai_manager(Arc::new(ai_manager));
-    println!("✅ Code Generator initialized with AI support: {}", code_generator.has_ai());
+    println!(
+        "✅ Code Generator initialized with AI support: {}",
+        code_generator.has_ai()
+    );
 
     // Example 1: Generate a simple Rust function
     println!("\n🚀 Example 1: Generate a Rust function");
     println!("=====================================\n");
-    
+
     let rust_prompt = "Create a function that calculates the factorial of a number using recursion";
     let generation_config = GenerationConfig {
         target_language: Some("rust".to_string()),
@@ -98,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         use_ai: true,
         ..GenerationConfig::default()
     };
-    
+
     let context = CodebaseContext {
         files: Vec::new(),
         dependencies: Vec::new(),
@@ -107,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         repository_info: Default::default(),
         symbols: Default::default(),
     };
-    
+
     let request = GenerationRequest {
         prompt: rust_prompt.to_string(),
         file_path: Some("factorial.rs".to_string()),
@@ -115,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config: generation_config.clone(),
         constraints: vec!["Use proper error handling".to_string()],
     };
-    
+
     match code_generator.generate_from_prompt(request).await {
         Ok(result) => {
             println!("✅ Code generated successfully!");
@@ -127,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", "=".repeat(50));
             println!("{}", result.generated_code);
             println!("{}", "=".repeat(50));
-            
+
             if !result.suggestions.is_empty() {
                 println!("\n💡 Suggestions:");
                 for suggestion in result.suggestions {
@@ -145,6 +154,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   1. Ensure Ollama is installed and running (ollama serve)");
     println!("   2. Install a model (e.g., ollama pull llama3.2)");
     println!("   3. Run this example: cargo run --example ollama_integration");
-    
+
     Ok(())
 }

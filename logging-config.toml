@@ -1,0 +1,115 @@
+# DevKit Logging Configuration
+# This file provides default logging configuration for the DevKit AI development environment.
+
+# Minimum log level to process (trace, debug, info, warn, error)
+min_level = "info"
+
+# Environment for contextual logging
+environment = "development"
+
+# Global settings
+include_location = false
+include_thread_info = true
+capture_metrics = true
+buffer_size = 1000
+flush_timeout_ms = 5000
+
+# Rate limiting (entries per minute)
+rate_limit_per_minute = 1000
+
+# Sampling rate (0.0 to 1.0, where 1.0 = log everything)
+sample_rate = 1.0
+
+# Global fields added to all log entries
+[global_fields]
+service = "devkit"
+version = "0.1.0"
+
+# Output destinations
+[[outputs]]
+type = "console"
+format = "text"
+colored = true
+
+[[outputs]]
+type = "file"
+path = "./logs/devkit.log"
+format = "json"
+
+[outputs.rotation]
+max_size_bytes = 52428800  # 50MB
+max_files = 5
+compress = true
+
+# Component filtering (empty = allow all)
+allowed_components = []
+blocked_components = []
+
+# Examples of different configurations for various environments:
+
+# Development configuration
+[environments.development]
+min_level = "debug"
+include_location = true
+capture_metrics = true
+sample_rate = 1.0
+
+[[environments.development.outputs]]
+type = "console"
+format = "text"
+colored = true
+
+[[environments.development.outputs]]
+type = "file"
+path = "./logs/devkit-dev.log"
+format = "json"
+
+# Production configuration
+[environments.production]
+min_level = "info"
+include_location = false
+capture_metrics = true
+sample_rate = 1.0
+rate_limit_per_minute = 5000
+
+[[environments.production.outputs]]
+type = "console"
+format = "text"
+colored = false
+
+[[environments.production.outputs]]
+type = "file"
+path = "/var/log/devkit/devkit.log"
+format = "json"
+
+[environments.production.outputs.rotation]
+max_size_bytes = 104857600  # 100MB
+max_files = 10
+compress = true
+
+# Testing configuration
+[environments.testing]
+min_level = "warn"
+include_location = false
+capture_metrics = false
+sample_rate = 1.0
+
+[[environments.testing.outputs]]
+type = "console"
+format = "text"
+colored = false
+
+# Component-specific logging levels
+[component_levels]
+# Uncomment to set specific levels for components
+# agent_system = "debug"
+# code_generation = "info"
+# context_analysis = "debug"
+# ai_manager = "info"
+# shell_integration = "warn"
+
+# Example syslog configuration (commented out by default)
+# [[outputs]]
+# type = "syslog"
+# facility = "user"
+# format = "structured"

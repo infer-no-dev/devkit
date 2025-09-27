@@ -5,15 +5,18 @@
 
 pub mod agents;
 pub mod ai;
+pub mod cli;
 pub mod codegen;
-pub mod context;
-pub mod shell;
-pub mod ui;
 pub mod config;
-pub mod system_bus;
+pub mod context;
+pub mod error;
 pub mod integrations;
 pub mod interactive;
-pub mod cli;
+pub mod logging;
+pub mod services;
+pub mod shell;
+pub mod system_bus;
+pub mod ui;
 
 #[cfg(test)]
 pub mod testing;
@@ -23,10 +26,17 @@ pub mod testing;
 pub mod tests;
 
 // Re-export commonly used types
-pub use agents::{Agent, AgentTask, AgentResult, AgentError, AgentStatus, TaskPriority};
-pub use codegen::{CodeGenerator, GenerationConfig, CodeGenError as CodegenError};
-pub use context::{FileContext, CodebaseContext, ContextError};
-pub use config::{Config, ConfigManager, ConfigError};
+pub use agents::{Agent, AgentError, AgentResult, AgentStatus, AgentTask, TaskPriority};
+pub use codegen::{CodeGenError as CodegenError, CodeGenerator, GenerationConfig};
+pub use config::{Config, ConfigError, ConfigManager};
+pub use context::{CodebaseContext, ContextError, FileContext};
+pub use error::{
+    ContextualError, DevKitError, DevKitResult, ErrorContext, ErrorHandler, WithContext,
+};
+pub use logging::{
+    LogConfig, LogContext, LogEntry, LogFormat, LogLevel, LoggingError,
+    LoggingSystem,
+};
 pub use shell::{ShellConfig, ShellError};
 
 // Version information

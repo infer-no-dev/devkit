@@ -1,7 +1,7 @@
+use crate::agents::review::{ReviewCategory, ReviewConfig, ReviewSeverity};
 use crate::cli::CliRunner;
-use crate::agents::review::{ReviewConfig, ReviewCategory, ReviewSeverity};
-use std::path::PathBuf;
 use clap::{Args, ValueEnum};
+use std::path::PathBuf;
 
 /// Arguments for the review command
 #[derive(Args, Clone)]
@@ -9,43 +9,43 @@ pub struct ReviewArgs {
     /// Path(s) to review (files or directories)
     #[arg(value_name = "PATH")]
     pub paths: Vec<PathBuf>,
-    
+
     /// Focus areas for the review (can be specified multiple times)
     #[arg(short, long, value_enum)]
     pub focus: Vec<ReviewFocus>,
-    
+
     /// Minimum severity level to report
     #[arg(long, value_enum, default_value = "low")]
     pub severity: ReviewSeverityArg,
-    
+
     /// Output format
     #[arg(short, long, value_enum, default_value = "text")]
     pub output: OutputFormat,
-    
+
     /// Save results to file
     #[arg(short = 'o', long)]
     pub save_to: Option<PathBuf>,
-    
+
     /// Enable auto-fix for fixable issues
     #[arg(long)]
     pub auto_fix: bool,
-    
+
     /// Include style issues in the review
     #[arg(long, default_value = "true")]
     pub include_style: bool,
-    
+
     /// Maximum number of issues to report per file
     #[arg(long, default_value = "50")]
     pub max_issues_per_file: usize,
-    
+
     /// Exclude files matching these patterns
     #[arg(long)]
     pub exclude: Vec<String>,
-    
+
     /// Run review in watch mode (re-run on file changes)
     #[arg(short, long)]
     pub watch: bool,
-    
+
     /// Show detailed progress information
     #[arg(short, long)]
     pub verbose: bool,
@@ -116,28 +116,34 @@ pub enum OutputFormat {
 }
 
 /// Main entry point for the review command
-pub async fn run(runner: &mut CliRunner, args: ReviewArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(
+    runner: &mut CliRunner,
+    args: ReviewArgs,
+) -> Result<(), Box<dyn std::error::Error>> {
     if args.verbose {
-        runner.print_info(&format!("Starting code review of {} paths", args.paths.len()));
+        runner.print_info(&format!(
+            "Starting code review of {} paths",
+            args.paths.len()
+        ));
     }
-    
+
     // Default to current directory if no paths specified
     let review_paths = if args.paths.is_empty() {
         vec![PathBuf::from(".")]
     } else {
         args.paths.clone()
     };
-    
+
     // Validate paths exist
     for path in &review_paths {
         if !path.exists() {
             return Err(format!("Path does not exist: {}", path.display()).into());
         }
     }
-    
+
     // Build review configuration from CLI args
     let review_config = build_review_config(&args)?;
-    
+
     if args.watch {
         // Run in watch mode
         run_watch_mode(runner, &review_paths, &review_config, &args).await
@@ -150,7 +156,7 @@ pub async fn run(runner: &mut CliRunner, args: ReviewArgs) -> Result<(), Box<dyn
 /// Build ReviewConfig from CLI arguments
 fn build_review_config(args: &ReviewArgs) -> Result<ReviewConfig, Box<dyn std::error::Error>> {
     let mut config = ReviewConfig::default();
-    
+
     // Set focus areas
     if !args.focus.is_empty() {
         config.focus_areas = if args.focus.contains(&ReviewFocus::All) {
@@ -169,18 +175,18 @@ fn build_review_config(args: &ReviewArgs) -> Result<ReviewConfig, Box<dyn std::e
             args.focus.iter().map(|f| f.clone().into()).collect()
         };
     }
-    
+
     // Set other options
     config.severity_threshold = args.severity.clone().into();
     config.enable_auto_fix = args.auto_fix;
     config.include_style_issues = args.include_style;
     config.max_issues_per_file = args.max_issues_per_file;
-    
+
     // Add exclude patterns
     if !args.exclude.is_empty() {
         config.exclude_files.extend(args.exclude.iter().cloned());
     }
-    
+
     Ok(config)
 }
 
@@ -191,38 +197,37 @@ async fn run_single_review(
     config: &ReviewConfig,
     args: &ReviewArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    
     if args.verbose {
-        println!("Reviewing {} paths with {} focus areas", 
-                paths.len(), config.focus_areas.len());
+        println!(
+            "Reviewing {} paths with {} focus areas",
+            paths.len(),
+            config.focus_areas.len()
+        );
     }
-    
+
     // For now, create a mock result since the CLI integration needs more work
     // TODO: Integrate with actual agent system once CLI runner is properly set up
-    
+
     let mock_result = crate::agents::review::ReviewResult {
-        issues: vec![
-            crate::agents::review::ReviewIssue {
-                category: crate::agents::review::ReviewCategory::CodeSmell,
-                severity: crate::agents::review::ReviewSeverity::Medium,
-                title: "Example code smell detected".to_string(),
-                description: "This is a demonstration of the code review functionality.".to_string(),
-                file_path: paths.get(0).unwrap_or(&std::path::PathBuf::from(".")).clone(),
-                line_start: Some(1),
-                line_end: Some(1),
-                suggestion: Some("Consider refactoring for better maintainability.".to_string()),
-                auto_fixable: false,
-                code_snippet: None,
-            }
-        ],
+        issues: vec![crate::agents::review::ReviewIssue {
+            category: crate::agents::review::ReviewCategory::CodeSmell,
+            severity: crate::agents::review::ReviewSeverity::Medium,
+            title: "Example code smell detected".to_string(),
+            description: "This is a demonstration of the code review functionality.".to_string(),
+            file_path: paths
+                .get(0)
+                .unwrap_or(&std::path::PathBuf::from("."))
+                .clone(),
+            line_start: Some(1),
+            line_end: Some(1),
+            suggestion: Some("Consider refactoring for better maintainability.".to_string()),
+            auto_fixable: false,
+            code_snippet: None,
+        }],
         summary: crate::agents::review::ReviewSummary {
             total_issues: 1,
-            issues_by_severity: std::collections::HashMap::from([
-                ("Medium".to_string(), 1)
-            ]),
-            issues_by_category: std::collections::HashMap::from([
-                ("CodeSmell".to_string(), 1)
-            ]),
+            issues_by_severity: std::collections::HashMap::from([("Medium".to_string(), 1)]),
+            issues_by_category: std::collections::HashMap::from([("CodeSmell".to_string(), 1)]),
             auto_fixable_issues: 0,
             most_common_issue: Some("CodeSmell".to_string()),
         },
@@ -230,22 +235,25 @@ async fn run_single_review(
         total_lines: 100, // Mock value
         review_duration: std::time::Duration::from_secs(1),
     };
-    
+
     if args.verbose {
-        println!("Review completed in {:.2}s", mock_result.review_duration.as_secs_f64());
+        println!(
+            "Review completed in {:.2}s",
+            mock_result.review_duration.as_secs_f64()
+        );
     }
-    
+
     display_review_results(&mock_result, args)?;
-    
+
     // Save to file if requested
     if let Some(output_path) = &args.save_to {
         save_review_results(&mock_result, output_path, &args.output)?;
         println!("✅ Review results saved to: {}", output_path.display());
     }
-    
+
     // Show summary
     display_review_summary(&mock_result);
-    
+
     Ok(())
 }
 
@@ -282,10 +290,10 @@ fn display_text_results(result: &crate::agents::review::ReviewResult) {
         println!("✅ No issues found!");
         return;
     }
-    
+
     println!("🔍 Found {} issues:", result.issues.len());
     println!();
-    
+
     for issue in &result.issues {
         let severity_icon = match issue.severity {
             crate::agents::review::ReviewSeverity::Critical => "🚨",
@@ -294,69 +302,81 @@ fn display_text_results(result: &crate::agents::review::ReviewResult) {
             crate::agents::review::ReviewSeverity::Low => "💡",
             crate::agents::review::ReviewSeverity::Info => "ℹ️ ",
         };
-        
+
         let category_label = format!("{:?}", issue.category);
-        
-        println!("{} {} [{}] {}", 
-                 severity_icon,
-                 category_label,
-                 format!("{:?}", issue.severity),
-                 issue.title);
-        
+
+        println!(
+            "{} {} [{}] {}",
+            severity_icon,
+            category_label,
+            format!("{:?}", issue.severity),
+            issue.title
+        );
+
         println!("   📄 {}", issue.file_path.display());
-        
+
         if let Some(line) = issue.line_start {
             println!("   📍 Line {}", line);
         }
-        
+
         println!("   📝 {}", issue.description);
-        
+
         if let Some(suggestion) = &issue.suggestion {
             println!("   💭 Suggestion: {}", suggestion);
         }
-        
+
         if issue.auto_fixable {
             println!("   🔧 Auto-fixable");
         }
-        
+
         println!();
     }
 }
 
 /// Display results in JSON format
-fn display_json_results(result: &crate::agents::review::ReviewResult) -> Result<(), Box<dyn std::error::Error>> {
+fn display_json_results(
+    result: &crate::agents::review::ReviewResult,
+) -> Result<(), Box<dyn std::error::Error>> {
     let json_output = serde_json::to_string_pretty(result)?;
     println!("{}", json_output);
     Ok(())
 }
 
 /// Display results in YAML format
-fn display_yaml_results(result: &crate::agents::review::ReviewResult) -> Result<(), Box<dyn std::error::Error>> {
+fn display_yaml_results(
+    result: &crate::agents::review::ReviewResult,
+) -> Result<(), Box<dyn std::error::Error>> {
     let yaml_output = serde_yaml::to_string(result)?;
     println!("{}", yaml_output);
     Ok(())
 }
 
 /// Display results in CSV format
-fn display_csv_results(result: &crate::agents::review::ReviewResult) -> Result<(), Box<dyn std::error::Error>> {
+fn display_csv_results(
+    result: &crate::agents::review::ReviewResult,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("File,Line,Severity,Category,Title,Description,Suggestion,AutoFixable");
-    
+
     for issue in &result.issues {
-        println!("{},{},{:?},{:?},{},{},{},{}",
-                 issue.file_path.display(),
-                 issue.line_start.map_or("".to_string(), |l| l.to_string()),
-                 issue.severity,
-                 issue.category,
-                 escape_csv_field(&issue.title),
-                 escape_csv_field(&issue.description),
-                 issue.suggestion.as_deref().unwrap_or(""),
-                 issue.auto_fixable);
+        println!(
+            "{},{},{:?},{:?},{},{},{},{}",
+            issue.file_path.display(),
+            issue.line_start.map_or("".to_string(), |l| l.to_string()),
+            issue.severity,
+            issue.category,
+            escape_csv_field(&issue.title),
+            escape_csv_field(&issue.description),
+            issue.suggestion.as_deref().unwrap_or(""),
+            issue.auto_fixable
+        );
     }
     Ok(())
 }
 
 /// Display results in HTML format
-fn display_html_results(result: &crate::agents::review::ReviewResult) -> Result<(), Box<dyn std::error::Error>> {
+fn display_html_results(
+    result: &crate::agents::review::ReviewResult,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("<!DOCTYPE html>");
     println!("<html><head><title>Code Review Report</title>");
     println!("<style>");
@@ -369,35 +389,48 @@ fn display_html_results(result: &crate::agents::review::ReviewResult) -> Result<
     println!(".info {{ border-color: #0366d6; }}");
     println!("</style>");
     println!("</head><body>");
-    
+
     println!("<h1>Code Review Report</h1>");
-    println!("<p>Found {} issues in {} files</p>", result.issues.len(), result.files_reviewed);
-    
+    println!(
+        "<p>Found {} issues in {} files</p>",
+        result.issues.len(),
+        result.files_reviewed
+    );
+
     for issue in &result.issues {
         let severity_class = format!("{:?}", issue.severity).to_lowercase();
         println!("<div class=\"issue {}\">", severity_class);
         println!("<h3>{}</h3>", html_escape(&issue.title));
-        println!("<p><strong>File:</strong> {}</p>", html_escape(&issue.file_path.display().to_string()));
-        
+        println!(
+            "<p><strong>File:</strong> {}</p>",
+            html_escape(&issue.file_path.display().to_string())
+        );
+
         if let Some(line) = issue.line_start {
             println!("<p><strong>Line:</strong> {}</p>", line);
         }
-        
+
         println!("<p><strong>Category:</strong> {:?}</p>", issue.category);
         println!("<p><strong>Severity:</strong> {:?}</p>", issue.severity);
-        println!("<p><strong>Description:</strong> {}</p>", html_escape(&issue.description));
-        
+        println!(
+            "<p><strong>Description:</strong> {}</p>",
+            html_escape(&issue.description)
+        );
+
         if let Some(suggestion) = &issue.suggestion {
-            println!("<p><strong>Suggestion:</strong> {}</p>", html_escape(suggestion));
+            println!(
+                "<p><strong>Suggestion:</strong> {}</p>",
+                html_escape(suggestion)
+            );
         }
-        
+
         if issue.auto_fixable {
             println!("<p><em>This issue can be automatically fixed.</em></p>");
         }
-        
+
         println!("</div>");
     }
-    
+
     println!("</body></html>");
     Ok(())
 }
@@ -409,9 +442,15 @@ fn display_review_summary(result: &crate::agents::review::ReviewResult) {
     println!("   Files reviewed: {}", result.files_reviewed);
     println!("   Total lines: {}", result.total_lines);
     println!("   Total issues: {}", result.summary.total_issues);
-    println!("   Auto-fixable issues: {}", result.summary.auto_fixable_issues);
-    println!("   Review duration: {:.2}s", result.review_duration.as_secs_f64());
-    
+    println!(
+        "   Auto-fixable issues: {}",
+        result.summary.auto_fixable_issues
+    );
+    println!(
+        "   Review duration: {:.2}s",
+        result.review_duration.as_secs_f64()
+    );
+
     if !result.summary.issues_by_severity.is_empty() {
         println!();
         println!("Issues by severity:");
@@ -419,7 +458,7 @@ fn display_review_summary(result: &crate::agents::review::ReviewResult) {
             println!("   {}: {}", severity, count);
         }
     }
-    
+
     if !result.summary.issues_by_category.is_empty() {
         println!();
         println!("Issues by category:");
@@ -427,7 +466,7 @@ fn display_review_summary(result: &crate::agents::review::ReviewResult) {
             println!("   {}: {}", category, count);
         }
     }
-    
+
     if let Some(most_common) = &result.summary.most_common_issue {
         println!();
         println!("Most common issue type: {}", most_common);
@@ -443,29 +482,35 @@ fn save_review_results(
     let content = match format {
         OutputFormat::Json => serde_json::to_string_pretty(result)?,
         OutputFormat::Yaml => serde_yaml::to_string(result)?,
-        OutputFormat::Text => format!("Code Review Report\\n\\nTotal Issues: {}\\n\\n{:#?}", 
-                                     result.summary.total_issues, result),
+        OutputFormat::Text => format!(
+            "Code Review Report\\n\\nTotal Issues: {}\\n\\n{:#?}",
+            result.summary.total_issues, result
+        ),
         OutputFormat::Csv => {
-            let mut csv_content = "File,Line,Severity,Category,Title,Description,Suggestion,AutoFixable\\n".to_string();
+            let mut csv_content =
+                "File,Line,Severity,Category,Title,Description,Suggestion,AutoFixable\\n"
+                    .to_string();
             for issue in &result.issues {
-                csv_content.push_str(&format!("{},{},{:?},{:?},{},{},{},{}\\n",
-                                             issue.file_path.display(),
-                                             issue.line_start.map_or("".to_string(), |l| l.to_string()),
-                                             issue.severity,
-                                             issue.category,
-                                             escape_csv_field(&issue.title),
-                                             escape_csv_field(&issue.description),
-                                             issue.suggestion.as_deref().unwrap_or(""),
-                                             issue.auto_fixable));
+                csv_content.push_str(&format!(
+                    "{},{},{:?},{:?},{},{},{},{}\\n",
+                    issue.file_path.display(),
+                    issue.line_start.map_or("".to_string(), |l| l.to_string()),
+                    issue.severity,
+                    issue.category,
+                    escape_csv_field(&issue.title),
+                    escape_csv_field(&issue.description),
+                    issue.suggestion.as_deref().unwrap_or(""),
+                    issue.auto_fixable
+                ));
             }
             csv_content
-        },
+        }
         OutputFormat::Html => {
             // Generate HTML content similar to display_html_results
             format!("<!DOCTYPE html><html><head><title>Code Review Report</title></head><body><h1>Review Results</h1><p>Total Issues: {}</p></body></html>", result.summary.total_issues)
-        },
+        }
     };
-    
+
     std::fs::write(output_path, content)?;
     Ok(())
 }

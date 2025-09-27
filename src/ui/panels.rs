@@ -1,6 +1,11 @@
 //! Panel management system for displaying different UI views.
 
-use std::collections::HashMap;
+use crate::{
+    agents::{AgentStatus, TaskPriority},
+    ui::blocks::OutputBlockCollection,
+    ui::notifications::NotificationPanel,
+    ui::themes::Theme,
+};
 use ratatui::{
     layout::{Constraint, Direction, Rect},
     style::{Modifier, Style},
@@ -8,12 +13,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
-use crate::{
-    agents::{AgentStatus, TaskPriority},
-    ui::themes::Theme,
-    ui::notifications::NotificationPanel,
-    ui::blocks::OutputBlockCollection,
-};
+use std::collections::HashMap;
 
 /// Types of panels available in the UI
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -99,27 +99,41 @@ impl PanelLayout {
     /// Create a new panel layout
     pub fn new(panel_type: PanelType) -> Self {
         let (title, constraints, direction) = match panel_type {
-            PanelType::AgentStatus => {
-                ("Agent Status".to_string(), vec![Constraint::Percentage(30)], Direction::Vertical)
-            }
-            PanelType::Output => {
-                ("Output".to_string(), vec![Constraint::Percentage(50)], Direction::Vertical)
-            }
-            PanelType::Input => {
-                ("Input".to_string(), vec![Constraint::Length(3)], Direction::Vertical)
-            }
-            PanelType::Notifications => {
-                ("Notifications".to_string(), vec![Constraint::Percentage(20)], Direction::Vertical)
-            }
-            PanelType::Help => {
-                ("Help".to_string(), vec![Constraint::Percentage(100)], Direction::Vertical)
-            }
-            PanelType::Settings => {
-                ("Settings".to_string(), vec![Constraint::Percentage(100)], Direction::Vertical)
-            }
-            PanelType::Logs => {
-                ("Logs".to_string(), vec![Constraint::Percentage(100)], Direction::Vertical)
-            }
+            PanelType::AgentStatus => (
+                "Agent Status".to_string(),
+                vec![Constraint::Percentage(30)],
+                Direction::Vertical,
+            ),
+            PanelType::Output => (
+                "Output".to_string(),
+                vec![Constraint::Percentage(50)],
+                Direction::Vertical,
+            ),
+            PanelType::Input => (
+                "Input".to_string(),
+                vec![Constraint::Length(3)],
+                Direction::Vertical,
+            ),
+            PanelType::Notifications => (
+                "Notifications".to_string(),
+                vec![Constraint::Percentage(20)],
+                Direction::Vertical,
+            ),
+            PanelType::Help => (
+                "Help".to_string(),
+                vec![Constraint::Percentage(100)],
+                Direction::Vertical,
+            ),
+            PanelType::Settings => (
+                "Settings".to_string(),
+                vec![Constraint::Percentage(100)],
+                Direction::Vertical,
+            ),
+            PanelType::Logs => (
+                "Logs".to_string(),
+                vec![Constraint::Percentage(100)],
+                Direction::Vertical,
+            ),
         };
 
         Self {
@@ -242,7 +256,10 @@ impl AgentDisplayInfo {
 
         // Agent name and type
         let name_line = Line::from(vec![
-            Span::styled(&self.name, theme.primary_style().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &self.name,
+                theme.primary_style().add_modifier(Modifier::BOLD),
+            ),
             Span::styled(format!(" ({})", self.agent_type), theme.secondary_style()),
         ]);
         lines.push(name_line);
@@ -257,7 +274,7 @@ impl AgentDisplayInfo {
                 AgentStatus::Offline => "⭕",
                 AgentStatus::ShuttingDown => "🟠",
             };
-            
+
             let status_line = Line::from(vec![
                 Span::styled("  Status: ", theme.label_style()),
                 Span::styled(status_icon, self.status_style(theme)),
@@ -283,7 +300,9 @@ impl AgentDisplayInfo {
                 }
 
                 // Progress bar (only if processing)
-                if matches!(self.status, AgentStatus::Processing { task_id: _ }) && self.progress > 0.0 {
+                if matches!(self.status, AgentStatus::Processing { task_id: _ })
+                    && self.progress > 0.0
+                {
                     let progress_text = format!("  Progress: {:.1}%", self.progress * 100.0);
                     lines.push(Line::from(Span::styled(progress_text, theme.value_style())));
                 }
@@ -307,7 +326,7 @@ impl AgentDisplayInfo {
                 } else {
                     format!("{}h ago", elapsed.as_secs() / 3600)
                 };
-                
+
                 let update_line = Line::from(vec![
                     Span::styled("  Updated: ", theme.label_style()),
                     Span::styled(time_str, theme.timestamp_style()),
@@ -320,7 +339,7 @@ impl AgentDisplayInfo {
                 Span::styled("  ", theme.secondary_style()),
                 Span::styled(format!("{:?}", self.status), self.status_style(theme)),
             ];
-            
+
             if let Some(ref task) = self.current_task {
                 spans.push(Span::styled(" - ", theme.secondary_style()));
                 spans.push(Span::styled(
@@ -329,10 +348,10 @@ impl AgentDisplayInfo {
                     } else {
                         task.clone()
                     },
-                    theme.value_style()
+                    theme.value_style(),
                 ));
             }
-            
+
             lines.push(Line::from(spans));
         }
 
@@ -393,7 +412,11 @@ impl AgentStatusPanel {
         agents.sort_by(|a, b| {
             match self.sort_by {
                 AgentSortBy::Name => a.0.cmp(b.0),
-                AgentSortBy::Status => a.1.status.partial_cmp(&b.1.status).unwrap_or(std::cmp::Ordering::Equal),
+                AgentSortBy::Status => {
+                    a.1.status
+                        .partial_cmp(&b.1.status)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                }
                 AgentSortBy::LastUpdate => b.1.last_update.cmp(&a.1.last_update), // Most recent first
                 AgentSortBy::Priority => {
                     match (&a.1.task_priority, &b.1.task_priority) {
@@ -403,7 +426,11 @@ impl AgentStatusPanel {
                         (None, None) => std::cmp::Ordering::Equal,
                     }
                 }
-                AgentSortBy::Progress => b.1.progress.partial_cmp(&a.1.progress).unwrap_or(std::cmp::Ordering::Equal),
+                AgentSortBy::Progress => {
+                    b.1.progress
+                        .partial_cmp(&a.1.progress)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                }
             }
         });
 
@@ -411,24 +438,19 @@ impl AgentStatusPanel {
     }
 
     /// Render the agent status panel
-    pub fn render(
-        &self,
-        f: &mut Frame,
-        area: Rect,
-        theme: &Theme,
-    ) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let agents = self.get_sorted_agents();
-        
+
         // Create list items
         let mut items = Vec::new();
         for (name, info) in agents {
             let expanded = self.expanded_agent.as_ref() == Some(name);
             let lines = info.format_for_display(theme, expanded);
-            
+
             for line in lines {
                 items.push(ListItem::new(line));
             }
-            
+
             // Add separator between agents if expanded
             if expanded {
                 items.push(ListItem::new(Line::from("")));
@@ -436,18 +458,22 @@ impl AgentStatusPanel {
         }
 
         // Create the agent list
-        let agent_list = List::new(items)
-            .block(Block::default()
+        let agent_list = List::new(items).block(
+            Block::default()
                 .title(format!("Agents ({})", self.agents.len()))
                 .borders(Borders::ALL)
-                .style(theme.border_style()));
+                .style(theme.border_style()),
+        );
 
         f.render_widget(agent_list, area);
     }
 
     /// Get agent count by status
     pub fn count_by_status(&self, status: &AgentStatus) -> usize {
-        self.agents.values().filter(|info| info.status == *status).count()
+        self.agents
+            .values()
+            .filter(|info| info.status == *status)
+            .count()
     }
 
     /// Get all agent names
@@ -465,12 +491,18 @@ impl PanelManager {
     /// Create a new panel manager
     pub fn new() -> Self {
         let mut layouts = HashMap::new();
-        
+
         // Add default panel layouts
-        layouts.insert(PanelType::AgentStatus, PanelLayout::new(PanelType::AgentStatus));
+        layouts.insert(
+            PanelType::AgentStatus,
+            PanelLayout::new(PanelType::AgentStatus),
+        );
         layouts.insert(PanelType::Output, PanelLayout::new(PanelType::Output));
         layouts.insert(PanelType::Input, PanelLayout::new(PanelType::Input));
-        layouts.insert(PanelType::Notifications, PanelLayout::new(PanelType::Notifications));
+        layouts.insert(
+            PanelType::Notifications,
+            PanelLayout::new(PanelType::Notifications),
+        );
         layouts.insert(PanelType::Help, PanelLayout::new(PanelType::Help));
         layouts.insert(PanelType::Settings, PanelLayout::new(PanelType::Settings));
         layouts.insert(PanelType::Logs, PanelLayout::new(PanelType::Logs));
@@ -480,7 +512,7 @@ impl PanelManager {
             current_focus: Some(PanelType::Input),
             agent_panel: AgentStatusPanel::new(),
             notification_panel: NotificationPanel::new(5000), // 5 second auto-dismiss
-            output_blocks: OutputBlockCollection::new(1000), // Max 1000 blocks
+            output_blocks: OutputBlockCollection::new(1000),  // Max 1000 blocks
             help_visible: false,
         }
     }
@@ -571,12 +603,7 @@ impl PanelManager {
     }
 
     /// Render help overlay
-    pub fn render_help_overlay(
-        &self,
-        f: &mut Frame,
-        area: Rect,
-        theme: &Theme,
-    ) {
+    pub fn render_help_overlay(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         if !self.help_visible {
             return;
         }
@@ -646,16 +673,15 @@ impl PanelManager {
             "Press '?' or F1 again to close this help",
         ];
 
-        let help_lines: Vec<Line> = help_text
-            .iter()
-            .map(|line| Line::from(*line))
-            .collect();
+        let help_lines: Vec<Line> = help_text.iter().map(|line| Line::from(*line)).collect();
 
         let help_paragraph = Paragraph::new(help_lines)
-            .block(Block::default()
-                .title("Help")
-                .borders(Borders::ALL)
-                .style(theme.border_style()))
+            .block(
+                Block::default()
+                    .title("Help")
+                    .borders(Borders::ALL)
+                    .style(theme.border_style()),
+            )
             .wrap(Wrap { trim: true })
             .style(theme.primary_style());
 

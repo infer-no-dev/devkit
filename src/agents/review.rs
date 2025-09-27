@@ -1,13 +1,12 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tokio::time::Instant;
 use std::sync::Arc;
+use tokio::time::Instant;
 
-use crate::agents::{Agent, AgentError, AgentStatus, AgentMetrics, BaseAgent};
-use crate::agents::task::{AgentTask, AgentResult, AgentArtifact};
+use crate::agents::task::{AgentArtifact, AgentResult, AgentTask};
+use crate::agents::{Agent, AgentError, AgentMetrics, AgentStatus, BaseAgent};
 use crate::ai::AIManager;
 use serde_json::json;
 
@@ -122,12 +121,12 @@ impl CodeReviewAgent {
                     "code_smells".to_string(),
                     "documentation_review".to_string(),
                     "test_coverage_review".to_string(),
-                ]
+                ],
             ),
             ai_manager: None,
         }
     }
-    
+
     /// Create a code review agent with AI capabilities
     pub fn with_ai_manager(ai_manager: Arc<AIManager>) -> Self {
         let mut agent = Self::new();
@@ -141,7 +140,9 @@ impl CodeReviewAgent {
         paths: &[PathBuf],
         config: ReviewConfig,
     ) -> Result<ReviewResult, AgentError> {
-        self.base.status = AgentStatus::Processing { task_id: "review".to_string() };
+        self.base.status = AgentStatus::Processing {
+            task_id: "review".to_string(),
+        };
         let start_time = Instant::now();
         let mut all_issues = Vec::new();
         let mut files_reviewed = 0;
@@ -152,7 +153,7 @@ impl CodeReviewAgent {
                 if let Ok(issues) = self.review_file(path, &config).await {
                     all_issues.extend(issues);
                     files_reviewed += 1;
-                    
+
                     // Count lines in file
                     if let Ok(content) = tokio::fs::read_to_string(path).await {
                         total_lines += content.lines().count();
@@ -239,47 +240,49 @@ impl CodeReviewAgent {
         &'a mut self,
         dir_path: &'a PathBuf,
         config: &'a ReviewConfig,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ReviewResult, AgentError>> + 'a + Send>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<ReviewResult, AgentError>> + 'a + Send>,
+    > {
         Box::pin(async move {
-        let mut all_issues = Vec::new();
-        let mut files_reviewed = 0;
-        let mut total_lines = 0;
+            let mut all_issues = Vec::new();
+            let mut files_reviewed = 0;
+            let mut total_lines = 0;
 
-        let mut entries = tokio::fs::read_dir(dir_path)
-            .await
-            .map_err(|e| AgentError::TaskExecutionFailed(format!("Failed to read directory: {}", e)))?;
+            let mut entries = tokio::fs::read_dir(dir_path).await.map_err(|e| {
+                AgentError::TaskExecutionFailed(format!("Failed to read directory: {}", e))
+            })?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            AgentError::TaskExecutionFailed(format!("Failed to read directory entry: {}", e))
-        })? {
-            let path = entry.path();
-            
-            if path.is_file() {
-                if let Ok(issues) = self.review_file(&path, config).await {
-                    all_issues.extend(issues);
-                    files_reviewed += 1;
-                    
-                    if let Ok(content) = tokio::fs::read_to_string(&path).await {
-                        total_lines += content.lines().count();
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                AgentError::TaskExecutionFailed(format!("Failed to read directory entry: {}", e))
+            })? {
+                let path = entry.path();
+
+                if path.is_file() {
+                    if let Ok(issues) = self.review_file(&path, config).await {
+                        all_issues.extend(issues);
+                        files_reviewed += 1;
+
+                        if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                            total_lines += content.lines().count();
+                        }
                     }
+                } else if path.is_dir() && !self.should_exclude_file(&path, &config.exclude_files) {
+                    let sub_result = self.review_directory(&path, config).await?;
+                    all_issues.extend(sub_result.issues);
+                    files_reviewed += sub_result.files_reviewed;
+                    total_lines += sub_result.total_lines;
                 }
-            } else if path.is_dir() && !self.should_exclude_file(&path, &config.exclude_files) {
-                let sub_result = self.review_directory(&path, config).await?;
-                all_issues.extend(sub_result.issues);
-                files_reviewed += sub_result.files_reviewed;
-                total_lines += sub_result.total_lines;
             }
-        }
 
-        let summary = self.generate_summary(&all_issues);
+            let summary = self.generate_summary(&all_issues);
 
-        Ok(ReviewResult {
-            issues: all_issues,
-            summary,
-            files_reviewed,
-            total_lines,
-            review_duration: std::time::Duration::from_secs(0), // Will be set by caller
-        })
+            Ok(ReviewResult {
+                issues: all_issues,
+                summary,
+                files_reviewed,
+                total_lines,
+                review_duration: std::time::Duration::from_secs(0), // Will be set by caller
+            })
         })
     }
 
@@ -309,7 +312,8 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             content
         );
 
-        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Security).await
+        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Security)
+            .await
     }
 
     /// Analyze performance issues
@@ -338,7 +342,8 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             content
         );
 
-        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Performance).await
+        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Performance)
+            .await
     }
 
     /// Analyze code smells and maintainability issues
@@ -369,7 +374,8 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             content
         );
 
-        self.analyze_with_ai(&prompt, file_path, ReviewCategory::CodeSmell).await
+        self.analyze_with_ai(&prompt, file_path, ReviewCategory::CodeSmell)
+            .await
     }
 
     /// Analyze documentation coverage
@@ -397,7 +403,8 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             content
         );
 
-        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Documentation).await
+        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Documentation)
+            .await
     }
 
     /// Analyze testing coverage and quality
@@ -426,7 +433,8 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             content
         );
 
-        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Testing).await
+        self.analyze_with_ai(&prompt, file_path, ReviewCategory::Testing)
+            .await
     }
 
     /// Generic analysis for other categories
@@ -448,7 +456,8 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             category, content
         );
 
-        self.analyze_with_ai(&prompt, file_path, category.clone()).await
+        self.analyze_with_ai(&prompt, file_path, category.clone())
+            .await
     }
 
     /// Use AI to analyze code and return structured issues
@@ -474,7 +483,8 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
                 category: category.clone(),
                 severity: ReviewSeverity::Low,
                 title: format!("Basic {} check", format!("{:?}", category).to_lowercase()),
-                description: "Basic static analysis - AI manager not available for detailed review".to_string(),
+                description: "Basic static analysis - AI manager not available for detailed review"
+                    .to_string(),
                 file_path: file_path.clone(),
                 line_start: Some(1),
                 line_end: Some(1),
@@ -506,7 +516,7 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
                 }
             }
         }
-        
+
         // Fallback: create issue from plain text response
         Ok(vec![ReviewIssue {
             category: category.clone(),
@@ -521,7 +531,7 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             code_snippet: None,
         }])
     }
-    
+
     /// Parse a single issue from JSON
     fn parse_issue_from_json(
         &self,
@@ -529,24 +539,28 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
         file_path: &PathBuf,
         category: &ReviewCategory,
     ) -> Result<ReviewIssue, AgentError> {
-        let title = json_val.get("title")
+        let title = json_val
+            .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("Unknown issue")
             .to_string();
-            
-        let description = json_val.get("description")
+
+        let description = json_val
+            .get("description")
             .and_then(|v| v.as_str())
             .unwrap_or("No description provided")
             .to_string();
-            
-        let line = json_val.get("line")
+
+        let line = json_val
+            .get("line")
             .and_then(|v| v.as_u64())
             .map(|l| l as usize);
-            
-        let severity_str = json_val.get("severity")
+
+        let severity_str = json_val
+            .get("severity")
             .and_then(|v| v.as_str())
             .unwrap_or("Medium");
-            
+
         let severity = match severity_str.to_lowercase().as_str() {
             "critical" => ReviewSeverity::Critical,
             "high" => ReviewSeverity::High,
@@ -555,11 +569,12 @@ Return findings as JSON with format: {{\"issues\": [{{\"title\": \"Issue title\"
             "info" => ReviewSeverity::Info,
             _ => ReviewSeverity::Medium,
         };
-        
-        let suggestion = json_val.get("suggestion")
+
+        let suggestion = json_val
+            .get("suggestion")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        
+
         Ok(ReviewIssue {
             category: category.clone(),
             severity,
@@ -620,37 +635,40 @@ impl Agent for CodeReviewAgent {
     fn id(&self) -> &str {
         &self.base.id
     }
-    
+
     fn name(&self) -> &str {
         &self.base.name
     }
-    
+
     fn status(&self) -> AgentStatus {
         self.base.status.clone()
     }
-    
+
     fn capabilities(&self) -> Vec<String> {
         self.base.capabilities.clone()
     }
 
     async fn process_task(&mut self, task: AgentTask) -> Result<AgentResult, AgentError> {
-        self.base.status = AgentStatus::Processing { task_id: task.id.clone() };
-        
+        self.base.status = AgentStatus::Processing {
+            task_id: task.id.clone(),
+        };
+
         let start_time = std::time::Instant::now();
-        
+
         // Parse task parameters for code review
         let review_config = serde_json::from_str::<ReviewConfig>(&task.task_type)
             .unwrap_or_else(|_| ReviewConfig::default());
 
-        // Extract file paths from task context  
+        // Extract file paths from task context
         let paths = vec![PathBuf::from(".")];
 
         // Perform the code review
         let review_result = self.review_code(&paths, review_config).await?;
 
         // Convert result to JSON for the agent result
-        let result_json = serde_json::to_string_pretty(&review_result)
-            .map_err(|e| AgentError::TaskExecutionFailed(format!("Failed to serialize result: {}", e)))?;
+        let result_json = serde_json::to_string_pretty(&review_result).map_err(|e| {
+            AgentError::TaskExecutionFailed(format!("Failed to serialize result: {}", e))
+        })?;
 
         // Create artifact
         let artifact = AgentArtifact::new(
@@ -658,9 +676,15 @@ impl Agent for CodeReviewAgent {
             "analysis".to_string(),
             result_json.clone(),
         )
-        .with_metadata("total_issues".to_string(), json!(review_result.issues.len()))
-        .with_metadata("files_reviewed".to_string(), json!(review_result.files_reviewed));
-        
+        .with_metadata(
+            "total_issues".to_string(),
+            json!(review_result.issues.len()),
+        )
+        .with_metadata(
+            "files_reviewed".to_string(),
+            json!(review_result.files_reviewed),
+        );
+
         // Update metrics
         let duration = start_time.elapsed();
         self.base.update_metrics(true, duration);
@@ -669,18 +693,20 @@ impl Agent for CodeReviewAgent {
         Ok(AgentResult::success(
             task.id.clone(),
             self.base.id.clone(),
-            format!("Code review completed: {} issues found in {} files", 
-                   review_result.summary.total_issues, review_result.files_reviewed),
+            format!(
+                "Code review completed: {} issues found in {} files",
+                review_result.summary.total_issues, review_result.files_reviewed
+            ),
         )
         .with_artifact(artifact)
         .with_duration(duration)
         .with_next_action("Review findings and consider implementing fixes".to_string()))
     }
-    
+
     fn can_handle(&self, task_type: &str) -> bool {
         self.base.capabilities.contains(&task_type.to_string())
     }
-    
+
     fn get_metrics(&self) -> AgentMetrics {
         self.base.metrics.clone()
     }

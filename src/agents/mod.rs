@@ -14,33 +14,33 @@ use std::fmt;
 use uuid::Uuid;
 
 // Re-export commonly used types
-pub use system::{AgentSystem, AgentInfo};
-pub use task::{AgentTask, TaskPriority, AgentResult, AgentArtifact};
+pub use system::{AgentInfo, AgentSystem};
+pub use task::{AgentResult, AgentTask, TaskPriority};
 
 /// Core trait that all agents must implement
 #[async_trait::async_trait]
 pub trait Agent: Send + Sync + fmt::Debug {
     /// Get the agent's unique identifier
     fn id(&self) -> &str;
-    
+
     /// Get the agent's name
     fn name(&self) -> &str;
-    
+
     /// Get the agent's current status
     fn status(&self) -> AgentStatus;
-    
+
     /// Get the agent's capabilities
     fn capabilities(&self) -> Vec<String>;
-    
+
     /// Process a task assigned to this agent
     async fn process_task(&mut self, task: AgentTask) -> Result<AgentResult, AgentError>;
-    
+
     /// Check if the agent can handle a specific task type
     fn can_handle(&self, task_type: &str) -> bool;
-    
+
     /// Get agent metrics/statistics
     fn get_metrics(&self) -> AgentMetrics;
-    
+
     /// Shutdown the agent gracefully
     async fn shutdown(&mut self) -> Result<(), AgentError>;
 }
@@ -89,28 +89,28 @@ impl Default for AgentMetrics {
 pub enum AgentError {
     #[error("Task execution failed: {0}")]
     TaskExecutionFailed(String),
-    
+
     #[error("Agent is not available: {status:?}")]
     AgentUnavailable { status: AgentStatus },
-    
+
     #[error("Invalid task type: {task_type}")]
     InvalidTaskType { task_type: String },
-    
+
     #[error("Task timeout after {timeout_seconds}s")]
     TaskTimeout { timeout_seconds: u64 },
-    
+
     #[error("Agent configuration error: {0}")]
     ConfigurationError(String),
-    
+
     #[error("AI service error: {0}")]
     AIServiceError(String),
-    
+
     #[error("Context error: {0}")]
     ContextError(String),
-    
+
     #[error("IO error: {0}")]
     IOError(#[from] std::io::Error),
-    
+
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }
@@ -150,7 +150,7 @@ impl BaseAgent {
             start_time: std::time::Instant::now(),
         }
     }
-    
+
     /// Update agent metrics after task completion
     pub fn update_metrics(&mut self, success: bool, duration: std::time::Duration) {
         if success {
@@ -158,18 +158,18 @@ impl BaseAgent {
         } else {
             self.metrics.tasks_failed += 1;
         }
-        
+
         let total_tasks = self.metrics.tasks_completed + self.metrics.tasks_failed;
         if total_tasks > 0 {
             self.metrics.success_rate = self.metrics.tasks_completed as f64 / total_tasks as f64;
         }
-        
+
         // Update average duration
         let current_avg = self.metrics.average_task_duration;
         let new_duration = duration.as_secs_f64();
-        self.metrics.average_task_duration = 
+        self.metrics.average_task_duration =
             (current_avg * (total_tasks - 1) as f64 + new_duration) / total_tasks as f64;
-        
+
         self.metrics.uptime_seconds = self.start_time.elapsed().as_secs();
     }
 }

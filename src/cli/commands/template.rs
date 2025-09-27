@@ -1,22 +1,25 @@
 use crate::cli::{CliRunner, TemplateCommands};
-use crate::codegen::templates::{TemplateManager, Template, TemplateVariable};
+use crate::codegen::templates::{Template, TemplateManager, TemplateVariable};
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
 
-pub async fn run(runner: &mut CliRunner, command: TemplateCommands) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(
+    runner: &mut CliRunner,
+    command: TemplateCommands,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut template_manager = TemplateManager::new()?;
-    
+
     match command {
         TemplateCommands::List { language } => {
             list_templates(runner, &template_manager, language).await?
         }
-        TemplateCommands::Show { name } => {
-            show_template(runner, &template_manager, &name).await?
-        }
-        TemplateCommands::Create { name, language, source } => {
-            create_template(runner, &mut template_manager, name, language, source).await?
-        }
+        TemplateCommands::Show { name } => show_template(runner, &template_manager, &name).await?,
+        TemplateCommands::Create {
+            name,
+            language,
+            source,
+        } => create_template(runner, &mut template_manager, name, language, source).await?,
         TemplateCommands::Remove { name } => {
             remove_template(runner, &mut template_manager, name).await?
         }
@@ -24,7 +27,7 @@ pub async fn run(runner: &mut CliRunner, command: TemplateCommands) -> Result<()
             update_template(runner, &mut template_manager, name, source).await?
         }
     }
-    
+
     Ok(())
 }
 
@@ -34,9 +37,10 @@ async fn list_templates(
     language_filter: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let all_templates = template_manager.list_templates();
-    
+
     let filtered_templates: Vec<String> = if let Some(lang) = &language_filter {
-        all_templates.into_iter()
+        all_templates
+            .into_iter()
             .filter(|name| {
                 if let Some(template) = template_manager.get_template(name) {
                     template.language.to_lowercase() == lang.to_lowercase()
@@ -48,10 +52,11 @@ async fn list_templates(
     } else {
         all_templates
     };
-    
+
     match runner.format() {
         crate::cli::OutputFormat::Json => {
-            let template_data: Vec<_> = filtered_templates.iter()
+            let template_data: Vec<_> = filtered_templates
+                .iter()
                 .filter_map(|name| template_manager.get_template(name))
                 .map(|template| {
                     json!({
@@ -63,12 +68,15 @@ async fn list_templates(
                     })
                 })
                 .collect();
-            
-            println!("{}", serde_json::to_string_pretty(&json!({
-                "templates": template_data,
-                "count": template_data.len(),
-                "filter": language_filter
-            }))?);
+
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "templates": template_data,
+                    "count": template_data.len(),
+                    "filter": language_filter
+                }))?
+            );
         }
         _ => {
             if filtered_templates.is_empty() {
@@ -79,7 +87,7 @@ async fn list_templates(
                 }
                 return Ok(());
             }
-            
+
             let count = filtered_templates.len();
             if let Some(lang) = &language_filter {
                 runner.print_info(&format!("Found {} templates for {}:", count, lang));
@@ -87,7 +95,7 @@ async fn list_templates(
                 runner.print_info(&format!("Found {} templates:", count));
             }
             println!();
-            
+
             for template_name in filtered_templates {
                 if let Some(template) = template_manager.get_template(&template_name) {
                     print_template_summary(runner, template);
@@ -95,7 +103,7 @@ async fn list_templates(
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -121,7 +129,7 @@ async fn show_template(
                         })
                     }).collect::<Vec<_>>()
                 });
-                
+
                 println!("{}", serde_json::to_string_pretty(&template_data)?);
             }
             _ => {
@@ -131,7 +139,7 @@ async fn show_template(
                     println!("📝 Description: {}", template.description);
                 }
                 println!();
-                
+
                 if !template.variables.is_empty() {
                     println!("🔧 Variables:");
                     for var in &template.variables {
@@ -143,7 +151,7 @@ async fn show_template(
                     }
                     println!();
                 }
-                
+
                 if !template.content.is_empty() {
                     println!("📃 Template Content:");
                     println!("{}", "─".repeat(50));
@@ -158,7 +166,7 @@ async fn show_template(
         runner.print_error(&format!("Template '{}' not found", name));
         return Err(format!("Template '{}' not found", name).into());
     }
-    
+
     Ok(())
 }
 
@@ -174,15 +182,20 @@ async fn create_template(
         runner.print_error(&format!("Template '{}' already exists", name));
         return Err(format!("Template '{}' already exists", name).into());
     }
-    
+
     // Check if source path exists
     if !source.exists() {
         runner.print_error(&format!("Source path does not exist: {}", source.display()));
         return Err(format!("Source path does not exist: {}", source.display()).into());
     }
-    
-    runner.print_info(&format!("Creating template '{}' for {} from {}", name, language, source.display()));
-    
+
+    runner.print_info(&format!(
+        "Creating template '{}' for {} from {}",
+        name,
+        language,
+        source.display()
+    ));
+
     // Read template content from source
     let template_content = if source.is_file() {
         fs::read_to_string(&source)?
@@ -192,14 +205,17 @@ async fn create_template(
         if template_file.exists() {
             fs::read_to_string(&template_file)?
         } else {
-            runner.print_error(&format!("No template.txt found in directory: {}", source.display()));
+            runner.print_error(&format!(
+                "No template.txt found in directory: {}",
+                source.display()
+            ));
             return Err("Template file not found".into());
         }
     };
-    
+
     // Parse variables from template content (look for {{variable}} patterns)
     let variables = extract_template_variables(&template_content);
-    
+
     let template = Template {
         name: name.clone(),
         language: language.clone(),
@@ -207,10 +223,10 @@ async fn create_template(
         content: template_content,
         variables,
     };
-    
+
     template_manager.add_template(template);
     runner.print_success(&format!("Template '{}' created successfully", name));
-    
+
     Ok(())
 }
 
@@ -225,7 +241,7 @@ async fn remove_template(
         runner.print_error(&format!("Template '{}' not found", name));
         return Err(format!("Template '{}' not found", name).into());
     }
-    
+
     Ok(())
 }
 
@@ -236,16 +252,20 @@ async fn update_template(
     source: Option<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Check if template exists
-    let existing_template = template_manager.get_template(&name)
+    let existing_template = template_manager
+        .get_template(&name)
         .ok_or_else(|| format!("Template '{}' not found", name))?;
-    
+
     if let Some(source_path) = source {
         // Update template content from source
         if !source_path.exists() {
-            runner.print_error(&format!("Source path does not exist: {}", source_path.display()));
+            runner.print_error(&format!(
+                "Source path does not exist: {}",
+                source_path.display()
+            ));
             return Err(format!("Source path does not exist: {}", source_path.display()).into());
         }
-        
+
         let new_content = if source_path.is_file() {
             fs::read_to_string(&source_path)?
         } else {
@@ -256,9 +276,9 @@ async fn update_template(
                 return Err("Template file not found".into());
             }
         };
-        
+
         let new_variables = extract_template_variables(&new_content);
-        
+
         // Create updated template
         let updated_template = Template {
             name: existing_template.name.clone(),
@@ -267,16 +287,19 @@ async fn update_template(
             content: new_content,
             variables: new_variables,
         };
-        
+
         // Remove old and add updated
         template_manager.remove_template(&name);
         template_manager.add_template(updated_template);
-        
+
         runner.print_success(&format!("Template '{}' updated successfully", name));
     } else {
-        runner.print_info(&format!("Template '{}' exists but no updates specified", name));
+        runner.print_info(&format!(
+            "Template '{}' exists but no updates specified",
+            name
+        ));
     }
-    
+
     Ok(())
 }
 
@@ -287,20 +310,22 @@ fn print_template_summary(_runner: &CliRunner, template: &Template) {
     } else {
         String::new()
     };
-    
+
     println!("  📄 {} ({}){}", template.name, template.language, var_info);
-    if !template.description.is_empty() && template.description != format!("Custom {} template", template.language) {
+    if !template.description.is_empty()
+        && template.description != format!("Custom {} template", template.language)
+    {
         println!("     {}", template.description);
     }
 }
 
 fn extract_template_variables(template_content: &str) -> Vec<TemplateVariable> {
-    use std::collections::HashSet;
     use regex::Regex;
-    
+    use std::collections::HashSet;
+
     let mut variables = Vec::new();
     let mut seen = HashSet::new();
-    
+
     // Match {{variable}} patterns
     if let Ok(re) = Regex::new(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}") {
         for cap in re.captures_iter(template_content) {
@@ -316,6 +341,6 @@ fn extract_template_variables(template_content: &str) -> Vec<TemplateVariable> {
             }
         }
     }
-    
+
     variables
 }

@@ -1,7 +1,7 @@
 //! Symbol indexing and management for codebase context.
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Type of symbol in the codebase
@@ -84,44 +84,49 @@ impl SymbolIndex {
             symbol_count: 0,
         }
     }
-    
+
     /// Add a symbol to the index
     pub fn add_symbol(&mut self, symbol: Symbol) {
         let symbol_name = symbol.name.clone();
         let file_path = symbol.file_path.clone();
-        
+
         // Add to main symbols map
-        self.symbols.entry(symbol_name.clone())
+        self.symbols
+            .entry(symbol_name.clone())
             .or_insert_with(Vec::new)
             .push(symbol);
-        
+
         // Add to file symbols map
-        self.file_symbols.entry(file_path)
+        self.file_symbols
+            .entry(file_path)
             .or_insert_with(Vec::new)
             .push(symbol_name);
-        
+
         self.symbol_count += 1;
     }
-    
+
     /// Find symbols by name
     pub fn find_symbols(&self, name: &str) -> Vec<&Symbol> {
-        self.symbols.get(name)
+        self.symbols
+            .get(name)
             .map(|symbols| symbols.iter().collect())
             .unwrap_or_default()
     }
-    
+
     /// Find symbols by type
     pub fn find_symbols_by_type(&self, symbol_type: &SymbolType) -> Vec<&Symbol> {
-        self.symbols.values()
+        self.symbols
+            .values()
             .flatten()
             .filter(|symbol| symbol.symbol_type == *symbol_type)
             .collect()
     }
-    
+
     /// Get symbols in a specific file
     pub fn get_file_symbols(&self, file_path: &PathBuf) -> Vec<&Symbol> {
         if let Some(symbol_names) = self.file_symbols.get(file_path) {
-            symbol_names.iter()
+            symbol_names
+                .iter()
                 .filter_map(|name| self.symbols.get(name))
                 .flatten()
                 .filter(|symbol| symbol.file_path == *file_path)
@@ -130,12 +135,12 @@ impl SymbolIndex {
             Vec::new()
         }
     }
-    
+
     /// Search symbols with fuzzy matching
     pub fn search(&self, query: &str, symbol_types: Option<&[SymbolType]>) -> Vec<Symbol> {
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
-        
+
         for symbols in self.symbols.values() {
             for symbol in symbols {
                 // Check if symbol type matches filter
@@ -144,44 +149,44 @@ impl SymbolIndex {
                         continue;
                     }
                 }
-                
+
                 // Simple fuzzy matching
                 if symbol.name.to_lowercase().contains(&query_lower) {
                     results.push(symbol.clone());
                 }
             }
         }
-        
+
         // Sort by relevance (exact matches first, then partial matches)
         results.sort_by(|a, b| {
             let a_exact = a.name.to_lowercase() == query_lower;
             let b_exact = b.name.to_lowercase() == query_lower;
-            
+
             match (a_exact, b_exact) {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
                 _ => a.name.cmp(&b.name),
             }
         });
-        
+
         results
     }
-    
+
     /// Get all symbol names
     pub fn get_all_symbol_names(&self) -> Vec<String> {
         self.symbols.keys().cloned().collect()
     }
-    
+
     /// Get total symbol count
     pub fn total_symbols(&self) -> usize {
         self.symbol_count
     }
-    
+
     /// Get symbols by file
     pub fn get_files_with_symbols(&self) -> Vec<PathBuf> {
         self.file_symbols.keys().cloned().collect()
     }
-    
+
     /// Remove symbols from a file (for updates)
     pub fn remove_file_symbols(&mut self, file_path: &PathBuf) {
         if let Some(symbol_names) = self.file_symbols.remove(file_path) {
@@ -195,12 +200,12 @@ impl SymbolIndex {
             }
         }
     }
-    
+
     /// Update symbols for a file
     pub fn update_file_symbols(&mut self, file_path: &PathBuf, new_symbols: Vec<Symbol>) {
         // Remove old symbols
         self.remove_file_symbols(file_path);
-        
+
         // Add new symbols
         for symbol in new_symbols {
             self.add_symbol(symbol);
@@ -229,24 +234,25 @@ impl Symbol {
             references: Vec::new(),
         }
     }
-    
+
     /// Add a reference to this symbol
     pub fn add_reference(&mut self, reference: SymbolReference) {
         self.references.push(reference);
     }
-    
+
     /// Get all references of a specific type
     pub fn get_references_by_type(&self, ref_type: &ReferenceType) -> Vec<&SymbolReference> {
-        self.references.iter()
+        self.references
+            .iter()
             .filter(|reference| reference.reference_type == *ref_type)
             .collect()
     }
-    
+
     /// Check if this symbol is public
     pub fn is_public(&self) -> bool {
         self.visibility == Visibility::Public
     }
-    
+
     /// Get the qualified name (with file path context)
     pub fn qualified_name(&self) -> String {
         format!("{}:{}", self.file_path.to_string_lossy(), self.name)

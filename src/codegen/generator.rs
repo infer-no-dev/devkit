@@ -1,23 +1,23 @@
 //! Core code generation engine.
 
+use crate::ai::{AIManager, ChatMessage, ChatRequest, ModelParameters};
+use crate::codegen::{CodeGenError, GenerationConfig, GenerationResult, RefactorType};
+use crate::context::CodebaseContext;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::ai::{AIManager, ChatMessage, ChatRequest, ModelParameters};
-use crate::context::CodebaseContext;
-use crate::codegen::{GenerationConfig, GenerationResult, RefactorType, CodeGenError};
 
 /// Additional error types for code generation
 #[derive(Debug, thiserror::Error)]
 pub enum GenerationError {
     #[error("AI generation failed: {0}")]
     AIGenerationFailed(String),
-    
+
     #[error("Template not found: {0}")]
     TemplateNotFound(String),
-    
+
     #[error("Invalid prompt: {0}")]
     InvalidPrompt(String),
-    
+
     #[error("Context error: {0}")]
     ContextError(String),
 }
@@ -54,66 +54,102 @@ impl CodeGen {
     /// Create a new code generator
     pub fn new() -> Result<Self, CodeGenError> {
         let mut templates = HashMap::new();
-        
+
         // Add default templates
-        templates.insert("rust_function".to_string(), CodeTemplate {
-            name: "rust_function".to_string(),
-            language: "rust".to_string(),
-            template: r#"/// {description}
+        templates.insert(
+            "rust_function".to_string(),
+            CodeTemplate {
+                name: "rust_function".to_string(),
+                language: "rust".to_string(),
+                template: r#"/// {description}
 pub fn {name}({params}) -> {return_type} {{
     {body}
-}}"#.to_string(),
-            variables: vec!["description".to_string(), "name".to_string(), "params".to_string(), "return_type".to_string(), "body".to_string()],
-        });
-        
-        templates.insert("rust_struct".to_string(), CodeTemplate {
-            name: "rust_struct".to_string(),
-            language: "rust".to_string(),
-            template: r#"/// {description}
+}}"#
+                .to_string(),
+                variables: vec![
+                    "description".to_string(),
+                    "name".to_string(),
+                    "params".to_string(),
+                    "return_type".to_string(),
+                    "body".to_string(),
+                ],
+            },
+        );
+
+        templates.insert(
+            "rust_struct".to_string(),
+            CodeTemplate {
+                name: "rust_struct".to_string(),
+                language: "rust".to_string(),
+                template: r#"/// {description}
 #[derive(Debug, Clone)]
 pub struct {name} {{
     {fields}
-}}"#.to_string(),
-            variables: vec!["description".to_string(), "name".to_string(), "fields".to_string()],
-        });
-        
-        templates.insert("python_function".to_string(), CodeTemplate {
-            name: "python_function".to_string(),
-            language: "python".to_string(),
-            template: r#"def {name}({params}):
+}}"#
+                .to_string(),
+                variables: vec![
+                    "description".to_string(),
+                    "name".to_string(),
+                    "fields".to_string(),
+                ],
+            },
+        );
+
+        templates.insert(
+            "python_function".to_string(),
+            CodeTemplate {
+                name: "python_function".to_string(),
+                language: "python".to_string(),
+                template: r#"def {name}({params}):
     """{description}"""
-    {body}"#.to_string(),
-            variables: vec!["description".to_string(), "name".to_string(), "params".to_string(), "body".to_string()],
-        });
-        
-        templates.insert("javascript_function".to_string(), CodeTemplate {
-            name: "javascript_function".to_string(),
-            language: "javascript".to_string(),
-            template: r#"/**
+    {body}"#
+                    .to_string(),
+                variables: vec![
+                    "description".to_string(),
+                    "name".to_string(),
+                    "params".to_string(),
+                    "body".to_string(),
+                ],
+            },
+        );
+
+        templates.insert(
+            "javascript_function".to_string(),
+            CodeTemplate {
+                name: "javascript_function".to_string(),
+                language: "javascript".to_string(),
+                template: r#"/**
  * {description}
  */
 function {name}({params}) {{
     {body}
-}}"#.to_string(),
-            variables: vec!["description".to_string(), "name".to_string(), "params".to_string(), "body".to_string()],
-        });
-        
+}}"#
+                .to_string(),
+                variables: vec![
+                    "description".to_string(),
+                    "name".to_string(),
+                    "params".to_string(),
+                    "body".to_string(),
+                ],
+            },
+        );
+
         Ok(Self {
             templates,
             ai_manager: None,
         })
     }
-    
+
     /// Set the AI manager for enhanced code generation
     pub fn set_ai_manager(&mut self, ai_manager: Arc<AIManager>) {
         self.ai_manager = Some(ai_manager);
     }
-    
+
     /// Get a reference to the AI manager if available
     pub fn ai_manager(&self) -> Option<&Arc<AIManager>> {
         self.ai_manager.as_ref()
     }
-    
+
     /// Generate code using AI if available, fallback to templates
     pub async fn generate_with_ai(
         &self,
@@ -123,7 +159,8 @@ function {name}({params}) {{
         config: &GenerationConfig,
     ) -> Result<GenerationResult, CodeGenError> {
         if let Some(ai_manager) = &self.ai_manager {
-            self.generate_with_ai_backend(prompt, language, context, config, ai_manager).await
+            self.generate_with_ai_backend(prompt, language, context, config, ai_manager)
+                .await
         } else {
             // Fallback to template-based generation
             let code = self.generate(prompt, language, context, config).await?;
@@ -131,7 +168,9 @@ function {name}({params}) {{
                 generated_code: code,
                 language: language.to_string(),
                 confidence_score: 0.6, // Lower confidence for template-based generation
-                suggestions: vec!["Consider setting up AI integration for better code generation".to_string()],
+                suggestions: vec![
+                    "Consider setting up AI integration for better code generation".to_string(),
+                ],
                 modifications: Vec::new(),
                 metadata: crate::codegen::GenerationMetadata {
                     generation_time_ms: 100,
@@ -142,7 +181,7 @@ function {name}({params}) {{
             })
         }
     }
-    
+
     /// Internal method for AI-powered code generation
     async fn generate_with_ai_backend(
         &self,
@@ -153,10 +192,10 @@ function {name}({params}) {{
         ai_manager: &AIManager,
     ) -> Result<GenerationResult, CodeGenError> {
         let start_time = std::time::Instant::now();
-        
+
         // Build context-aware prompt
         let enhanced_prompt = self.build_context_prompt(prompt, language, context);
-        
+
         // Prepare AI request
         let parameters = ModelParameters {
             temperature: Some(config.temperature.unwrap_or(0.3)), // Lower temperature for code
@@ -165,7 +204,7 @@ function {name}({params}) {{
             stop: Some(vec!["```".to_string(), "\n\n---".to_string()]),
             ..Default::default()
         };
-        
+
         let messages = vec![
             ChatMessage::system(
                 "You are an expert software engineer. Generate clean, well-documented code based on the user's request. \
@@ -173,29 +212,31 @@ function {name}({params}) {{
             ),
             ChatMessage::user(enhanced_prompt),
         ];
-        
+
         let request = ChatRequest {
             model: String::new(), // Use default model
             messages,
             parameters: Some(parameters),
             stream: false,
         };
-        
+
         // Make AI request
-        let response = ai_manager.chat_completion_default(request).await
+        let response = ai_manager
+            .chat_completion_default(request)
+            .await
             .map_err(|e| CodeGenError::GenerationError(format!("AI generation failed: {}", e)))?;
-        
+
         let generation_time_ms = start_time.elapsed().as_millis() as u64;
-        
+
         // Extract and clean the generated code
         let generated_code = self.clean_generated_code(&response.message.content, language);
-        
+
         // Calculate confidence based on response quality
         let confidence = self.calculate_confidence(&generated_code, language);
-        
+
         // Generate suggestions
         let suggestions = self.generate_suggestions(&generated_code, language, context);
-        
+
         Ok(GenerationResult {
             generated_code,
             language: language.to_string(),
@@ -210,18 +251,24 @@ function {name}({params}) {{
             },
         })
     }
-    
+
     /// Build a context-aware prompt for AI generation
-    fn build_context_prompt(&self, prompt: &str, language: &str, context: &CodebaseContext) -> String {
+    fn build_context_prompt(
+        &self,
+        prompt: &str,
+        language: &str,
+        context: &CodebaseContext,
+    ) -> String {
         let mut enhanced_prompt = String::new();
-        
+
         // Add language context
         enhanced_prompt.push_str(&format!("Programming Language: {}\n\n", language));
-        
+
         // Add relevant context from codebase
         if !context.files.is_empty() {
             enhanced_prompt.push_str("Relevant codebase context:\n");
-            for file_context in context.files.iter().take(3) { // Limit to first 3 files
+            for file_context in context.files.iter().take(3) {
+                // Limit to first 3 files
                 enhanced_prompt.push_str(&format!("File: {}\n", file_context.path.display()));
                 if !file_context.imports.is_empty() {
                     enhanced_prompt.push_str("Imports: ");
@@ -230,57 +277,69 @@ function {name}({params}) {{
                 }
                 if !file_context.symbols.is_empty() {
                     enhanced_prompt.push_str("Symbols: ");
-                    enhanced_prompt.push_str(&file_context.symbols.iter().take(5).map(|s| s.name.clone()).collect::<Vec<_>>().join(", "));
+                    enhanced_prompt.push_str(
+                        &file_context
+                            .symbols
+                            .iter()
+                            .take(5)
+                            .map(|s| s.name.clone())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    );
                     enhanced_prompt.push_str("\n");
                 }
                 enhanced_prompt.push_str("\n");
             }
         }
-        
+
         // Add the actual prompt
         enhanced_prompt.push_str("Task: ");
         enhanced_prompt.push_str(prompt);
         enhanced_prompt.push_str("\n\nPlease generate the requested code following the existing patterns and conventions.");
-        
+
         enhanced_prompt
     }
-    
+
     /// Clean and format the generated code
     fn clean_generated_code(&self, raw_code: &str, language: &str) -> String {
         let mut cleaned = raw_code.trim().to_string();
-        
+
         // Remove markdown code blocks if present
         if cleaned.starts_with("```") {
             let lines: Vec<&str> = cleaned.lines().collect();
             if lines.len() > 2 {
                 // Remove first and last lines if they are markdown code block markers
-                cleaned = lines[1..lines.len()-1].join("\n");
+                cleaned = lines[1..lines.len() - 1].join("\n");
             }
         }
-        
+
         // Remove language specification line if present
         if let Some(_lang) = language.to_lowercase().chars().next() {
             let lang_marker = format!("```{}", language.to_lowercase());
             if cleaned.starts_with(&lang_marker) {
-                cleaned = cleaned.strip_prefix(&lang_marker).unwrap_or(&cleaned).trim().to_string();
+                cleaned = cleaned
+                    .strip_prefix(&lang_marker)
+                    .unwrap_or(&cleaned)
+                    .trim()
+                    .to_string();
             }
         }
-        
+
         // Basic cleanup
         cleaned = cleaned.trim().to_string();
-        
+
         cleaned
     }
-    
+
     /// Calculate confidence score based on generated code quality
     fn calculate_confidence(&self, code: &str, language: &str) -> f64 {
         let mut score: f64 = 0.5; // Base score
-        
+
         // Check if code is not empty
         if !code.trim().is_empty() {
             score += 0.2;
         }
-        
+
         // Check for language-specific syntax
         match language.to_lowercase().as_str() {
             "rust" => {
@@ -312,31 +371,38 @@ function {name}({params}) {{
             }
             _ => {}
         }
-        
+
         // Ensure score is within valid range
         score.min(1.0).max(0.0)
     }
-    
+
     /// Generate suggestions for the code
-    fn generate_suggestions(&self, code: &str, language: &str, _context: &CodebaseContext) -> Vec<String> {
+    fn generate_suggestions(
+        &self,
+        code: &str,
+        language: &str,
+        _context: &CodebaseContext,
+    ) -> Vec<String> {
         let mut suggestions = Vec::new();
-        
+
         // Basic suggestions based on code analysis
         if code.len() > 1000 {
             suggestions.push("Consider breaking this into smaller functions".to_string());
         }
-        
+
         if !code.contains("//") && !code.contains("#") && !code.contains("/*") {
             suggestions.push("Add comments to explain complex logic".to_string());
         }
-        
+
         match language.to_lowercase().as_str() {
             "rust" => {
                 if !code.contains("Result<") && code.contains("unwrap()") {
-                    suggestions.push("Consider proper error handling instead of unwrap()".to_string());
+                    suggestions
+                        .push("Consider proper error handling instead of unwrap()".to_string());
                 }
                 if code.contains("clone()") {
-                    suggestions.push("Review clone() usage for performance implications".to_string());
+                    suggestions
+                        .push("Review clone() usage for performance implications".to_string());
                 }
             }
             "python" => {
@@ -346,14 +412,14 @@ function {name}({params}) {{
             }
             _ => {}
         }
-        
+
         if suggestions.is_empty() {
             suggestions.push("Code looks good! Consider adding tests.".to_string());
         }
-        
+
         suggestions
     }
-    
+
     /// Generate code from a prompt
     pub async fn generate(
         &self,
@@ -364,9 +430,9 @@ function {name}({params}) {{
     ) -> Result<String, CodeGenError> {
         // For this implementation, we'll use simple template-based generation
         // In a real implementation, this would interface with an AI service
-        
+
         let template_key = format!("{}_{}", language, self.infer_template_type(prompt));
-        
+
         if let Some(template) = self.templates.get(&template_key) {
             self.apply_template(template, prompt, config).await
         } else {
@@ -374,7 +440,7 @@ function {name}({params}) {{
             self.generate_basic_code(prompt, language, config).await
         }
     }
-    
+
     /// Complete partial code
     pub async fn complete_code(
         &self,
@@ -384,26 +450,27 @@ function {name}({params}) {{
     ) -> Result<Vec<String>, CodeGenError> {
         // Simple completion suggestions
         let mut suggestions = Vec::new();
-        
+
         let code_before_cursor = &partial_code[..cursor_position.min(partial_code.len())];
-        
+
         if code_before_cursor.ends_with("fn ") {
             suggestions.push("new_function() -> Result<(), Error> {\n    todo!()\n}".to_string());
         } else if code_before_cursor.ends_with("struct ") {
             suggestions.push("NewStruct {\n    field: String,\n}".to_string());
         } else if code_before_cursor.ends_with("impl ") {
-            suggestions.push("SomeType {\n    fn new() -> Self {\n        Self {}\n    }\n}".to_string());
+            suggestions
+                .push("SomeType {\n    fn new() -> Self {\n        Self {}\n    }\n}".to_string());
         } else if code_before_cursor.ends_with("let ") {
             suggestions.push("variable = value;".to_string());
         }
-        
+
         if suggestions.is_empty() {
             suggestions.push("// Continue implementation here".to_string());
         }
-        
+
         Ok(suggestions)
     }
-    
+
     /// Refactor existing code
     pub async fn refactor(
         &self,
@@ -412,18 +479,18 @@ function {name}({params}) {{
         _context: &CodebaseContext,
     ) -> Result<GenerationResult, CodeGenError> {
         match refactor_type {
-            RefactorType::ExtractFunction { start_line, end_line, function_name } => {
+            RefactorType::ExtractFunction {
+                start_line,
+                end_line,
+                function_name,
+            } => {
                 let lines: Vec<&str> = code.lines().collect();
                 if start_line > 0 && end_line <= lines.len() && start_line <= end_line {
-                    let extracted_lines = &lines[start_line-1..end_line];
+                    let extracted_lines = &lines[start_line - 1..end_line];
                     let extracted_code = extracted_lines.join("\n");
-                    
-                    let new_function = format!(
-                        "fn {}() {{\n{}\n}}",
-                        function_name,
-                        extracted_code
-                    );
-                    
+
+                    let new_function = format!("fn {}() {{\n{}\n}}", function_name, extracted_code);
+
                     Ok(GenerationResult {
                         generated_code: new_function,
                         language: "rust".to_string(),
@@ -438,7 +505,9 @@ function {name}({params}) {{
                         },
                     })
                 } else {
-                    Err(CodeGenError::InvalidConfig("Invalid line range for extraction".to_string()))
+                    Err(CodeGenError::InvalidConfig(
+                        "Invalid line range for extraction".to_string(),
+                    ))
                 }
             }
             RefactorType::RenameSymbol { old_name, new_name } => {
@@ -447,7 +516,9 @@ function {name}({params}) {{
                     generated_code: refactored_code,
                     language: "rust".to_string(),
                     confidence_score: 0.9,
-                    suggestions: vec!["Verify that all references have been updated correctly".to_string()],
+                    suggestions: vec![
+                        "Verify that all references have been updated correctly".to_string()
+                    ],
                     modifications: Vec::new(),
                     metadata: crate::codegen::GenerationMetadata {
                         generation_time_ms: 25,
@@ -462,12 +533,14 @@ function {name}({params}) {{
                 let simplified = code
                     .replace("if true {", "// Simplified: ")
                     .replace("if false {", "// Removed unreachable code: ");
-                
+
                 Ok(GenerationResult {
                     generated_code: simplified,
                     language: "rust".to_string(),
                     confidence_score: 0.6,
-                    suggestions: vec!["Review the simplified logic to ensure correctness".to_string()],
+                    suggestions: vec![
+                        "Review the simplified logic to ensure correctness".to_string()
+                    ],
                     modifications: Vec::new(),
                     metadata: crate::codegen::GenerationMetadata {
                         generation_time_ms: 75,
@@ -482,12 +555,14 @@ function {name}({params}) {{
                 let optimized = code
                     .replace("Vec::new()", "Vec::with_capacity(10)")
                     .replace("String::new()", "String::with_capacity(50)");
-                
+
                 Ok(GenerationResult {
                     generated_code: optimized,
                     language: "rust".to_string(),
                     confidence_score: 0.7,
-                    suggestions: vec!["Consider profiling to measure actual performance impact".to_string()],
+                    suggestions: vec![
+                        "Consider profiling to measure actual performance impact".to_string()
+                    ],
                     modifications: Vec::new(),
                     metadata: crate::codegen::GenerationMetadata {
                         generation_time_ms: 100,
@@ -510,7 +585,7 @@ function {name}({params}) {{
                     })
                     .collect::<Vec<_>>()
                     .join("\n");
-                
+
                 Ok(GenerationResult {
                     generated_code: readable,
                     language: "rust".to_string(),
@@ -527,11 +602,11 @@ function {name}({params}) {{
             }
         }
     }
-    
+
     /// Infer template type from prompt
     fn infer_template_type(&self, prompt: &str) -> &str {
         let prompt_lower = prompt.to_lowercase();
-        
+
         if prompt_lower.contains("function") || prompt_lower.contains("method") {
             "function"
         } else if prompt_lower.contains("struct") || prompt_lower.contains("class") {
@@ -540,7 +615,7 @@ function {name}({params}) {{
             "function" // Default to function
         }
     }
-    
+
     /// Apply template to generate code
     async fn apply_template(
         &self,
@@ -549,11 +624,13 @@ function {name}({params}) {{
         _config: &GenerationConfig,
     ) -> Result<String, CodeGenError> {
         let mut code = template.template.clone();
-        
+
         // Extract information from prompt for template variables
-        let name = self.extract_name(prompt).unwrap_or_else(|| "generated_item".to_string());
+        let name = self
+            .extract_name(prompt)
+            .unwrap_or_else(|| "generated_item".to_string());
         let description = prompt.to_string();
-        
+
         // Replace template variables
         code = code.replace("{name}", &name);
         code = code.replace("{description}", &description);
@@ -561,10 +638,10 @@ function {name}({params}) {{
         code = code.replace("{return_type}", "()");
         code = code.replace("{body}", "    todo!(\"Implement this\")");
         code = code.replace("{fields}", "    // Add fields here");
-        
+
         Ok(code)
     }
-    
+
     /// Generate basic code without templates
     async fn generate_basic_code(
         &self,
@@ -599,24 +676,24 @@ function {name}({params}) {{
             }
         }
     }
-    
+
     /// Extract name from prompt
     fn extract_name(&self, prompt: &str) -> Option<String> {
         let words: Vec<&str> = prompt.split_whitespace().collect();
-        
+
         for i in 0..words.len() {
             if (words[i] == "named" || words[i] == "called") && i + 1 < words.len() {
                 return Some(words[i + 1].to_string());
             }
         }
-        
+
         // Look for capitalized words that might be names
         for word in words {
             if word.chars().next().unwrap_or('a').is_uppercase() && word.len() > 2 {
                 return Some(word.to_string());
             }
         }
-        
+
         None
     }
 }

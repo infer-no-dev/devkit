@@ -3,14 +3,14 @@
 //! This module provides adapters that wrap existing components and connect them
 //! to the system-wide communication bus.
 
-use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
-use crate::system_bus::{SystemBus, SystemBusHandle, SystemEvent, SystemComponent, SystemMessage};
 use crate::agents::{AgentSystem, AgentTask, TaskPriority};
 use crate::ai::AIManager;
-use crate::shell::{ShellManager, CommandOperation};
 use crate::codegen::CodeGenerator;
 use crate::context::ContextManager;
+use crate::shell::ShellManager;
+use crate::system_bus::{SystemBus, SystemBusHandle, SystemComponent, SystemEvent, SystemMessage};
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
 
 /// Integrated system that connects all components via the system bus
 #[derive(Debug)]
@@ -72,23 +72,28 @@ impl IntegratedSystem {
         context_manager: Option<Arc<ContextManager>>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let system_bus = Arc::new(SystemBus::new());
-        
+
         // Create agent system with AI manager
         let agent_system = Arc::new(AgentSystem::with_ai_manager(ai_manager.clone()));
-        agent_system.initialize().await;
-        
+        let _ = agent_system.initialize().await;
+
         // Create adapters
-        let agent_adapter = Arc::new(AgentSystemAdapter::new(system_bus.clone(), agent_system).await?);
+        let agent_adapter =
+            Arc::new(AgentSystemAdapter::new(system_bus.clone(), agent_system).await?);
         let ai_adapter = Arc::new(AIManagerAdapter::new(system_bus.clone(), ai_manager).await?);
-        let shell_adapter = Arc::new(ShellManagerAdapter::new(system_bus.clone(), shell_manager).await?);
-        let codegen_adapter = Arc::new(CodeGeneratorAdapter::new(system_bus.clone(), code_generator).await?);
-        
+        let shell_adapter =
+            Arc::new(ShellManagerAdapter::new(system_bus.clone(), shell_manager).await?);
+        let codegen_adapter =
+            Arc::new(CodeGeneratorAdapter::new(system_bus.clone(), code_generator).await?);
+
         let context_adapter = if let Some(ctx_mgr) = context_manager {
-            Some(Arc::new(ContextManagerAdapter::new(system_bus.clone(), ctx_mgr).await?))
+            Some(Arc::new(
+                ContextManagerAdapter::new(system_bus.clone(), ctx_mgr).await?,
+            ))
         } else {
             None
         };
-        
+
         let integrated_system = Self {
             system_bus,
             agent_adapter,
@@ -97,13 +102,13 @@ impl IntegratedSystem {
             codegen_adapter,
             context_adapter,
         };
-        
+
         // Start message processing for all adapters
         integrated_system.start_message_processing().await;
-        
+
         Ok(integrated_system)
     }
-    
+
     /// Start message processing for all adapters
     async fn start_message_processing(&self) {
         // Start agent system message processing
@@ -111,25 +116,25 @@ impl IntegratedSystem {
         tokio::spawn(async move {
             agent_adapter.start_message_processing().await;
         });
-        
+
         // Start AI manager message processing
         let ai_adapter = self.ai_adapter.clone();
         tokio::spawn(async move {
             ai_adapter.start_message_processing().await;
         });
-        
+
         // Start shell manager message processing
         let shell_adapter = self.shell_adapter.clone();
         tokio::spawn(async move {
             shell_adapter.start_message_processing().await;
         });
-        
+
         // Start code generator message processing
         let codegen_adapter = self.codegen_adapter.clone();
         tokio::spawn(async move {
             codegen_adapter.start_message_processing().await;
         });
-        
+
         // Start context manager message processing if available
         if let Some(context_adapter) = &self.context_adapter {
             let context_adapter = context_adapter.clone();
@@ -138,18 +143,29 @@ impl IntegratedSystem {
             });
         }
     }
-    
+
     /// Process a user command through the integrated system
-    pub async fn process_user_command(&self, command: String, args: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn process_user_command(
+        &self,
+        command: String,
+        args: Vec<String>,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         // Publish user command event
-        let event = SystemEvent::UICommandRequest { command: command.clone(), args: args.clone() };
-        self.system_bus.publish(SystemMessage::new("User".to_string(), event)).await?;
-        
+        let event = SystemEvent::UICommandRequest {
+            command: command.clone(),
+            args: args.clone(),
+        };
+        self.system_bus
+            .publish(SystemMessage::new("User".to_string(), event))
+            .await?;
+
         // Route command to appropriate component
         match command.as_str() {
             "generate" => {
                 if let Some(prompt) = args.first() {
-                    self.agent_adapter.request_code_generation(prompt.clone()).await
+                    self.agent_adapter
+                        .request_code_generation(prompt.clone())
+                        .await
                 } else {
                     Err("Generate command requires a prompt".into())
                 }
@@ -171,17 +187,29 @@ impl IntegratedSystem {
             _ => Err(format!("Unknown command: {}", command).into()),
         }
     }
-    
+
     /// Get system status
     pub async fn get_system_status(&self) -> SystemStatus {
         let component_stats = self.system_bus.get_component_stats().await;
-        
+
         SystemStatus {
             components_connected: component_stats.len(),
-            agent_system_ready: component_stats.get(&SystemComponent::AgentSystem).map(|s| s.is_connected).unwrap_or(false),
-            ai_manager_ready: component_stats.get(&SystemComponent::AIManager).map(|s| s.is_connected).unwrap_or(false),
-            shell_manager_ready: component_stats.get(&SystemComponent::ShellManager).map(|s| s.is_connected).unwrap_or(false),
-            code_generator_ready: component_stats.get(&SystemComponent::CodeGenerator).map(|s| s.is_connected).unwrap_or(false),
+            agent_system_ready: component_stats
+                .get(&SystemComponent::AgentSystem)
+                .map(|s| s.is_connected)
+                .unwrap_or(false),
+            ai_manager_ready: component_stats
+                .get(&SystemComponent::AIManager)
+                .map(|s| s.is_connected)
+                .unwrap_or(false),
+            shell_manager_ready: component_stats
+                .get(&SystemComponent::ShellManager)
+                .map(|s| s.is_connected)
+                .unwrap_or(false),
+            code_generator_ready: component_stats
+                .get(&SystemComponent::CodeGenerator)
+                .map(|s| s.is_connected)
+                .unwrap_or(false),
         }
     }
 }
@@ -197,31 +225,37 @@ pub struct SystemStatus {
 }
 
 impl AgentSystemAdapter {
-    async fn new(system_bus: Arc<SystemBus>, agent_system: Arc<AgentSystem>) -> Result<Self, Box<dyn std::error::Error>> {
-        let (bus_handle, message_receiver) = system_bus.register_component(SystemComponent::AgentSystem).await;
-        
+    async fn new(
+        system_bus: Arc<SystemBus>,
+        agent_system: Arc<AgentSystem>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let (bus_handle, message_receiver) = system_bus
+            .register_component(SystemComponent::AgentSystem)
+            .await;
+
         Ok(Self {
             agent_system,
             bus_handle,
             message_receiver: Arc::new(RwLock::new(Some(message_receiver))),
         })
     }
-    
+
     async fn start_message_processing(&self) {
         if let Some(mut receiver) = self.message_receiver.write().await.take() {
             let agent_system = self.agent_system.clone();
             let bus_handle = self.bus_handle.clone();
-            
+
             tokio::spawn(async move {
                 while let Some(message) = receiver.recv().await {
-                    if let Err(e) = Self::handle_message(&agent_system, &bus_handle, message).await {
+                    if let Err(e) = Self::handle_message(&agent_system, &bus_handle, message).await
+                    {
                         eprintln!("Agent system message handling error: {}", e);
                     }
                 }
             });
         }
     }
-    
+
     async fn handle_message(
         agent_system: &Arc<AgentSystem>,
         bus_handle: &SystemBusHandle,
@@ -239,7 +273,7 @@ impl AgentSystemAdapter {
                             "test" => "generate_tests",
                             _ => "general",
                         };
-                        
+
                         let task = AgentTask {
                             id: uuid::Uuid::new_v4().to_string(),
                             task_type: task_type.to_string(),
@@ -249,32 +283,38 @@ impl AgentSystemAdapter {
                             deadline: None,
                             metadata: std::collections::HashMap::new(),
                         };
-                        
+
                         // Notify task started
-                        bus_handle.publish(SystemEvent::AgentTaskStarted {
-                            agent_id: "system".to_string(),
-                            task_id: task.id.clone(),
-                            description: task.description.clone(),
-                        }).await?;
-                        
+                        bus_handle
+                            .publish(SystemEvent::AgentTaskStarted {
+                                agent_id: "system".to_string(),
+                                task_id: task.id.clone(),
+                                description: task.description.clone(),
+                            })
+                            .await?;
+
                         // Submit task
                         match agent_system.submit_task(task.clone()).await {
                             Ok(result) => {
-                                bus_handle.publish(SystemEvent::AgentTaskCompleted {
-                                    agent_id: "system".to_string(),
-                                    task_id: task.id,
-                                    result: serde_json::json!({
-                                        "output": result.output,
-                                        "artifacts": result.artifacts.len()
-                                    }),
-                                }).await?;
+                                bus_handle
+                                    .publish(SystemEvent::AgentTaskCompleted {
+                                        agent_id: "system".to_string(),
+                                        task_id: task.id,
+                                        result: serde_json::json!({
+                                            "output": result.output,
+                                            "artifacts": result.artifacts.len()
+                                        }),
+                                    })
+                                    .await?;
                             }
                             Err(e) => {
-                                bus_handle.publish(SystemEvent::AgentTaskFailed {
-                                    agent_id: "system".to_string(),
-                                    task_id: task.id,
-                                    error: e.to_string(),
-                                }).await?;
+                                bus_handle
+                                    .publish(SystemEvent::AgentTaskFailed {
+                                        agent_id: "system".to_string(),
+                                        task_id: task.id,
+                                        error: e.to_string(),
+                                    })
+                                    .await?;
                             }
                         }
                     }
@@ -285,9 +325,12 @@ impl AgentSystemAdapter {
         }
         Ok(())
     }
-    
+
     /// Request code generation through the agent system
-    pub async fn request_code_generation(&self, prompt: String) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_code_generation(
+        &self,
+        prompt: String,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let task = AgentTask {
             id: uuid::Uuid::new_v4().to_string(),
             task_type: "generate_code".to_string(),
@@ -297,15 +340,18 @@ impl AgentSystemAdapter {
             deadline: None,
             metadata: std::collections::HashMap::new(),
         };
-        
+
         match self.agent_system.submit_task(task).await {
             Ok(result) => Ok(result.output),
             Err(e) => Err(e.into()),
         }
     }
-    
+
     /// Request code analysis through the agent system
-    pub async fn request_code_analysis(&self, path: String) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_code_analysis(
+        &self,
+        path: String,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let task = AgentTask {
             id: uuid::Uuid::new_v4().to_string(),
             task_type: "analyze_code".to_string(),
@@ -315,7 +361,7 @@ impl AgentSystemAdapter {
             deadline: None,
             metadata: std::collections::HashMap::new(),
         };
-        
+
         match self.agent_system.submit_task(task).await {
             Ok(result) => Ok(result.output),
             Err(e) => Err(e.into()),
@@ -324,21 +370,26 @@ impl AgentSystemAdapter {
 }
 
 impl ShellManagerAdapter {
-    async fn new(system_bus: Arc<SystemBus>, shell_manager: Arc<ShellManager>) -> Result<Self, Box<dyn std::error::Error>> {
-        let (bus_handle, message_receiver) = system_bus.register_component(SystemComponent::ShellManager).await;
-        
+    async fn new(
+        system_bus: Arc<SystemBus>,
+        shell_manager: Arc<ShellManager>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let (bus_handle, message_receiver) = system_bus
+            .register_component(SystemComponent::ShellManager)
+            .await;
+
         Ok(Self {
             shell_manager,
             bus_handle,
             message_receiver: Arc::new(RwLock::new(Some(message_receiver))),
         })
     }
-    
+
     async fn start_message_processing(&self) {
         if let Some(mut receiver) = self.message_receiver.write().await.take() {
-            let shell_manager = self.shell_manager.clone();
-            let bus_handle = self.bus_handle.clone();
-            
+            let _shell_manager = self.shell_manager.clone();
+            let _bus_handle = self.bus_handle.clone();
+
             tokio::spawn(async move {
                 while let Some(_message) = receiver.recv().await {
                     // Handle shell-specific messages here
@@ -346,38 +397,52 @@ impl ShellManagerAdapter {
             });
         }
     }
-    
+
     /// Execute a shell command and publish the result
-    pub async fn execute_shell_command(&self, command: String) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn execute_shell_command(
+        &self,
+        command: String,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let result = self.shell_manager.execute_command(&command, None).await?;
-        
+
         // Publish shell command execution event
-        self.bus_handle.publish(SystemEvent::ShellCommandExecuted {
-            command: command.clone(),
-            exit_code: result.exit_code,
-            output: result.stdout.clone(),
-        }).await?;
-        
+        self.bus_handle
+            .publish(SystemEvent::ShellCommandExecuted {
+                command: command.clone(),
+                exit_code: result.exit_code,
+                output: result.stdout.clone(),
+            })
+            .await?;
+
         if result.exit_code == 0 {
             Ok(result.stdout)
         } else {
-            Err(format!("Command failed with exit code {}: {}", result.exit_code, result.stderr).into())
+            Err(format!(
+                "Command failed with exit code {}: {}",
+                result.exit_code, result.stderr
+            )
+            .into())
         }
     }
 }
 
 // Implement similar patterns for other adapters
 impl AIManagerAdapter {
-    async fn new(system_bus: Arc<SystemBus>, ai_manager: Arc<AIManager>) -> Result<Self, Box<dyn std::error::Error>> {
-        let (bus_handle, message_receiver) = system_bus.register_component(SystemComponent::AIManager).await;
-        
+    async fn new(
+        system_bus: Arc<SystemBus>,
+        ai_manager: Arc<AIManager>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let (bus_handle, message_receiver) = system_bus
+            .register_component(SystemComponent::AIManager)
+            .await;
+
         Ok(Self {
             ai_manager,
             bus_handle,
             message_receiver: Arc::new(RwLock::new(Some(message_receiver))),
         })
     }
-    
+
     async fn start_message_processing(&self) {
         if let Some(mut receiver) = self.message_receiver.write().await.take() {
             while let Some(_message) = receiver.recv().await {
@@ -388,16 +453,21 @@ impl AIManagerAdapter {
 }
 
 impl CodeGeneratorAdapter {
-    async fn new(system_bus: Arc<SystemBus>, code_generator: Arc<CodeGenerator>) -> Result<Self, Box<dyn std::error::Error>> {
-        let (bus_handle, message_receiver) = system_bus.register_component(SystemComponent::CodeGenerator).await;
-        
+    async fn new(
+        system_bus: Arc<SystemBus>,
+        code_generator: Arc<CodeGenerator>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let (bus_handle, message_receiver) = system_bus
+            .register_component(SystemComponent::CodeGenerator)
+            .await;
+
         Ok(Self {
             code_generator,
             bus_handle,
             message_receiver: Arc::new(RwLock::new(Some(message_receiver))),
         })
     }
-    
+
     async fn start_message_processing(&self) {
         if let Some(mut receiver) = self.message_receiver.write().await.take() {
             while let Some(_message) = receiver.recv().await {
@@ -408,16 +478,21 @@ impl CodeGeneratorAdapter {
 }
 
 impl ContextManagerAdapter {
-    async fn new(system_bus: Arc<SystemBus>, context_manager: Arc<ContextManager>) -> Result<Self, Box<dyn std::error::Error>> {
-        let (bus_handle, message_receiver) = system_bus.register_component(SystemComponent::ContextManager).await;
-        
+    async fn new(
+        system_bus: Arc<SystemBus>,
+        context_manager: Arc<ContextManager>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let (bus_handle, message_receiver) = system_bus
+            .register_component(SystemComponent::ContextManager)
+            .await;
+
         Ok(Self {
             context_manager,
             bus_handle,
             message_receiver: Arc::new(RwLock::new(Some(message_receiver))),
         })
     }
-    
+
     async fn start_message_processing(&self) {
         if let Some(mut receiver) = self.message_receiver.write().await.take() {
             while let Some(_message) = receiver.recv().await {

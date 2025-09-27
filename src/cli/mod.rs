@@ -7,30 +7,35 @@
 //! - Progress indicators and rich output formatting
 //! - Integration with all system components
 
-use std::path::PathBuf;
-use std::io::{self, Write};
-use clap::{Parser, Subcommand, Args};
+use clap::{Args, Parser, Subcommand};
 use crossterm::{
     style::{Color, Print, ResetColor, SetForegroundColor},
     ExecutableCommand,
 };
+use is_terminal::IsTerminal;
+use std::io::{self, Write};
+use std::path::PathBuf;
 
 pub mod commands;
-pub mod interactive;
-pub mod formatting;
 pub mod completion;
+pub mod formatting;
+pub mod help;
+pub mod interactive;
 pub mod progress;
+pub mod validation;
 
+use crate::agents::AgentSystem;
 use crate::config::ConfigManager;
 use crate::context::ContextManager;
-use crate::agents::AgentSystem;
 
 /// Simple color support detection
 fn supports_color() -> bool {
     // Check common environment variables and terminal capabilities
-    std::env::var("NO_COLOR").is_err() && 
-    (std::env::var("FORCE_COLOR").is_ok() || 
-     std::env::var("TERM").map(|term| !term.is_empty() && term != "dumb").unwrap_or(false))
+    std::env::var("NO_COLOR").is_err()
+        && (std::env::var("FORCE_COLOR").is_ok()
+            || std::env::var("TERM")
+                .map(|term| !term.is_empty() && term != "dumb")
+                .unwrap_or(false))
 }
 
 /// Main CLI application structure
@@ -624,7 +629,7 @@ impl CliRunner {
     pub fn new(cli: &Cli) -> Result<Self, Box<dyn std::error::Error>> {
         // Initialize configuration manager
         let config_manager = ConfigManager::new(cli.config.clone())?;
-        
+
         // Configuration is already loaded by the constructor
 
         // Determine color mode
@@ -672,7 +677,7 @@ impl CliRunner {
     pub fn print_output(&self, content: &str, color: Option<Color>) {
         if !self.quiet {
             let mut stdout = io::stdout();
-            
+
             if self.color_enabled && color.is_some() {
                 let _ = stdout.execute(SetForegroundColor(color.unwrap()));
                 let _ = stdout.execute(Print(content));
@@ -680,7 +685,7 @@ impl CliRunner {
             } else {
                 print!("{}", content);
             }
-            
+
             let _ = stdout.flush();
         }
     }
@@ -720,15 +725,21 @@ impl CliRunner {
     /// Print code block
     pub fn print_code(&self, code: &str) {
         if self.color_enabled {
-            io::stdout().execute(SetForegroundColor(Color::DarkGrey)).ok();
+            io::stdout()
+                .execute(SetForegroundColor(Color::DarkGrey))
+                .ok();
         }
-        print!("┌─────────────────────────────────────────────────────────────────────────────────┐\n");
-        
+        print!(
+            "┌─────────────────────────────────────────────────────────────────────────────────┐\n"
+        );
+
         for line in code.lines() {
             println!("│ {:<79} │", line);
         }
-        
-        print!("└─────────────────────────────────────────────────────────────────────────────────┘\n");
+
+        print!(
+            "└─────────────────────────────────────────────────────────────────────────────────┘\n"
+        );
         if self.color_enabled {
             io::stdout().execute(ResetColor).ok();
         }
@@ -736,45 +747,45 @@ impl CliRunner {
 
     /// Check if running in interactive terminal
     pub fn is_interactive(&self) -> bool {
-        atty::is(atty::Stream::Stdin)
+        std::io::stdin().is_terminal()
     }
 
     /// Initialize context manager if not already done
     pub async fn ensure_context_manager(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.context_manager.is_none() {
             let _config = self.config_manager.config();
-            
+
             self.context_manager = Some(ContextManager::new()?);
             self.print_verbose("Context manager initialized");
         }
         Ok(())
     }
-    
+
     /// Get mutable reference to context manager
     pub fn context_manager_mut(&mut self) -> Option<&mut ContextManager> {
         self.context_manager.as_mut()
     }
-    
+
     /// Get verbose flag
     pub fn verbose(&self) -> bool {
         self.verbose
     }
-    
+
     /// Get quiet flag  
     pub fn quiet(&self) -> bool {
         self.quiet
     }
-    
+
     /// Get output format
     pub fn format(&self) -> &OutputFormat {
         &self.format
     }
-    
+
     /// Get config manager
     pub fn config_manager(&self) -> &ConfigManager {
         &self.config_manager
     }
-    
+
     /// Get mutable config manager
     pub fn config_manager_mut(&mut self) -> &mut ConfigManager {
         &mut self.config_manager
@@ -784,9 +795,9 @@ impl CliRunner {
     async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.agent_system.is_none() {
             self.ensure_context_manager().await?;
-            
+
             let _config = self.config_manager.config();
-            
+
             // For now, just initialize with default AgentSystem
             self.agent_system = Some(AgentSystem::new());
             self.print_verbose("Agent system initialized");
@@ -799,7 +810,10 @@ impl CliRunner {
         commands::init::run(self, args).await
     }
 
-    async fn run_interactive(&mut self, args: InteractiveArgs) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_interactive(
+        &mut self,
+        args: InteractiveArgs,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         commands::interactive::run(self, args).await
     }
 
@@ -811,23 +825,38 @@ impl CliRunner {
         commands::generate::run(self, args).await
     }
 
-    async fn run_agent(&mut self, command: AgentCommands) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_agent(
+        &mut self,
+        command: AgentCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         commands::agent::run(self, command).await
     }
 
-    async fn run_config(&mut self, command: ConfigCommands) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_config(
+        &mut self,
+        command: ConfigCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         commands::config::run(self, command).await
     }
 
-    async fn run_inspect(&mut self, command: InspectCommands) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_inspect(
+        &mut self,
+        command: InspectCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         commands::inspect::run(self, command).await
     }
 
-    async fn run_profile(&mut self, command: ProfileCommands) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_profile(
+        &mut self,
+        command: ProfileCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         commands::profile::run(self, command).await
     }
 
-    async fn run_template(&mut self, command: TemplateCommands) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_template(
+        &mut self,
+        command: TemplateCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         commands::template::run(self, command).await
     }
 
@@ -835,7 +864,10 @@ impl CliRunner {
         commands::status::run(self, args).await
     }
 
-    async fn run_shell(&mut self, command: ShellCommands) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_shell(
+        &mut self,
+        command: ShellCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         commands::shell::run(self, command).await
     }
 
@@ -843,4 +875,3 @@ impl CliRunner {
         commands::demo::run(self, args).await
     }
 }
-

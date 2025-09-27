@@ -5,7 +5,10 @@
 //! - OpenAI: GPT models via API
 //! - Anthropic: Claude models via API
 
-use super::{AIClient, AIError, AIProvider, ChatMessage, ChatRequest, ChatResponse, ChatStreamChunk, MessageRole, ModelCapability, ModelInfo, ModelParameters, TokenUsage};
+use super::{
+    AIClient, AIError, AIProvider, ChatMessage, ChatRequest, ChatResponse, ChatStreamChunk,
+    MessageRole, ModelCapability, ModelInfo, ModelParameters, TokenUsage,
+};
 use async_trait::async_trait;
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
@@ -168,10 +171,14 @@ impl OllamaClient {
     }
 
     /// Convert Ollama model to our ModelInfo structure
-    fn convert_model_info(&self, model: OllamaModel, show_response: Option<OllamaShowResponse>) -> ModelInfo {
+    fn convert_model_info(
+        &self,
+        model: OllamaModel,
+        show_response: Option<OllamaShowResponse>,
+    ) -> ModelInfo {
         let capabilities = self.infer_capabilities(&model.name);
         let context_window = self.infer_context_window(&model.name);
-        
+
         ModelInfo {
             name: model.name.clone(),
             provider: AIProvider::Ollama,
@@ -194,9 +201,13 @@ impl OllamaClient {
         ];
 
         // Add code capabilities for code-focused models
-        if name_lower.contains("code") || name_lower.contains("llama") || 
-           name_lower.contains("mistral") || name_lower.contains("deepseek") ||
-           name_lower.contains("qwen") || name_lower.contains("phi") {
+        if name_lower.contains("code")
+            || name_lower.contains("llama")
+            || name_lower.contains("mistral")
+            || name_lower.contains("deepseek")
+            || name_lower.contains("qwen")
+            || name_lower.contains("phi")
+        {
             capabilities.push(ModelCapability::CodeGeneration);
             capabilities.push(ModelCapability::CodeAnalysis);
         }
@@ -213,7 +224,7 @@ impl OllamaClient {
     /// Infer context window size based on model name
     fn infer_context_window(&self, model_name: &str) -> usize {
         let name_lower = model_name.to_lowercase();
-        
+
         // Known context windows for popular models
         if name_lower.contains("llama2") {
             4096
@@ -240,7 +251,7 @@ impl OllamaClient {
     fn convert_message(message: &ChatMessage) -> OllamaChatMessage {
         let role = match message.role {
             MessageRole::System => "system",
-            MessageRole::User => "user", 
+            MessageRole::User => "user",
             MessageRole::Assistant => "assistant",
             MessageRole::Tool => "user", // Ollama doesn't have tool role, map to user
         };
@@ -258,11 +269,11 @@ impl OllamaClient {
         if let Some(temp) = params.temperature {
             options.insert("temperature".to_string(), Value::from(temp));
         }
-        
+
         if let Some(top_p) = params.top_p {
             options.insert("top_p".to_string(), Value::from(top_p));
         }
-        
+
         if let Some(top_k) = params.top_k {
             options.insert("top_k".to_string(), Value::from(top_k));
         }
@@ -297,8 +308,9 @@ impl OllamaClient {
 impl AIClient for OllamaClient {
     async fn list_models(&self) -> Result<Vec<ModelInfo>, AIError> {
         let url = format!("{}/api/tags", self.config.endpoint);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -328,7 +340,8 @@ impl AIClient for OllamaClient {
             name: model_name.to_string(),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&request)
             .send()
@@ -358,13 +371,12 @@ impl AIClient for OllamaClient {
 
     async fn chat_completion(&self, request: ChatRequest) -> Result<ChatResponse, AIError> {
         let url = format!("{}/api/chat", self.config.endpoint);
-        
-        let messages: Vec<OllamaChatMessage> = request.messages
-            .iter()
-            .map(Self::convert_message)
-            .collect();
 
-        let options = request.parameters
+        let messages: Vec<OllamaChatMessage> =
+            request.messages.iter().map(Self::convert_message).collect();
+
+        let options = request
+            .parameters
             .as_ref()
             .map(Self::convert_parameters)
             .unwrap_or_default();
@@ -376,7 +388,8 @@ impl AIClient for OllamaClient {
             options,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&ollama_request)
             .send()
@@ -397,7 +410,9 @@ impl AIClient for OllamaClient {
         } else if let Some(content) = ollama_response.response {
             ChatMessage::assistant(content)
         } else {
-            return Err(AIError::ParseError("No message content in response".to_string()));
+            return Err(AIError::ParseError(
+                "No message content in response".to_string(),
+            ));
         };
 
         let usage = if let (Some(prompt_tokens), Some(completion_tokens)) = (
@@ -426,13 +441,12 @@ impl AIClient for OllamaClient {
         request: ChatRequest,
     ) -> Result<mpsc::Receiver<Result<ChatStreamChunk, AIError>>, AIError> {
         let url = format!("{}/api/chat", self.config.endpoint);
-        
-        let messages: Vec<OllamaChatMessage> = request.messages
-            .iter()
-            .map(Self::convert_message)
-            .collect();
 
-        let options = request.parameters
+        let messages: Vec<OllamaChatMessage> =
+            request.messages.iter().map(Self::convert_message).collect();
+
+        let options = request
+            .parameters
             .as_ref()
             .map(Self::convert_parameters)
             .unwrap_or_default();
@@ -444,7 +458,8 @@ impl AIClient for OllamaClient {
             options,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&ollama_request)
             .send()
@@ -505,7 +520,10 @@ impl AIClient for OllamaClient {
                                     }
                                 }
                                 Err(e) => {
-                                    let error = AIError::ParseError(format!("Failed to parse streaming response: {}", e));
+                                    let error = AIError::ParseError(format!(
+                                        "Failed to parse streaming response: {}",
+                                        e
+                                    ));
                                     let _ = tx.send(Err(error)).await;
                                     break;
                                 }
@@ -526,7 +544,7 @@ impl AIClient for OllamaClient {
 
     async fn health_check(&self) -> Result<bool, AIError> {
         let url = format!("{}/api/tags", self.config.endpoint);
-        
+
         match self.client.get(&url).send().await {
             Ok(response) => Ok(response.status().is_success()),
             Err(_) => Ok(false),
@@ -662,7 +680,7 @@ impl OpenAIClient {
     pub fn new(config: OpenAIConfig) -> Result<Self, AIError> {
         if config.api_key.is_empty() {
             return Err(AIError::ConfigurationError(
-                "OpenAI API key is required. Set OPENAI_API_KEY environment variable.".to_string()
+                "OpenAI API key is required. Set OPENAI_API_KEY environment variable.".to_string(),
             ));
         }
 
@@ -673,12 +691,13 @@ impl OpenAIClient {
                 .parse()
                 .map_err(|e| AIError::ConfigurationError(format!("Invalid API key: {}", e)))?,
         );
-        
+
         if let Some(org) = &config.organization {
             headers.insert(
                 "OpenAI-Organization",
-                org.parse()
-                    .map_err(|e| AIError::ConfigurationError(format!("Invalid organization ID: {}", e)))?,
+                org.parse().map_err(|e| {
+                    AIError::ConfigurationError(format!("Invalid organization ID: {}", e))
+                })?,
             );
         }
 
@@ -686,7 +705,9 @@ impl OpenAIClient {
             .timeout(config.timeout)
             .default_headers(headers)
             .build()
-            .map_err(|e| AIError::ConfigurationError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                AIError::ConfigurationError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         Ok(Self { client, config })
     }
@@ -755,7 +776,7 @@ impl OpenAIClient {
     /// Get context window size based on model name
     fn get_context_window(model_name: &str) -> usize {
         let name_lower = model_name.to_lowercase();
-        
+
         if name_lower.contains("gpt-4-turbo") || name_lower.contains("gpt-4-1106") {
             128000
         } else if name_lower.contains("gpt-4-32k") {
@@ -791,8 +812,9 @@ impl OpenAIClient {
 impl AIClient for OpenAIClient {
     async fn list_models(&self) -> Result<Vec<ModelInfo>, AIError> {
         let url = format!("{}/models", self.config.base_url);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -807,7 +829,8 @@ impl AIClient for OpenAIClient {
             .await
             .map_err(|e| AIError::ParseError(e.to_string()))?;
 
-        let model_infos = models_response.data
+        let model_infos = models_response
+            .data
             .into_iter()
             .map(|model| ModelInfo {
                 name: model.id.clone(),
@@ -836,11 +859,9 @@ impl AIClient for OpenAIClient {
 
     async fn chat_completion(&self, request: ChatRequest) -> Result<ChatResponse, AIError> {
         let url = format!("{}/chat/completions", self.config.base_url);
-        
-        let messages: Vec<OpenAIChatMessage> = request.messages
-            .iter()
-            .map(Self::convert_message)
-            .collect();
+
+        let messages: Vec<OpenAIChatMessage> =
+            request.messages.iter().map(Self::convert_message).collect();
 
         let mut openai_request = OpenAIChatRequest {
             model: request.model.clone(),
@@ -858,7 +879,8 @@ impl AIClient for OpenAIClient {
             Self::apply_parameters(&mut openai_request, params);
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&openai_request)
             .send()
@@ -874,7 +896,8 @@ impl AIClient for OpenAIClient {
             .await
             .map_err(|e| AIError::ParseError(e.to_string()))?;
 
-        let choice = openai_response.choices
+        let choice = openai_response
+            .choices
             .into_iter()
             .next()
             .ok_or_else(|| AIError::ParseError("No choices in response".to_string()))?;
@@ -899,11 +922,9 @@ impl AIClient for OpenAIClient {
         request: ChatRequest,
     ) -> Result<mpsc::Receiver<Result<ChatStreamChunk, AIError>>, AIError> {
         let url = format!("{}/chat/completions", self.config.base_url);
-        
-        let messages: Vec<OpenAIChatMessage> = request.messages
-            .iter()
-            .map(Self::convert_message)
-            .collect();
+
+        let messages: Vec<OpenAIChatMessage> =
+            request.messages.iter().map(Self::convert_message).collect();
 
         let mut openai_request = OpenAIChatRequest {
             model: request.model.clone(),
@@ -921,7 +942,8 @@ impl AIClient for OpenAIClient {
             Self::apply_parameters(&mut openai_request, params);
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&openai_request)
             .send()
@@ -956,7 +978,7 @@ impl AIClient for OpenAIClient {
                             }
 
                             let json_str = &line[6..]; // Remove "data: " prefix
-                            
+
                             if json_str == "[DONE]" {
                                 break;
                             }
@@ -965,7 +987,7 @@ impl AIClient for OpenAIClient {
                                 Ok(openai_chunk) => {
                                     if let Some(choice) = openai_chunk.choices.into_iter().next() {
                                         let delta = choice.delta.content.unwrap_or_default();
-                                        
+
                                         let chunk = ChatStreamChunk {
                                             delta,
                                             finish_reason: choice.finish_reason,
@@ -978,7 +1000,10 @@ impl AIClient for OpenAIClient {
                                     }
                                 }
                                 Err(e) => {
-                                    let error = AIError::ParseError(format!("Failed to parse streaming response: {}", e));
+                                    let error = AIError::ParseError(format!(
+                                        "Failed to parse streaming response: {}",
+                                        e
+                                    ));
                                     let _ = tx.send(Err(error)).await;
                                     break;
                                 }
@@ -999,7 +1024,7 @@ impl AIClient for OpenAIClient {
 
     async fn health_check(&self) -> Result<bool, AIError> {
         let url = format!("{}/models", self.config.base_url);
-        
+
         match self.client.get(&url).send().await {
             Ok(response) => Ok(response.status().is_success()),
             Err(_) => Ok(false),
@@ -1131,33 +1156,39 @@ impl AnthropicClient {
     pub fn new(config: AnthropicConfig) -> Result<Self, AIError> {
         if config.api_key.is_empty() {
             return Err(AIError::ConfigurationError(
-                "Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable.".to_string()
+                "Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable."
+                    .to_string(),
             ));
         }
 
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             "x-api-key",
-            config.api_key
+            config
+                .api_key
                 .parse()
                 .map_err(|e| AIError::ConfigurationError(format!("Invalid API key: {}", e)))?,
         );
         headers.insert(
             "anthropic-version",
-            "2023-06-01".parse()
-                .map_err(|e| AIError::ConfigurationError(format!("Invalid version header: {}", e)))?,
+            "2023-06-01".parse().map_err(|e| {
+                AIError::ConfigurationError(format!("Invalid version header: {}", e))
+            })?,
         );
         headers.insert(
             "content-type",
-            "application/json".parse()
-                .map_err(|e| AIError::ConfigurationError(format!("Invalid content-type header: {}", e)))?,
+            "application/json".parse().map_err(|e| {
+                AIError::ConfigurationError(format!("Invalid content-type header: {}", e))
+            })?,
         );
 
         let client = Client::builder()
             .timeout(config.timeout)
             .default_headers(headers)
             .build()
-            .map_err(|e| AIError::ConfigurationError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                AIError::ConfigurationError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         Ok(Self { client, config })
     }
@@ -1242,7 +1273,7 @@ impl AnthropicClient {
     /// Get context window size based on model name
     fn get_context_window(model_name: &str) -> usize {
         let name_lower = model_name.to_lowercase();
-        
+
         if name_lower.contains("claude-3-opus") {
             200000
         } else if name_lower.contains("claude-3-sonnet") {
@@ -1318,7 +1349,7 @@ impl AIClient for AnthropicClient {
 
     async fn chat_completion(&self, request: ChatRequest) -> Result<ChatResponse, AIError> {
         let url = format!("{}/v1/messages", self.config.base_url);
-        
+
         let (system, messages) = Self::convert_messages(&request.messages);
 
         let mut anthropic_request = AnthropicMessageRequest {
@@ -1337,7 +1368,8 @@ impl AIClient for AnthropicClient {
             Self::apply_parameters(&mut anthropic_request, params);
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&anthropic_request)
             .send()
@@ -1353,7 +1385,8 @@ impl AIClient for AnthropicClient {
             .await
             .map_err(|e| AIError::ParseError(e.to_string()))?;
 
-        let content = anthropic_response.content
+        let content = anthropic_response
+            .content
             .into_iter()
             .map(|c| c.text)
             .collect::<Vec<_>>()
@@ -1363,7 +1396,8 @@ impl AIClient for AnthropicClient {
         let usage = Some(TokenUsage {
             prompt_tokens: anthropic_response.usage.input_tokens,
             completion_tokens: anthropic_response.usage.output_tokens,
-            total_tokens: anthropic_response.usage.input_tokens + anthropic_response.usage.output_tokens,
+            total_tokens: anthropic_response.usage.input_tokens
+                + anthropic_response.usage.output_tokens,
         });
 
         Ok(ChatResponse {
@@ -1379,7 +1413,7 @@ impl AIClient for AnthropicClient {
         request: ChatRequest,
     ) -> Result<mpsc::Receiver<Result<ChatStreamChunk, AIError>>, AIError> {
         let url = format!("{}/v1/messages", self.config.base_url);
-        
+
         let (system, messages) = Self::convert_messages(&request.messages);
 
         let mut anthropic_request = AnthropicMessageRequest {
@@ -1398,7 +1432,8 @@ impl AIClient for AnthropicClient {
             Self::apply_parameters(&mut anthropic_request, params);
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&anthropic_request)
             .send()
@@ -1433,14 +1468,17 @@ impl AIClient for AnthropicClient {
                             }
 
                             let json_str = &line[6..]; // Remove "data: " prefix
-                            
+
                             if json_str == "[DONE]" {
                                 break;
                             }
 
                             match serde_json::from_str::<AnthropicStreamChunk>(json_str) {
                                 Ok(anthropic_chunk) => {
-                                    let (delta, finish_reason) = match anthropic_chunk.chunk_type.as_str() {
+                                    let (delta, finish_reason) = match anthropic_chunk
+                                        .chunk_type
+                                        .as_str()
+                                    {
                                         "content_block_delta" => {
                                             if let Some(delta) = anthropic_chunk.delta {
                                                 (delta.text.unwrap_or_default(), delta.stop_reason)
@@ -1457,7 +1495,7 @@ impl AIClient for AnthropicClient {
                                         }
                                         _ => (String::new(), None),
                                     };
-                                    
+
                                     let chunk = ChatStreamChunk {
                                         delta,
                                         finish_reason,
@@ -1469,7 +1507,10 @@ impl AIClient for AnthropicClient {
                                     }
                                 }
                                 Err(e) => {
-                                    let error = AIError::ParseError(format!("Failed to parse streaming response: {}", e));
+                                    let error = AIError::ParseError(format!(
+                                        "Failed to parse streaming response: {}",
+                                        e
+                                    ));
                                     let _ = tx.send(Err(error)).await;
                                     break;
                                 }

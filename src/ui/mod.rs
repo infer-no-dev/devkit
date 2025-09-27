@@ -1,21 +1,19 @@
 //! User interface components for the terminal application.
 
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout, Rect},
+    widgets::Widget,
+    Frame, Terminal,
+};
 use std::io::{stdout, Stdout};
 use std::time::{Duration, Instant};
 use tokio::time::interval;
-use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers, KeyEvent},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    execute,
-};
-use ratatui::{
-    layout::{Direction, Layout, Constraint, Rect},
-    Terminal,
-    backend::CrosstermBackend,
-    text::{Line, Span},
-    widgets::{Paragraph, Block, Borders},
-    Frame,
-};
 pub mod blocks;
 pub mod input;
 pub mod keybindings;
@@ -23,12 +21,12 @@ pub mod notifications;
 pub mod panels;
 pub mod themes;
 
-use input::InputHandler;
-use keybindings::{KeybindingManager, KeyBindings, KeyContext, Action};
-use notifications::Notification;
-use panels::{PanelManager, PanelType, AgentDisplayInfo};
-use themes::{Theme, ThemeManager};
 use crate::agents::{AgentStatus, TaskPriority};
+use input::InputHandler;
+use keybindings::{Action, KeyBindings, KeyContext, KeybindingManager};
+use notifications::Notification;
+use panels::{AgentDisplayInfo, PanelManager, PanelType};
+use themes::{Theme, ThemeManager};
 
 /// UI configuration
 #[derive(Debug, Clone)]
@@ -90,13 +88,13 @@ impl UIConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Set theme
     pub fn with_theme(mut self, theme: String) -> Self {
         self.theme = theme;
         self
     }
-    
+
     /// Set tick rate
     pub fn with_tick_rate(mut self, tick_rate: Duration) -> Self {
         self.tick_rate = tick_rate;
@@ -108,17 +106,22 @@ impl Application {
     /// Create a new UI application
     pub fn new(config: UIConfig) -> Result<Self, UIError> {
         // Setup terminal
-        enable_raw_mode().map_err(|e| UIError::SetupFailed(format!("Failed to enable raw mode: {}", e)))?;
+        enable_raw_mode()
+            .map_err(|e| UIError::SetupFailed(format!("Failed to enable raw mode: {}", e)))?;
         let mut stdout = stdout();
-        execute!(stdout, EnterAlternateScreen)
-            .map_err(|e| UIError::SetupFailed(format!("Failed to enter alternate screen: {}", e)))?;
+        execute!(stdout, EnterAlternateScreen).map_err(|e| {
+            UIError::SetupFailed(format!("Failed to enter alternate screen: {}", e))
+        })?;
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)
             .map_err(|e| UIError::SetupFailed(format!("Failed to create terminal: {}", e)))?;
 
         let mut theme_manager = ThemeManager::new();
         if !theme_manager.set_theme(&config.theme) {
-            eprintln!("Warning: Failed to set theme '{}'. Using default theme.", config.theme);
+            eprintln!(
+                "Warning: Failed to set theme '{}'. Using default theme.",
+                config.theme
+            );
         }
 
         Ok(Self {
@@ -137,7 +140,7 @@ impl Application {
     /// Run the UI event loop
     pub async fn run(&mut self) -> Result<(), UIError> {
         let mut tick_interval = interval(self.config.tick_rate);
-        
+
         while self.running {
             // Handle input events
             if event::poll(Duration::from_millis(0))? {
@@ -145,33 +148,34 @@ impl Application {
                     self.handle_key_event(key.code, key.modifiers)?;
                 }
             }
-            
+
             // Tick for animations and updates
             tick_interval.tick().await;
             self.tick();
-            
+
             // Render the UI
             let theme = self.theme_manager.current_theme().clone();
             let panel_manager = &mut self.panel_manager;
             let input_handler = &mut self.input_handler;
-            self.terminal.draw(|f| {
-                Self::render_frame(f, &theme, panel_manager, input_handler);
-            })
+            self.terminal
+                .draw(|f| {
+                    Self::render_frame(f, &theme, panel_manager, input_handler);
+                })
                 .map_err(|e| UIError::RenderError(format!("Render failed: {}", e)))?;
         }
-        
+
         self.cleanup()?;
         Ok(())
     }
-    
+
     /// Handle key events
     fn handle_key_event(&mut self, key: KeyCode, modifiers: KeyModifiers) -> Result<(), UIError> {
         // Create KeyEvent for input handler
         let key_event = KeyEvent::new(key, modifiers);
-        
+
         // Get current input context
         let current_context = *self.input_handler.current_context();
-        
+
         // In input or command mode, handle input keys first
         if current_context == KeyContext::Input || current_context == KeyContext::Command {
             if let Ok(result) = self.input_handler.handle_key_event(key_event) {
@@ -180,21 +184,24 @@ impl Application {
                         // Process command
                         self.process_command(cmd);
                         // Switch back to normal mode after command
-                        self.input_handler.set_context(keybindings::KeyContext::Normal);
+                        self.input_handler
+                            .set_context(keybindings::KeyContext::Normal);
                         return Ok(());
                     }
                     input::InputResult::Input(input) => {
                         // Process input
                         self.process_command(input);
                         // Switch back to normal mode after input
-                        self.input_handler.set_context(keybindings::KeyContext::Normal);
+                        self.input_handler
+                            .set_context(keybindings::KeyContext::Normal);
                         return Ok(());
                     }
                     input::InputResult::Action(action) => {
                         // Handle action from input
                         match action {
                             Action::SwitchToNormalMode => {
-                                self.input_handler.set_context(keybindings::KeyContext::Normal);
+                                self.input_handler
+                                    .set_context(keybindings::KeyContext::Normal);
                                 return Ok(());
                             }
                             _ => {}
@@ -210,11 +217,14 @@ impl Application {
                 }
             }
         }
-        
+
         // Global key handling (only if not in input/command mode, or key wasn't consumed)
-        
+
         // Check for global keybindings
-        if let Some(action) = self.keybinding_manager.get_action(key, modifiers, &keybindings::Context::Global) {
+        if let Some(action) =
+            self.keybinding_manager
+                .get_action(key, modifiers, &keybindings::Context::Global)
+        {
             match action {
                 Action::Quit => {
                     self.running = false;
@@ -231,17 +241,19 @@ impl Application {
                 _ => {}
             }
         }
-        
+
         // Check for common key shortcuts
         match key {
             KeyCode::Char('i') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // Switch to input mode
-                self.input_handler.set_context(keybindings::KeyContext::Input);
+                self.input_handler
+                    .set_context(keybindings::KeyContext::Input);
                 return Ok(());
             }
             KeyCode::Char(':') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // Switch to command mode
-                self.input_handler.set_context(keybindings::KeyContext::Command);
+                self.input_handler
+                    .set_context(keybindings::KeyContext::Command);
                 return Ok(());
             }
             KeyCode::F(1) => {
@@ -266,7 +278,7 @@ impl Application {
             }
             _ => {}
         }
-        
+
         // Handle panel-specific keys (only in normal mode)
         if current_context == KeyContext::Normal {
             match self.panel_manager.get_focus() {
@@ -298,10 +310,10 @@ impl Application {
                 _ => {}
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Process a command
     fn process_command(&mut self, command: String) {
         // Send command to external processor if available
@@ -310,31 +322,35 @@ impl Application {
         } else {
             // Fallback: Add command output
             self.panel_manager.output_blocks().add_user_input(&command);
-            
+
             // Process the command (placeholder)
             let response = format!("Processing command: {}", command);
-            self.panel_manager.output_blocks().add_agent_response(&response);
-            
+            self.panel_manager
+                .output_blocks()
+                .add_agent_response(&response);
+
             // Add notification
             let notification = Notification::info(
                 "Command Processed".to_string(),
                 format!("Executed: {}", command),
             );
-            self.panel_manager.notification_panel().add_notification(notification);
+            self.panel_manager
+                .notification_panel()
+                .add_notification(notification);
         }
     }
-    
+
     /// Update UI state (called on each tick)
     fn tick(&mut self) {
         self.last_tick = Instant::now();
-        
+
         // Cleanup expired notifications
         self.panel_manager.notification_panel().cleanup_expired();
-        
+
         // Update input handler
         self.input_handler.tick();
     }
-    
+
     /// Static render function to avoid borrow checker issues
     fn render_frame(
         f: &mut Frame,
@@ -343,70 +359,76 @@ impl Application {
         input_handler: &mut InputHandler,
     ) {
         let size = f.area();
-        
+
         // Create main layout with status bar at bottom
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .margin(0)
             .constraints([
-                Constraint::Min(3), // Main content area
+                Constraint::Min(3),    // Main content area
                 Constraint::Length(1), // Status bar
             ])
             .split(size);
-        
+
         let main_area = main_chunks[0];
         let status_area = main_chunks[1];
-        
+
         // Calculate layout constraints based on visible panels
         let constraints = panel_manager.calculate_layout_constraints();
-        
+
         // Create main layout for panels
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .margin(0)
             .constraints(constraints)
             .split(main_area);
-        
+
         let mut chunk_idx = 0;
-        
+
         // Render agent status panel if visible
         if let Some(layout) = panel_manager.get_panel_layout(&PanelType::AgentStatus) {
             if layout.visible && chunk_idx < chunks.len() {
-                panel_manager.agent_panel().render(f, chunks[chunk_idx], theme);
+                panel_manager
+                    .agent_panel()
+                    .render(f, chunks[chunk_idx], theme);
                 chunk_idx += 1;
             }
         }
-        
+
         // Render notifications panel if visible
         if let Some(layout) = panel_manager.get_panel_layout(&PanelType::Notifications) {
             if layout.visible && chunk_idx < chunks.len() {
-                panel_manager.notification_panel().render(f, chunks[chunk_idx], theme);
+                panel_manager
+                    .notification_panel()
+                    .render(f, chunks[chunk_idx], theme);
                 chunk_idx += 1;
             }
         }
-        
+
         // Render output panel if visible
         if let Some(layout) = panel_manager.get_panel_layout(&PanelType::Output) {
             if layout.visible && chunk_idx < chunks.len() {
-                panel_manager.output_blocks().render(f, chunks[chunk_idx], theme);
+                panel_manager
+                    .output_blocks()
+                    .render(f, chunks[chunk_idx], theme);
                 chunk_idx += 1;
             }
         }
-        
+
         // Render input panel if visible
         if let Some(layout) = panel_manager.get_panel_layout(&PanelType::Input) {
             if layout.visible && chunk_idx < chunks.len() {
                 input_handler.render(f, chunks[chunk_idx], theme, input_handler.current_context());
             }
         }
-        
+
         // Render status bar
         Self::render_status_bar(f, status_area, theme, input_handler);
-        
+
         // Render help overlay if visible (use full size, not main_area)
         panel_manager.render_help_overlay(f, size, theme);
     }
-    
+
     /// Handle UI events from external sources
     pub fn handle_event(&mut self, event: UIEvent) {
         match event {
@@ -416,7 +438,13 @@ impl Application {
             UIEvent::Input(input) => {
                 self.input_handler.set_input(input);
             }
-            UIEvent::AgentStatusUpdate { agent_name, status, task, priority, progress } => {
+            UIEvent::AgentStatusUpdate {
+                agent_name,
+                status,
+                task,
+                priority,
+                progress,
+            } => {
                 let mut info = AgentDisplayInfo::new(agent_name.clone(), "Agent".to_string());
                 info.update_status(status);
                 if let Some(task) = task {
@@ -425,20 +453,34 @@ impl Application {
                 if let Some(progress) = progress {
                     info.update_progress(progress);
                 }
-                self.panel_manager.agent_panel().update_agent(agent_name, info);
+                self.panel_manager
+                    .agent_panel()
+                    .update_agent(agent_name, info);
             }
             UIEvent::Notification(notification) => {
-                self.panel_manager.notification_panel().add_notification(notification);
+                self.panel_manager
+                    .notification_panel()
+                    .add_notification(notification);
             }
-            UIEvent::Output { content, block_type } => {
-                match block_type.as_str() {
-                    "user" => self.panel_manager.output_blocks().add_user_input(&content),
-                    "agent" => self.panel_manager.output_blocks().add_agent_response(&content),
-                    "system" => self.panel_manager.output_blocks().add_system_message(&content),
-                    "error" => self.panel_manager.output_blocks().add_error(&content),
-                    _ => self.panel_manager.output_blocks().add_system_message(&content),
-                }
-            }
+            UIEvent::Output {
+                content,
+                block_type,
+            } => match block_type.as_str() {
+                "user" => self.panel_manager.output_blocks().add_user_input(&content),
+                "agent" => self
+                    .panel_manager
+                    .output_blocks()
+                    .add_agent_response(&content),
+                "system" => self
+                    .panel_manager
+                    .output_blocks()
+                    .add_system_message(&content),
+                "error" => self.panel_manager.output_blocks().add_error(&content),
+                _ => self
+                    .panel_manager
+                    .output_blocks()
+                    .add_system_message(&content),
+            },
             UIEvent::ToggleHelp => {
                 self.panel_manager.toggle_help();
             }
@@ -448,60 +490,61 @@ impl Application {
                         "Theme Error".to_string(),
                         format!("Failed to switch to theme '{}'", theme_name),
                     );
-                    self.panel_manager.notification_panel().add_notification(notification);
+                    self.panel_manager
+                        .notification_panel()
+                        .add_notification(notification);
                 }
             }
         }
     }
-    
+
     /// Cleanup terminal state
     fn cleanup(&mut self) -> Result<(), UIError> {
         disable_raw_mode()?;
-        execute!(
-            self.terminal.backend_mut(),
-            LeaveAlternateScreen
-        )?;
+        execute!(self.terminal.backend_mut(), LeaveAlternateScreen)?;
         Ok(())
     }
-    
+
     /// Get the current theme
     pub fn theme(&self) -> &Theme {
         self.theme_manager.current_theme()
     }
-    
+
     /// Get mutable access to panel manager
     pub fn panel_manager(&mut self) -> &mut PanelManager {
         &mut self.panel_manager
     }
-    
+
     /// Get mutable access to theme manager
     pub fn theme_manager(&mut self) -> &mut ThemeManager {
         &mut self.theme_manager
     }
-    
+
     /// Check if UI is still running
     pub fn is_running(&self) -> bool {
         self.running
     }
-    
+
     /// Force quit the UI
     pub fn quit(&mut self) {
         self.running = false;
     }
-    
+
     /// Add a notification
     pub fn add_notification(&mut self, notification: Notification) {
-        self.panel_manager.notification_panel().add_notification(notification);
+        self.panel_manager
+            .notification_panel()
+            .add_notification(notification);
     }
-    
+
     /// Add agent status update
     pub fn update_agent_status(
-        &mut self, 
-        agent_name: String, 
+        &mut self,
+        agent_name: String,
         status: AgentStatus,
         task: Option<String>,
         priority: Option<TaskPriority>,
-        progress: Option<f64>
+        progress: Option<f64>,
     ) {
         let event = UIEvent::AgentStatusUpdate {
             agent_name,
@@ -512,18 +555,21 @@ impl Application {
         };
         self.handle_event(event);
     }
-    
+
     /// Add output to display
     pub fn add_output(&mut self, content: String, block_type: String) {
-        let event = UIEvent::Output { content, block_type };
+        let event = UIEvent::Output {
+            content,
+            block_type,
+        };
         self.handle_event(event);
     }
-    
+
     /// Set command sender for external command processing
     pub fn set_command_sender(&mut self, sender: tokio::sync::mpsc::UnboundedSender<String>) {
         self.command_sender = Some(sender);
     }
-    
+
     /// Cycle panel focus
     fn cycle_panel_focus(&mut self) {
         let panels = vec![
@@ -532,55 +578,59 @@ impl Application {
             panels::PanelType::AgentStatus,
             panels::PanelType::Notifications,
         ];
-        
+
         let current = self.panel_manager.get_focus();
         let next_index = if let Some(current_type) = current {
-            panels.iter().position(|p| p == current_type)
+            panels
+                .iter()
+                .position(|p| p == current_type)
                 .map(|i| (i + 1) % panels.len())
                 .unwrap_or(0)
         } else {
             0
         };
-        
-        self.panel_manager.set_focus(Some(panels[next_index].clone()));
+
+        self.panel_manager
+            .set_focus(Some(panels[next_index].clone()));
     }
-    
+
     /// Render the status bar
-    fn render_status_bar(
-        f: &mut Frame,
-        area: Rect,
-        theme: &Theme,
-        input_handler: &InputHandler,
-    ) {
-        use ratatui::widgets::{Paragraph};
+    fn render_status_bar(f: &mut Frame, area: Rect, theme: &Theme, input_handler: &InputHandler) {
+        use ratatui::style::{Modifier, Style};
         use ratatui::text::{Line, Span};
-        use ratatui::style::{Style, Modifier};
-        
+        use ratatui::widgets::Paragraph;
+
         // Get current input context
         let context = input_handler.current_context();
-        
+
         // Create status text based on context
         let status_text = match context {
             keybindings::KeyContext::Input => {
                 "INPUT MODE: Type your command and press Enter | ESC: Cancel | ?: Help | q: Quit"
-            },
+            }
             keybindings::KeyContext::Command => {
                 "COMMAND MODE: Type /command and press Enter | ESC: Cancel | ?: Help | q: Quit"
-            },
-            _ => {
-                "i: Input | :: Command | Tab: Cycle Panels | ?: Help | q: Quit | Ctrl+C: Exit"
             }
+            _ => "i: Input | :: Command | Tab: Cycle Panels | ?: Help | q: Quit | Ctrl+C: Exit",
         };
-        
-        let status_line = Line::from(vec![
-            Span::styled(status_text, Style::default()
-                .fg(theme.primary_style().fg.unwrap_or(ratatui::style::Color::White))
-                .add_modifier(Modifier::DIM))
-        ]);
-        
-        let status_paragraph = Paragraph::new(vec![status_line])
-            .style(Style::default().bg(theme.border_style().bg.unwrap_or(ratatui::style::Color::Black)));
-        
+
+        let status_line = Line::from(vec![Span::styled(
+            status_text,
+            Style::default()
+                .fg(theme
+                    .primary_style()
+                    .fg
+                    .unwrap_or(ratatui::style::Color::White))
+                .add_modifier(Modifier::DIM),
+        )]);
+
+        let status_paragraph = Paragraph::new(vec![status_line]).style(
+            Style::default().bg(theme
+                .border_style()
+                .bg
+                .unwrap_or(ratatui::style::Color::Black)),
+        );
+
         f.render_widget(status_paragraph, area);
     }
 }

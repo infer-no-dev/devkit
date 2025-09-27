@@ -110,19 +110,19 @@ pub struct ChatStreamChunk {
 pub trait AIClient {
     /// Get information about available models
     async fn list_models(&self) -> Result<Vec<ModelInfo>, AIError>;
-    
+
     /// Get information about a specific model
     async fn get_model_info(&self, model_name: &str) -> Result<ModelInfo, AIError>;
-    
+
     /// Send a chat completion request
     async fn chat_completion(&self, request: ChatRequest) -> Result<ChatResponse, AIError>;
-    
+
     /// Send a streaming chat completion request
     async fn chat_completion_stream(
         &self,
         request: ChatRequest,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<ChatStreamChunk, AIError>>, AIError>;
-    
+
     /// Check if the AI service is available
     async fn health_check(&self) -> Result<bool, AIError>;
 }
@@ -132,28 +132,28 @@ pub trait AIClient {
 pub enum AIError {
     #[error("Network error: {0}")]
     NetworkError(String),
-    
+
     #[error("Authentication failed: {0}")]
     AuthenticationError(String),
-    
+
     #[error("Model not found: {0}")]
     ModelNotFound(String),
-    
+
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
-    
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("Service unavailable: {0}")]
     ServiceUnavailable(String),
-    
+
     #[error("Parsing error: {0}")]
     ParseError(String),
-    
+
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
-    
+
     #[error("Unknown error: {0}")]
     Unknown(String),
 }
@@ -185,7 +185,7 @@ impl ChatMessage {
             metadata: None,
         }
     }
-    
+
     /// Create a new user message
     pub fn user(content: impl Into<String>) -> Self {
         Self {
@@ -194,7 +194,7 @@ impl ChatMessage {
             metadata: None,
         }
     }
-    
+
     /// Create a new assistant message
     pub fn assistant(content: impl Into<String>) -> Self {
         Self {
@@ -203,7 +203,7 @@ impl ChatMessage {
             metadata: None,
         }
     }
-    
+
     /// Add metadata to the message
     pub fn with_metadata(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         if self.metadata.is_none() {

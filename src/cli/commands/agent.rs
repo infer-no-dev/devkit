@@ -1,16 +1,17 @@
-use crate::cli::{CliRunner, AgentCommands};
-use crate::agents::{AgentSystem, AgentInfo};
+use crate::agents::{AgentInfo, AgentSystem};
+use crate::cli::{AgentCommands, CliRunner};
 use serde_json::json;
 use std::sync::Arc;
 
-pub async fn run(runner: &mut CliRunner, command: AgentCommands) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(
+    runner: &mut CliRunner,
+    command: AgentCommands,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize agent system if not already available
     let agent_system = get_or_create_agent_system(runner).await?;
-    
+
     match command {
-        AgentCommands::List => {
-            list_agents(runner, &agent_system, None, false).await?
-        }
+        AgentCommands::List => list_agents(runner, &agent_system, None, false).await?,
         AgentCommands::Status { agent } => {
             show_agent_status(runner, &agent_system, agent.as_deref(), None).await?
         }
@@ -20,25 +21,40 @@ pub async fn run(runner: &mut CliRunner, command: AgentCommands) -> Result<(), B
         AgentCommands::Stop { agents, all } => {
             stop_agents(runner, &agent_system, agents, all).await?
         }
-        AgentCommands::Create { name, agent_type, config } => {
-            create_custom_agent(runner, &agent_system, name, agent_type, config.map(|p| p.to_string_lossy().to_string())).await?
+        AgentCommands::Create {
+            name,
+            agent_type,
+            config,
+        } => {
+            create_custom_agent(
+                runner,
+                &agent_system,
+                name,
+                agent_type,
+                config.map(|p| p.to_string_lossy().to_string()),
+            )
+            .await?
         }
         AgentCommands::Remove { name } => {
             remove_custom_agent(runner, &agent_system, name, false).await?
         }
-        AgentCommands::Logs { agent, lines, follow } => {
-            show_agent_logs(runner, &agent_system, Some(&agent), Some(lines), follow).await?
-        }
+        AgentCommands::Logs {
+            agent,
+            lines,
+            follow,
+        } => show_agent_logs(runner, &agent_system, Some(&agent), Some(lines), follow).await?,
     }
-    
+
     Ok(())
 }
 
-async fn get_or_create_agent_system(_runner: &mut CliRunner) -> Result<Arc<AgentSystem>, Box<dyn std::error::Error>> {
+async fn get_or_create_agent_system(
+    _runner: &mut CliRunner,
+) -> Result<Arc<AgentSystem>, Box<dyn std::error::Error>> {
     // For now, create a new agent system each time
     // In a real implementation, this would be managed by the CliRunner
     let agent_system = Arc::new(AgentSystem::new());
-    agent_system.initialize().await;
+    let _ = agent_system.initialize().await;
     Ok(agent_system)
 }
 
@@ -49,7 +65,7 @@ async fn list_agents(
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let agents_info = agent_system.get_agents_info().await;
-    
+
     // Use the format from runner if not provided
     let output_format = if let Some(fmt) = format {
         fmt
@@ -61,7 +77,7 @@ async fn list_agents(
             crate::cli::OutputFormat::Table => "table".to_string(),
         }
     };
-    
+
     match output_format.as_str() {
         "json" => {
             let json_output = json!({
@@ -85,16 +101,16 @@ async fn list_agents(
                 runner.print_info("No agents currently registered");
                 return Ok(());
             }
-            
+
             runner.print_info(&format!("Found {} agents:", agents_info.len()));
             println!();
-            
+
             for info in agents_info {
                 print_agent_info(runner, &info, verbose);
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -105,13 +121,16 @@ async fn show_agent_status(
     format: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let statuses = agent_system.get_agent_statuses().await;
-    
+
     let filtered_statuses: Vec<_> = if let Some(id) = agent_id {
-        statuses.into_iter().filter(|(name, _)| name.contains(id)).collect()
+        statuses
+            .into_iter()
+            .filter(|(name, _)| name.contains(id))
+            .collect()
     } else {
         statuses.into_iter().collect()
     };
-    
+
     // Use the format from runner if not provided
     let output_format = if let Some(fmt) = format {
         fmt
@@ -123,7 +142,7 @@ async fn show_agent_status(
             crate::cli::OutputFormat::Table => "table".to_string(),
         }
     };
-    
+
     match output_format.as_str() {
         "json" => {
             let json_output = json!({
@@ -141,10 +160,10 @@ async fn show_agent_status(
                 runner.print_info("No agents found matching criteria");
                 return Ok(());
             }
-            
+
             runner.print_info("Agent Status:");
             println!();
-            
+
             for (name, status) in filtered_statuses {
                 let status_str = match &status {
                     crate::agents::AgentStatus::Idle => "🟢 Idle",
@@ -154,20 +173,20 @@ async fn show_agent_status(
                     crate::agents::AgentStatus::Offline => "⚫ Offline",
                     crate::agents::AgentStatus::ShuttingDown => "🟠 Shutting Down",
                 };
-                
+
                 println!("  {} - {}", name, status_str);
-                
+
                 if let crate::agents::AgentStatus::Processing { task_id } = &status {
                     println!("    Currently processing task: {}", task_id);
                 }
-                
+
                 if let crate::agents::AgentStatus::Error { message } = &status {
                     runner.print_error(&format!("    Error: {}", message));
                 }
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -181,17 +200,19 @@ async fn start_agents(
         runner.print_info("Starting all agents...");
         runner.print_success("All agents started successfully");
     } else if agents.is_empty() {
-        runner.print_error("No agents specified. Use --all to start all agents or specify agent names.");
+        runner.print_error(
+            "No agents specified. Use --all to start all agents or specify agent names.",
+        );
         return Ok(());
     } else {
         runner.print_info(&format!("Starting {} agents...", agents.len()));
-        
+
         for agent_name in agents {
             // In a real implementation, this would actually start/activate the agent
             runner.print_success(&format!("Started agent: {}", agent_name));
         }
     }
-    
+
     Ok(())
 }
 
@@ -205,17 +226,19 @@ async fn stop_agents(
         runner.print_info("Stopping all agents...");
         runner.print_success("All agents stopped successfully");
     } else if agents.is_empty() {
-        runner.print_error("No agents specified. Use --all to stop all agents or specify agent names.");
+        runner.print_error(
+            "No agents specified. Use --all to stop all agents or specify agent names.",
+        );
         return Ok(());
     } else {
         runner.print_info(&format!("Stopping {} agents...", agents.len()));
-        
+
         for agent_name in agents {
             // In a real implementation, this would actually stop/deactivate the agent
             runner.print_success(&format!("Stopped agent: {}", agent_name));
         }
     }
-    
+
     Ok(())
 }
 
@@ -226,15 +249,18 @@ async fn create_custom_agent(
     agent_type: String,
     config: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    runner.print_info(&format!("Creating custom agent: {} of type {}", name, agent_type));
-    
+    runner.print_info(&format!(
+        "Creating custom agent: {} of type {}",
+        name, agent_type
+    ));
+
     if let Some(config_file) = config {
         runner.print_info(&format!("Using configuration from: {}", config_file));
     }
-    
+
     // In a real implementation, this would create and register a custom agent
     runner.print_success(&format!("Custom agent '{}' created successfully", name));
-    
+
     Ok(())
 }
 
@@ -249,10 +275,10 @@ async fn remove_custom_agent(
     } else {
         runner.print_info(&format!("Removing agent: {}", name));
     }
-    
+
     // In a real implementation, this would remove the agent from the system
     runner.print_success(&format!("Agent '{}' removed successfully", name));
-    
+
     Ok(())
 }
 
@@ -265,18 +291,21 @@ async fn show_agent_logs(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let agent_name = agent_id.unwrap_or("all agents");
     let lines_count = lines.unwrap_or(100);
-    
-    runner.print_info(&format!("Showing {} lines of logs for {}", lines_count, agent_name));
-    
+
+    runner.print_info(&format!(
+        "Showing {} lines of logs for {}",
+        lines_count, agent_name
+    ));
+
     if follow {
         runner.print_info("Following log output (press Ctrl+C to exit)");
     }
-    
+
     // In a real implementation, this would show actual agent logs
     println!("[2024-01-20 10:30:15] INFO  CodeGenAgent: Initialized successfully");
     println!("[2024-01-20 10:30:16] INFO  AnalysisAgent: Ready for code analysis tasks");
     println!("[2024-01-20 10:30:17] INFO  DebugAgent: Debugging capabilities online");
-    
+
     Ok(())
 }
 
@@ -289,18 +318,17 @@ fn print_agent_info(_runner: &CliRunner, info: &AgentInfo, verbose: bool) {
         crate::agents::AgentStatus::Offline => "⚫",
         crate::agents::AgentStatus::ShuttingDown => "🟠",
     };
-    
+
     println!("  {} {} ({})", status_emoji, info.name, info.id);
     println!("     Type: Agent");
     println!("     Status: {:?}", info.status);
-    
+
     if verbose && !info.capabilities.is_empty() {
         println!("     Capabilities:");
         for capability in &info.capabilities {
             println!("       - {}", capability);
         }
     }
-    
+
     println!();
 }
-

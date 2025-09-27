@@ -7,12 +7,12 @@
 //! - Git repository initialization
 //! - Best-practice project structures
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::fs;
-use chrono::Datelike;
-use crate::cli::{CliRunner, InitArgs};
 use super::utils::*;
+use crate::cli::{CliRunner, InitArgs};
+use chrono::Datelike;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Project template structure
 #[derive(Debug, Clone)]
@@ -38,153 +38,157 @@ pub struct TemplateConfig {
 /// Available project templates
 pub fn get_available_templates() -> HashMap<String, ProjectTemplate> {
     let mut templates = HashMap::new();
-    
+
     // Rust template
-    templates.insert("rust".to_string(), ProjectTemplate {
-        name: "Rust Project".to_string(),
-        language: "rust".to_string(),
-        description: "A modern Rust project with best practices".to_string(),
-        files: rust_template_files(),
-        directories: vec![
-            PathBuf::from("src"),
-            PathBuf::from("tests"),
-            PathBuf::from("examples"),
-            PathBuf::from("benches"),
-        ],
-        config: TemplateConfig {
-            dependencies: vec![
-                "serde = { version = \"1.0\", features = [\"derive\"] }".to_string(),
-                "tokio = { version = \"1.0\", features = [\"full\"] }".to_string(),
-                "clap = { version = \"4.0\", features = [\"derive\"] }".to_string(),
+    templates.insert(
+        "rust".to_string(),
+        ProjectTemplate {
+            name: "Rust Project".to_string(),
+            language: "rust".to_string(),
+            description: "A modern Rust project with best practices".to_string(),
+            files: rust_template_files(),
+            directories: vec![
+                PathBuf::from("src"),
+                PathBuf::from("tests"),
+                PathBuf::from("examples"),
+                PathBuf::from("benches"),
             ],
-            dev_dependencies: vec![
-                "criterion = \"0.5\"".to_string(),
-                "tempfile = \"3.0\"".to_string(),
-            ],
-            scripts: HashMap::new(),
-            git_ignore_patterns: vec![
-                "/target/".to_string(),
-                "Cargo.lock".to_string(),
-                "*.orig".to_string(),
-                ".DS_Store".to_string(),
-            ],
-            recommended_extensions: vec![
-                "rust-analyzer".to_string(),
-                "crates".to_string(),
-            ],
+            config: TemplateConfig {
+                dependencies: vec![
+                    "serde = { version = \"1.0\", features = [\"derive\"] }".to_string(),
+                    "tokio = { version = \"1.0\", features = [\"full\"] }".to_string(),
+                    "clap = { version = \"4.0\", features = [\"derive\"] }".to_string(),
+                ],
+                dev_dependencies: vec![
+                    "criterion = \"0.5\"".to_string(),
+                    "tempfile = \"3.0\"".to_string(),
+                ],
+                scripts: HashMap::new(),
+                git_ignore_patterns: vec![
+                    "/target/".to_string(),
+                    "Cargo.lock".to_string(),
+                    "*.orig".to_string(),
+                    ".DS_Store".to_string(),
+                ],
+                recommended_extensions: vec!["rust-analyzer".to_string(), "crates".to_string()],
+            },
         },
-    });
-    
+    );
+
     // Python template
-    templates.insert("python".to_string(), ProjectTemplate {
-        name: "Python Project".to_string(),
-        language: "python".to_string(),
-        description: "A Python project with modern tooling".to_string(),
-        files: python_template_files(),
-        directories: vec![
-            PathBuf::from("src"),
-            PathBuf::from("tests"),
-            PathBuf::from("docs"),
-        ],
-        config: TemplateConfig {
-            dependencies: vec![
-                "click>=8.0.0".to_string(),
-                "requests>=2.28.0".to_string(),
+    templates.insert(
+        "python".to_string(),
+        ProjectTemplate {
+            name: "Python Project".to_string(),
+            language: "python".to_string(),
+            description: "A Python project with modern tooling".to_string(),
+            files: python_template_files(),
+            directories: vec![
+                PathBuf::from("src"),
+                PathBuf::from("tests"),
+                PathBuf::from("docs"),
             ],
-            dev_dependencies: vec![
-                "pytest>=7.0.0".to_string(),
-                "black>=22.0.0".to_string(),
-                "flake8>=5.0.0".to_string(),
-                "mypy>=0.991".to_string(),
-            ],
-            scripts: HashMap::from([
-                ("test".to_string(), "pytest".to_string()),
-                ("format".to_string(), "black src tests".to_string()),
-                ("lint".to_string(), "flake8 src tests".to_string()),
-                ("typecheck".to_string(), "mypy src".to_string()),
-            ]),
-            git_ignore_patterns: vec![
-                "__pycache__/".to_string(),
-                "*.py[cod]".to_string(),
-                "*.egg-info/".to_string(),
-                "build/".to_string(),
-                "dist/".to_string(),
-                ".pytest_cache/".to_string(),
-                ".coverage".to_string(),
-            ],
-            recommended_extensions: vec![
-                "python".to_string(),
-                "pylance".to_string(),
-            ],
+            config: TemplateConfig {
+                dependencies: vec!["click>=8.0.0".to_string(), "requests>=2.28.0".to_string()],
+                dev_dependencies: vec![
+                    "pytest>=7.0.0".to_string(),
+                    "black>=22.0.0".to_string(),
+                    "flake8>=5.0.0".to_string(),
+                    "mypy>=0.991".to_string(),
+                ],
+                scripts: HashMap::from([
+                    ("test".to_string(), "pytest".to_string()),
+                    ("format".to_string(), "black src tests".to_string()),
+                    ("lint".to_string(), "flake8 src tests".to_string()),
+                    ("typecheck".to_string(), "mypy src".to_string()),
+                ]),
+                git_ignore_patterns: vec![
+                    "__pycache__/".to_string(),
+                    "*.py[cod]".to_string(),
+                    "*.egg-info/".to_string(),
+                    "build/".to_string(),
+                    "dist/".to_string(),
+                    ".pytest_cache/".to_string(),
+                    ".coverage".to_string(),
+                ],
+                recommended_extensions: vec!["python".to_string(), "pylance".to_string()],
+            },
         },
-    });
-    
+    );
+
     // JavaScript/TypeScript template
-    templates.insert("typescript".to_string(), ProjectTemplate {
-        name: "TypeScript Project".to_string(),
-        language: "typescript".to_string(),
-        description: "A TypeScript project with modern tooling".to_string(),
-        files: typescript_template_files(),
-        directories: vec![
-            PathBuf::from("src"),
-            PathBuf::from("tests"),
-            PathBuf::from("dist"),
-        ],
-        config: TemplateConfig {
-            dependencies: vec![
-                "typescript".to_string(),
-                "@types/node".to_string(),
+    templates.insert(
+        "typescript".to_string(),
+        ProjectTemplate {
+            name: "TypeScript Project".to_string(),
+            language: "typescript".to_string(),
+            description: "A TypeScript project with modern tooling".to_string(),
+            files: typescript_template_files(),
+            directories: vec![
+                PathBuf::from("src"),
+                PathBuf::from("tests"),
+                PathBuf::from("dist"),
             ],
-            dev_dependencies: vec![
-                "jest".to_string(),
-                "@types/jest".to_string(),
-                "eslint".to_string(),
-                "prettier".to_string(),
-            ],
-            scripts: HashMap::from([
-                ("build".to_string(), "tsc".to_string()),
-                ("test".to_string(), "jest".to_string()),
-                ("format".to_string(), "prettier --write src".to_string()),
-                ("lint".to_string(), "eslint src --ext .ts".to_string()),
-            ]),
-            git_ignore_patterns: vec![
-                "node_modules/".to_string(),
-                "dist/".to_string(),
-                "*.log".to_string(),
-                ".env".to_string(),
-            ],
-            recommended_extensions: vec![
-                "typescript".to_string(),
-                "eslint".to_string(),
-                "prettier".to_string(),
-            ],
+            config: TemplateConfig {
+                dependencies: vec!["typescript".to_string(), "@types/node".to_string()],
+                dev_dependencies: vec![
+                    "jest".to_string(),
+                    "@types/jest".to_string(),
+                    "eslint".to_string(),
+                    "prettier".to_string(),
+                ],
+                scripts: HashMap::from([
+                    ("build".to_string(), "tsc".to_string()),
+                    ("test".to_string(), "jest".to_string()),
+                    ("format".to_string(), "prettier --write src".to_string()),
+                    ("lint".to_string(), "eslint src --ext .ts".to_string()),
+                ]),
+                git_ignore_patterns: vec![
+                    "node_modules/".to_string(),
+                    "dist/".to_string(),
+                    "*.log".to_string(),
+                    ".env".to_string(),
+                ],
+                recommended_extensions: vec![
+                    "typescript".to_string(),
+                    "eslint".to_string(),
+                    "prettier".to_string(),
+                ],
+            },
         },
-    });
-    
+    );
+
     templates
 }
 
 /// Run the init command
 pub async fn run(runner: &mut CliRunner, args: InitArgs) -> Result<(), Box<dyn std::error::Error>> {
-    runner.print_info(&format!("🚀 Initializing new agentic development project: {}", args.name));
-    
+    runner.print_info(&format!(
+        "🚀 Initializing new agentic development project: {}",
+        args.name
+    ));
+
     // Validate project name
     if args.name.is_empty() {
         return Err("Project name cannot be empty".into());
     }
-    
+
     let project_path = PathBuf::from(&args.name);
-    
+
     // Check if directory already exists
     if project_path.exists() && !args.force {
         if project_path.is_dir() && fs::read_dir(&project_path)?.next().is_some() {
-            return Err(format!("Directory '{}' already exists and is not empty. Use --force to overwrite.", args.name).into());
+            return Err(format!(
+                "Directory '{}' already exists and is not empty. Use --force to overwrite.",
+                args.name
+            )
+            .into());
         }
     }
-    
+
     // Create project directory
     ensure_directory(&project_path)?;
-    
+
     // Determine template and language
     let templates = get_available_templates();
     let (template_name, language) = if let Some(template) = &args.template {
@@ -198,7 +202,8 @@ pub async fn run(runner: &mut CliRunner, args: InitArgs) -> Result<(), Box<dyn s
         }
         (template.clone(), templates[template].language.clone())
     } else if let Some(lang) = &args.language {
-        let template_name = templates.iter()
+        let template_name = templates
+            .iter()
             .find(|(_, t)| t.language == *lang)
             .map(|(name, _)| name.clone())
             .unwrap_or_else(|| lang.clone());
@@ -206,10 +211,10 @@ pub async fn run(runner: &mut CliRunner, args: InitArgs) -> Result<(), Box<dyn s
     } else if !args.no_interactive {
         // Interactive template selection
         runner.print_info("🤖 Let's set up your agentic development project!\n");
-        
+
         // Detect language from current directory if possible
         let detected_lang = detect_project_language(&std::env::current_dir()?);
-        
+
         let language = if let Some(detected) = detected_lang {
             runner.print_info(&format!("Detected language: {}", detected));
             if confirm_action("Use detected language?", true)? {
@@ -220,39 +225,47 @@ pub async fn run(runner: &mut CliRunner, args: InitArgs) -> Result<(), Box<dyn s
         } else {
             select_language_interactive(&templates)?
         };
-        
-        let template_name = templates.iter()
+
+        let template_name = templates
+            .iter()
             .find(|(_, t)| t.language == language)
             .map(|(name, _)| name.clone())
             .unwrap_or_else(|| language.clone());
-        
+
         (template_name, language)
     } else {
         // Default to rust template
         ("rust".to_string(), "rust".to_string())
     };
-    
+
     // Get template
-    let template = templates.get(&template_name)
+    let template = templates
+        .get(&template_name)
         .ok_or(format!("Template '{}' not found", template_name))?;
-    
-    runner.print_info(&format!("📋 Using template: {} ({})", template.name, template.description));
-    
+
+    runner.print_info(&format!(
+        "📋 Using template: {} ({})",
+        template.name, template.description
+    ));
+
     // Create project structure
     create_project_structure(&project_path, template, &args, runner).await?;
-    
+
     // Initialize git repository if requested
     if args.git {
         initialize_git_repository(&project_path, runner).await?;
     }
-    
+
     // Create agentic development configuration
     create_agentic_config(&project_path, &language, runner).await?;
-    
-    runner.print_success(&format!("✨ Project '{}' initialized successfully!", args.name));
+
+    runner.print_success(&format!(
+        "✨ Project '{}' initialized successfully!",
+        args.name
+    ));
     runner.print_info("\nNext steps:");
     runner.print_info(&format!("  cd {}", args.name));
-    
+
     match language.as_str() {
         "rust" => {
             runner.print_info("  cargo build");
@@ -260,7 +273,9 @@ pub async fn run(runner: &mut CliRunner, args: InitArgs) -> Result<(), Box<dyn s
         }
         "python" => {
             runner.print_info("  python -m venv venv");
-            runner.print_info("  source venv/bin/activate  # or .\\venv\\Scripts\\activate on Windows");
+            runner.print_info(
+                "  source venv/bin/activate  # or .\\venv\\Scripts\\activate on Windows",
+            );
             runner.print_info("  pip install -e .");
             runner.print_info("  agentic-dev analyze");
         }
@@ -273,80 +288,90 @@ pub async fn run(runner: &mut CliRunner, args: InitArgs) -> Result<(), Box<dyn s
             runner.print_info("  agentic-dev analyze");
         }
     }
-    
+
     runner.print_info("  agentic-dev interactive  # Start interactive development mode");
-    
+
     Ok(())
 }
 
 /// Interactive language selection
-fn select_language_interactive(templates: &HashMap<String, ProjectTemplate>) -> Result<String, Box<dyn std::error::Error>> {
+fn select_language_interactive(
+    templates: &HashMap<String, ProjectTemplate>,
+) -> Result<String, Box<dyn std::error::Error>> {
     println!("Available languages:");
     let languages: Vec<_> = templates.values().map(|t| t.language.as_str()).collect();
-    
+
     for (i, template) in templates.values().enumerate() {
-        println!("  {}. {} - {}", i + 1, template.language, template.description);
+        println!(
+            "  {}. {} - {}",
+            i + 1,
+            template.language,
+            template.description
+        );
     }
-    
+
     loop {
         let input = get_user_input("Select language (enter number)", None)?;
-        
+
         if let Ok(num) = input.parse::<usize>() {
             if num > 0 && num <= languages.len() {
                 return Ok(languages[num - 1].to_string());
             }
         }
-        
+
         // Try direct language name
         if templates.values().any(|t| t.language == input) {
             return Ok(input);
         }
-        
-        println!("Invalid selection. Please enter a number from 1 to {} or a language name.", languages.len());
+
+        println!(
+            "Invalid selection. Please enter a number from 1 to {} or a language name.",
+            languages.len()
+        );
     }
 }
 
 /// Create the project structure from template
 async fn create_project_structure(
-    project_path: &Path, 
+    project_path: &Path,
     template: &ProjectTemplate,
     args: &InitArgs,
     runner: &CliRunner,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("📁 Creating project structure...");
-    
+
     // Create directories
     for dir in &template.directories {
         let dir_path = project_path.join(dir);
         ensure_directory(&dir_path)?;
         runner.print_verbose(&format!("Created directory: {}", dir.display()));
     }
-    
+
     // Create template variables
     let mut template_vars = HashMap::new();
     template_vars.insert("project_name".to_string(), args.name.clone());
     template_vars.insert("language".to_string(), template.language.clone());
     template_vars.insert("year".to_string(), chrono::Utc::now().year().to_string());
-    
+
     // Create files from templates
     for (file_path, content_template) in &template.files {
         let full_path = project_path.join(file_path);
-        
+
         // Ensure parent directory exists
         if let Some(parent) = full_path.parent() {
             ensure_directory(parent)?;
         }
-        
+
         // Process template variables
         let content = process_template_variables(content_template, &template_vars);
-        
+
         fs::write(&full_path, content)?;
         runner.print_verbose(&format!("Created file: {}", file_path.display()));
     }
-    
+
     // Create language-specific configuration files
     create_language_config(project_path, template, args, runner).await?;
-    
+
     Ok(())
 }
 
@@ -360,7 +385,8 @@ async fn create_language_config(
     match template.language.as_str() {
         "rust" => {
             let cargo_toml = project_path.join("Cargo.toml");
-            let cargo_content = format!(r#"[package]
+            let cargo_content = format!(
+                r#"[package]
 name = "{}"
 version = "0.1.0"
 edition = "2021"
@@ -385,10 +411,11 @@ path = "src/main.rs"
             );
             fs::write(&cargo_toml, cargo_content)?;
         }
-        
+
         "python" => {
             let setup_py = project_path.join("setup.py");
-            let setup_content = format!(r#"from setuptools import setup, find_packages
+            let setup_content = format!(
+                r#"from setuptools import setup, find_packages
 
 setup(
     name="{}",
@@ -412,11 +439,17 @@ setup(
 )
 "#,
                 args.name,
-                template.config.dependencies.iter()
+                template
+                    .config
+                    .dependencies
+                    .iter()
                     .map(|d| format!("\"{}\"", d))
                     .collect::<Vec<_>>()
                     .join(",\n        "),
-                template.config.dev_dependencies.iter()
+                template
+                    .config
+                    .dev_dependencies
+                    .iter()
                     .map(|d| format!("\"{}\"", d))
                     .collect::<Vec<_>>()
                     .join(",\n            "),
@@ -424,15 +457,21 @@ setup(
                 args.name.replace("-", "_")
             );
             fs::write(&setup_py, setup_content)?;
-            
+
             // Create requirements files
             let requirements_txt = project_path.join("requirements.txt");
             fs::write(&requirements_txt, template.config.dependencies.join("\n"))?;
-            
+
             let requirements_dev_txt = project_path.join("requirements-dev.txt");
-            fs::write(&requirements_dev_txt, format!("-r requirements.txt\n{}", template.config.dev_dependencies.join("\n")))?;
+            fs::write(
+                &requirements_dev_txt,
+                format!(
+                    "-r requirements.txt\n{}",
+                    template.config.dev_dependencies.join("\n")
+                ),
+            )?;
         }
-        
+
         "typescript" => {
             let package_json = project_path.join("package.json");
             let package_content = serde_json::json!({
@@ -456,8 +495,11 @@ setup(
                     "node": ">=16.0.0"
                 }
             });
-            fs::write(&package_json, serde_json::to_string_pretty(&package_content)?)?;
-            
+            fs::write(
+                &package_json,
+                serde_json::to_string_pretty(&package_content)?,
+            )?;
+
             // Create tsconfig.json
             let tsconfig_json = project_path.join("tsconfig.json");
             let tsconfig_content = serde_json::json!({
@@ -477,49 +519,58 @@ setup(
                 "include": ["src/**/*"],
                 "exclude": ["node_modules", "dist", "tests"]
             });
-            fs::write(&tsconfig_json, serde_json::to_string_pretty(&tsconfig_content)?)?;
+            fs::write(
+                &tsconfig_json,
+                serde_json::to_string_pretty(&tsconfig_content)?,
+            )?;
         }
-        
+
         _ => {}
     }
-    
+
     // Create .gitignore
     let gitignore_path = project_path.join(".gitignore");
-    fs::write(&gitignore_path, template.config.git_ignore_patterns.join("\n"))?;
-    
+    fs::write(
+        &gitignore_path,
+        template.config.git_ignore_patterns.join("\n"),
+    )?;
+
     Ok(())
 }
 
 /// Initialize git repository
 async fn initialize_git_repository(
-    project_path: &Path, 
-    runner: &CliRunner
+    project_path: &Path,
+    runner: &CliRunner,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("🌱 Initializing git repository...");
-    
+
     let output = std::process::Command::new("git")
         .arg("init")
         .current_dir(project_path)
         .output()?;
-    
+
     if !output.status.success() {
-        return Err(format!("Failed to initialize git repository: {}", 
-                          String::from_utf8_lossy(&output.stderr)).into());
+        return Err(format!(
+            "Failed to initialize git repository: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
-    
+
     // Create initial commit
     std::process::Command::new("git")
         .args(&["add", "."])
         .current_dir(project_path)
         .output()?;
-        
+
     std::process::Command::new("git")
         .args(&["commit", "-m", "Initial commit from agentic-dev init"])
         .current_dir(project_path)
         .output()?;
-    
+
     runner.print_success("Git repository initialized with initial commit");
-    
+
     Ok(())
 }
 
@@ -530,9 +581,10 @@ async fn create_agentic_config(
     runner: &CliRunner,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("⚙️  Creating agentic development configuration...");
-    
+
     let config_path = project_path.join(".agentic-config.toml");
-    let config_content = format!(r#"# Agentic Development Environment Configuration
+    let config_content = format!(
+        r#"# Agentic Development Environment Configuration
 # This file was generated by `agentic-dev init`
 
 [general]
@@ -568,7 +620,7 @@ history_enabled = true
 theme = "dark"
 show_line_numbers = true
 show_timestamps = true
-"#, 
+"#,
         project_path.file_name().unwrap().to_string_lossy(),
         language,
         match language {
@@ -591,29 +643,29 @@ show_timestamps = true
             _ => "snake_case",
         }
     );
-    
+
     fs::write(&config_path, config_content)?;
     runner.print_success("Created .agentic-config.toml");
-    
+
     Ok(())
 }
 
 /// Process template variables in content
 fn process_template_variables(content: &str, vars: &HashMap<String, String>) -> String {
     let mut result = content.to_string();
-    
+
     for (key, value) in vars {
         let placeholder = format!("{{{{{}}}}}", key);
         result = result.replace(&placeholder, value);
     }
-    
+
     result
 }
 
 // Template file contents
 fn rust_template_files() -> HashMap<PathBuf, String> {
     let mut files = HashMap::new();
-    
+
     files.insert(
         PathBuf::from("src/main.rs"),
         r#"//! {{project_name}} - An agentic development project
@@ -666,9 +718,10 @@ mod tests {
         assert_eq!(2 + 2, 4);
     }
 }
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files.insert(
         PathBuf::from("src/lib.rs"),
         r#"//! {{project_name}} library
@@ -699,9 +752,10 @@ mod tests {
         assert_eq!(add(2, 2), 4);
     }
 }
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files.insert(
         PathBuf::from("README.md"),
         r#"# {{project_name}}
@@ -759,15 +813,16 @@ agentic-dev generate "create a function that processes user input"
 ## License
 
 This project is licensed under the MIT OR Apache-2.0 license.
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files
 }
 
 fn python_template_files() -> HashMap<PathBuf, String> {
     let mut files = HashMap::new();
-    
+
     files.insert(
         PathBuf::from("src/{{project_name}}/__init__.py"),
         r#"""{{project_name}} - An agentic development project
@@ -782,9 +837,10 @@ __email__ = "TODO: your.email@example.com"
 from .main import main
 
 __all__ = ["main"]
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files.insert(
         PathBuf::from("src/{{project_name}}/main.py"),
         r#"""Main module for {{project_name}}."""
@@ -829,9 +885,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files.insert(
         PathBuf::from("tests/test_main.py"),
         r#"""Tests for the main module."""
@@ -857,9 +914,10 @@ def test_add_type_error():
     """Test that add raises TypeError for invalid inputs."""
     with pytest.raises(TypeError):
         add("a", "b")  # type: ignore
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files.insert(
         PathBuf::from("README.md"),
         r#"# {{project_name}}
@@ -939,15 +997,16 @@ agentic-dev generate "create a function that processes user input"
 ## License
 
 This project is licensed under the MIT license.
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files
 }
 
 fn typescript_template_files() -> HashMap<PathBuf, String> {
     let mut files = HashMap::new();
-    
+
     files.insert(
         PathBuf::from("src/index.ts"),
         r#"/**
@@ -974,9 +1033,10 @@ export function main(): void {
 if (require.main === module) {
     main();
 }
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files.insert(
         PathBuf::from("tests/index.test.ts"),
         r#"import { helloWorld, add } from '../src/index';
@@ -993,9 +1053,10 @@ describe('{{project_name}}', () => {
         expect(add(0, 0)).toBe(0);
     });
 });
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files.insert(
         PathBuf::from("README.md"),
         r#"# {{project_name}}
@@ -1071,8 +1132,9 @@ agentic-dev generate "create a function that processes user input"
 ## License
 
 This project is licensed under the MIT license.
-"#.to_string()
+"#
+        .to_string(),
     );
-    
+
     files
 }

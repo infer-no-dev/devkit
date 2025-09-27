@@ -1,7 +1,6 @@
 //! Notification system for displaying alerts and updates.
 
-use std::collections::VecDeque;
-use std::time::{SystemTime, Duration};
+use crate::ui::themes::Theme;
 use ratatui::{
     layout::Rect,
     style::Modifier,
@@ -10,7 +9,8 @@ use ratatui::{
     Frame,
 };
 use serde::{Deserialize, Serialize};
-use crate::ui::themes::Theme;
+use std::collections::VecDeque;
+use std::time::{Duration, SystemTime};
 
 /// Types of notifications
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -79,11 +79,7 @@ pub struct NotificationPanel {
 
 impl Notification {
     /// Create a new notification
-    pub fn new(
-        title: String,
-        message: String,
-        notification_type: NotificationType,
-    ) -> Self {
+    pub fn new(title: String, message: String, notification_type: NotificationType) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             title,
@@ -97,21 +93,21 @@ impl Notification {
             sticky: false,
         }
     }
-    
+
     /// Create an info notification
     pub fn info(title: String, message: String) -> Self {
         let mut notification = Self::new(title, message, NotificationType::Info);
         notification.ttl = Some(Duration::from_secs(10));
         notification
     }
-    
+
     /// Create a success notification
     pub fn success(title: String, message: String) -> Self {
         let mut notification = Self::new(title, message, NotificationType::Success);
         notification.ttl = Some(Duration::from_secs(8));
         notification
     }
-    
+
     /// Create a warning notification
     pub fn warning(title: String, message: String) -> Self {
         let mut notification = Self::new(title, message, NotificationType::Warning);
@@ -119,7 +115,7 @@ impl Notification {
         notification.ttl = Some(Duration::from_secs(15));
         notification
     }
-    
+
     /// Create an error notification
     pub fn error(title: String, message: String) -> Self {
         let mut notification = Self::new(title, message, NotificationType::Error);
@@ -131,7 +127,7 @@ impl Notification {
         ];
         notification
     }
-    
+
     /// Create an agent update notification
     pub fn agent_update(agent_name: String, status: String) -> Self {
         let mut notification = Self::new(
@@ -142,7 +138,7 @@ impl Notification {
         notification.ttl = Some(Duration::from_secs(5));
         notification
     }
-    
+
     /// Create a system message notification
     pub fn system_message(message: String) -> Self {
         let mut notification = Self::new(
@@ -153,36 +149,37 @@ impl Notification {
         notification.ttl = Some(Duration::from_secs(12));
         notification
     }
-    
+
     /// Check if the notification has expired
     pub fn is_expired(&self) -> bool {
         if self.sticky {
             return false;
         }
-        
+
         if let Some(ttl) = self.ttl {
             if let Ok(elapsed) = self.timestamp.elapsed() {
                 return elapsed > ttl;
             }
         }
-        
+
         false
     }
-    
+
     /// Get age of the notification
     pub fn age(&self) -> Duration {
         self.timestamp.elapsed().unwrap_or(Duration::ZERO)
     }
-    
+
     /// Format the notification for display
     pub fn format_for_display(&self, theme: &Theme, show_timestamp: bool) -> Line<'_> {
         let mut spans = Vec::new();
-        
+
         // Add timestamp if requested
         if show_timestamp {
             if let Ok(duration) = self.timestamp.duration_since(std::time::UNIX_EPOCH) {
                 let timestamp = duration.as_secs();
-                let time_str = format!("[{}] ",
+                let time_str = format!(
+                    "[{}] ",
                     chrono::DateTime::from_timestamp(timestamp as i64, 0)
                         .unwrap_or_default()
                         .format("%H:%M:%S")
@@ -190,7 +187,7 @@ impl Notification {
                 spans.push(Span::styled(time_str, theme.timestamp_style()));
             }
         }
-        
+
         // Add type indicator
         let (indicator, style) = match self.notification_type {
             NotificationType::Info => ("ℹ️  ", theme.info_style()),
@@ -201,50 +198,56 @@ impl Notification {
             NotificationType::SystemMessage => ("⚙️  ", theme.system_style()),
             NotificationType::UserAction => ("👤 ", theme.user_input_style()),
         };
-        
+
         spans.push(Span::styled(indicator.to_string(), style));
-        
+
         // Add title if different from message
         if self.title != self.message && !self.title.is_empty() {
-            spans.push(Span::styled(format!("{}: ", self.title), style.add_modifier(Modifier::BOLD)));
+            spans.push(Span::styled(
+                format!("{}: ", self.title),
+                style.add_modifier(Modifier::BOLD),
+            ));
         }
-        
+
         // Add message
         spans.push(Span::styled(self.message.clone(), style));
-        
+
         // Add priority indicator for high/critical
         match self.priority {
             NotificationPriority::Critical => {
-                spans.push(Span::styled(" [!]", theme.error_style().add_modifier(Modifier::BOLD)));
+                spans.push(Span::styled(
+                    " [!]",
+                    theme.error_style().add_modifier(Modifier::BOLD),
+                ));
             }
             NotificationPriority::High => {
                 spans.push(Span::styled(" [!]", theme.warning_style()));
             }
             _ => {}
         }
-        
+
         Line::from(spans)
     }
-    
+
     /// Set time-to-live for the notification
     pub fn with_ttl(mut self, ttl: Duration) -> Self {
         self.ttl = Some(ttl);
         self
     }
-    
+
     /// Set priority for the notification
     pub fn with_priority(mut self, priority: NotificationPriority) -> Self {
         self.priority = priority;
         self
     }
-    
+
     /// Make notification sticky (won't auto-dismiss)
     pub fn sticky(mut self) -> Self {
         self.sticky = true;
         self.ttl = None;
         self
     }
-    
+
     /// Add an action to the notification
     pub fn with_action(mut self, action: NotificationAction) -> Self {
         self.actions.push(action);
@@ -255,9 +258,13 @@ impl Notification {
 impl NotificationAction {
     /// Create a new notification action
     pub fn new(id: String, label: String, action_type: ActionType) -> Self {
-        Self { id, label, action_type }
+        Self {
+            id,
+            label,
+            action_type,
+        }
     }
-    
+
     /// Create a dismiss action
     pub fn dismiss() -> Self {
         Self::new(
@@ -266,7 +273,7 @@ impl NotificationAction {
             ActionType::Dismiss,
         )
     }
-    
+
     /// Create a view details action
     pub fn view_details() -> Self {
         Self::new(
@@ -275,16 +282,12 @@ impl NotificationAction {
             ActionType::ViewDetails,
         )
     }
-    
+
     /// Create a retry action
     pub fn retry() -> Self {
-        Self::new(
-            "retry".to_string(),
-            "Retry".to_string(),
-            ActionType::Retry,
-        )
+        Self::new("retry".to_string(), "Retry".to_string(), ActionType::Retry)
     }
-    
+
     /// Create a cancel action
     pub fn cancel() -> Self {
         Self::new(
@@ -293,7 +296,7 @@ impl NotificationAction {
             ActionType::Cancel,
         )
     }
-    
+
     /// Create a custom action
     pub fn custom(id: String, label: String, action: String) -> Self {
         Self::new(id, label, ActionType::Custom(action))
@@ -312,23 +315,23 @@ impl NotificationPanel {
             min_priority: NotificationPriority::Low,
         }
     }
-    
+
     /// Add a notification to the panel
     pub fn add_notification(&mut self, notification: Notification) {
         // Check if notification meets minimum priority
         if notification.priority < self.min_priority {
             return;
         }
-        
+
         // Add to front of deque (most recent first)
         self.notifications.push_front(notification);
-        
+
         // Maintain size limit
         if self.notifications.len() > self.max_notifications {
             self.notifications.truncate(self.max_notifications);
         }
     }
-    
+
     /// Remove a notification by ID
     pub fn remove_notification(&mut self, id: &str) -> bool {
         if let Some(pos) = self.notifications.iter().position(|n| n.id == id) {
@@ -338,72 +341,74 @@ impl NotificationPanel {
             false
         }
     }
-    
+
     /// Clear all notifications
     pub fn clear_all(&mut self) {
         self.notifications.clear();
     }
-    
+
     /// Clear only dismissible notifications
     pub fn clear_dismissible(&mut self) {
         self.notifications.retain(|n| !n.dismissible || n.sticky);
     }
-    
+
     /// Remove expired notifications
     pub fn cleanup_expired(&mut self) {
         self.notifications.retain(|n| !n.is_expired());
     }
-    
+
     /// Get all notifications
     pub fn get_notifications(&self) -> &VecDeque<Notification> {
         &self.notifications
     }
-    
+
     /// Get notifications filtered by type
-    pub fn get_notifications_by_type(&self, notification_type: &NotificationType) -> Vec<&Notification> {
+    pub fn get_notifications_by_type(
+        &self,
+        notification_type: &NotificationType,
+    ) -> Vec<&Notification> {
         self.notifications
             .iter()
             .filter(|n| n.notification_type == *notification_type)
             .collect()
     }
-    
+
     /// Get notifications filtered by priority
-    pub fn get_notifications_by_priority(&self, min_priority: &NotificationPriority) -> Vec<&Notification> {
+    pub fn get_notifications_by_priority(
+        &self,
+        min_priority: &NotificationPriority,
+    ) -> Vec<&Notification> {
         self.notifications
             .iter()
             .filter(|n| n.priority >= *min_priority)
             .collect()
     }
-    
+
     /// Get recent notifications (last n)
     pub fn get_recent_notifications(&self, count: usize) -> Vec<&Notification> {
         self.notifications.iter().take(count).collect()
     }
-    
+
     /// Set notification type filter
     pub fn set_type_filter(&mut self, filter: Option<NotificationType>) {
         self.filter_type = filter;
     }
-    
+
     /// Set minimum priority filter
     pub fn set_min_priority(&mut self, priority: NotificationPriority) {
         self.min_priority = priority;
     }
-    
+
     /// Toggle timestamp display
     pub fn toggle_timestamps(&mut self) {
         self.show_timestamps = !self.show_timestamps;
     }
-    
+
     /// Render the notification panel
-    pub fn render(
-        &self,
-        f: &mut Frame,
-        area: Rect,
-        theme: &Theme,
-    ) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         // Get notifications to display based on filters
-        let notifications_to_show: Vec<&Notification> = self.notifications
+        let notifications_to_show: Vec<&Notification> = self
+            .notifications
             .iter()
             .filter(|n| {
                 if let Some(ref filter_type) = self.filter_type {
@@ -415,7 +420,7 @@ impl NotificationPanel {
             })
             .take(area.height.saturating_sub(2) as usize) // Account for borders
             .collect();
-        
+
         // Create list items
         let items: Vec<ListItem> = notifications_to_show
             .iter()
@@ -423,39 +428,37 @@ impl NotificationPanel {
                 ListItem::new(notification.format_for_display(theme, self.show_timestamps))
             })
             .collect();
-        
+
         // Create the notification list
-        let notification_list = List::new(items)
-            .block(Block::default()
+        let notification_list = List::new(items).block(
+            Block::default()
                 .title("Notifications")
                 .borders(Borders::ALL)
-                .style(theme.border_style()));
-        
+                .style(theme.border_style()),
+        );
+
         f.render_widget(notification_list, area);
     }
-    
+
     /// Render notification count badge
-    pub fn render_count_badge(
-        &self,
-        f: &mut Frame,
-        area: Rect,
-        theme: &Theme,
-    ) {
+    pub fn render_count_badge(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let count = self.notifications.len();
         if count == 0 {
             return;
         }
-        
-        let critical_count = self.notifications
+
+        let critical_count = self
+            .notifications
             .iter()
             .filter(|n| n.priority == NotificationPriority::Critical)
             .count();
-        
-        let warning_count = self.notifications
+
+        let warning_count = self
+            .notifications
             .iter()
             .filter(|n| n.priority == NotificationPriority::High)
             .count();
-        
+
         let badge_text = if critical_count > 0 {
             format!("!{}", critical_count)
         } else if warning_count > 0 {
@@ -463,7 +466,7 @@ impl NotificationPanel {
         } else {
             format!("{}", count)
         };
-        
+
         let style = if critical_count > 0 {
             theme.error_style().add_modifier(Modifier::BOLD)
         } else if warning_count > 0 {
@@ -471,19 +474,19 @@ impl NotificationPanel {
         } else {
             theme.info_style()
         };
-        
+
         let badge = Paragraph::new(badge_text)
             .style(style)
             .wrap(Wrap { trim: true });
-        
+
         f.render_widget(badge, area);
     }
-    
+
     /// Get notification count
     pub fn count(&self) -> usize {
         self.notifications.len()
     }
-    
+
     /// Get count by priority
     pub fn count_by_priority(&self, priority: NotificationPriority) -> usize {
         self.notifications
@@ -491,20 +494,20 @@ impl NotificationPanel {
             .filter(|n| n.priority == priority)
             .count()
     }
-    
+
     /// Check if there are any critical notifications
     pub fn has_critical(&self) -> bool {
         self.notifications
             .iter()
             .any(|n| n.priority == NotificationPriority::Critical)
     }
-    
+
     /// Process notification action
     pub fn process_action(&mut self, notification_id: &str, action_id: &str) -> Option<ActionType> {
         if let Some(notification) = self.notifications.iter().find(|n| n.id == notification_id) {
             if let Some(action) = notification.actions.iter().find(|a| a.id == action_id) {
                 let action_type = action.action_type.clone();
-                
+
                 // Handle built-in actions
                 match &action_type {
                     ActionType::Dismiss => {
@@ -512,7 +515,7 @@ impl NotificationPanel {
                     }
                     _ => {} // Other actions handled by caller
                 }
-                
+
                 return Some(action_type);
             }
         }

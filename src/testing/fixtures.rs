@@ -4,11 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::agents::{AgentTask, TaskPriority};
-use crate::context::{FileContext, CodebaseContext, RelationshipType};
-use crate::context::symbols::{SymbolIndex, Symbol, SymbolType};
-use crate::codegen::GenerationConfig;
-use crate::config::{StyleConfig, AIModelConfig};
-use crate::config::{Config, GeneralConfig, AgentConfig, CodegenConfig, ShellConfig, UIConfig};
+use crate::context::symbols::{Symbol, SymbolType};
+use crate::context::FileContext;
 
 /// Common test fixtures for agents
 pub struct AgentFixtures;
@@ -18,16 +15,18 @@ impl AgentFixtures {
     pub fn create_task(id: &str, description: &str, priority: TaskPriority) -> AgentTask {
         let mut context = HashMap::new();
         context.insert("test_key".to_string(), "test_value".to_string());
-        
+
         AgentTask {
             id: id.to_string(),
             task_type: "test".to_string(),
             description: description.to_string(),
             priority,
             context: serde_json::to_value(context).unwrap(),
+            deadline: None,
+            metadata: HashMap::new(),
         }
     }
-    
+
     /// Create a set of sample tasks with different priorities
     pub fn create_sample_tasks() -> Vec<AgentTask> {
         vec![
@@ -37,35 +36,39 @@ impl AgentFixtures {
             Self::create_task("task_4", "Critical priority task", TaskPriority::Critical),
         ]
     }
-    
+
     /// Create a code generation task
     pub fn create_code_generation_task(prompt: &str) -> AgentTask {
         let mut context = HashMap::new();
         context.insert("prompt".to_string(), prompt.to_string());
         context.insert("language".to_string(), "rust".to_string());
         context.insert("target_file".to_string(), "src/generated.rs".to_string());
-        
+
         AgentTask {
             id: format!("codegen_{}", uuid::Uuid::new_v4()),
             task_type: "code_generation".to_string(),
             description: format!("Generate code: {}", prompt),
             priority: TaskPriority::Normal,
             context: serde_json::to_value(context).unwrap(),
+            deadline: None,
+            metadata: HashMap::new(),
         }
     }
-    
+
     /// Create an analysis task
     pub fn create_analysis_task(file_path: &str) -> AgentTask {
         let mut context = HashMap::new();
         context.insert("file_path".to_string(), file_path.to_string());
         context.insert("analysis_type".to_string(), "full".to_string());
-        
+
         AgentTask {
             id: format!("analysis_{}", uuid::Uuid::new_v4()),
             task_type: "analysis".to_string(),
             description: format!("Analyze file: {}", file_path),
             priority: TaskPriority::Normal,
             context: serde_json::to_value(context).unwrap(),
+            deadline: None,
+            metadata: HashMap::new(),
         }
     }
 }
@@ -80,7 +83,7 @@ impl ContextFixtures {
         let mut imports = Vec::new();
         let mut exports = Vec::new();
         let mut metadata = HashMap::new();
-        
+
         // Add some sample data based on file type
         match language {
             Some("rust") => {
@@ -95,7 +98,7 @@ impl ContextFixtures {
                     visibility: crate::context::symbols::Visibility::Public,
                     references: Vec::new(),
                 });
-                
+
                 imports.push("std::io".to_string());
                 exports.push("main".to_string());
                 metadata.insert("edition".to_string(), "2021".to_string());
@@ -112,7 +115,7 @@ impl ContextFixtures {
                     visibility: crate::context::symbols::Visibility::Private,
                     references: Vec::new(),
                 });
-                
+
                 imports.push("os".to_string());
                 imports.push("sys".to_string());
                 metadata.insert("python_version".to_string(), "3.9".to_string());
@@ -121,7 +124,7 @@ impl ContextFixtures {
                 metadata.insert("type".to_string(), "text".to_string());
             }
         }
-        
+
         FileContext {
             path: PathBuf::from(path),
             relative_path: PathBuf::from(path),
@@ -136,14 +139,14 @@ impl ContextFixtures {
             relationships: Vec::new(),
         }
     }
-    
+
     /// Create a sample codebase context
     /// NOTE: This method is currently commented out due to API changes.
     /// TODO: Update this method to work with the new CodebaseContext structure.
     /*
     pub fn create_codebase_context(root_path: &str) -> CodebaseContext {
         let root = PathBuf::from(root_path);
-        
+
         let files = vec![
             Self::create_file_context("src/main.rs", Some("rust")),
             Self::create_file_context("src/lib.rs", Some("rust")),
@@ -151,14 +154,14 @@ impl ContextFixtures {
             Self::create_file_context("tests/test_main.rs", Some("rust")),
             Self::create_file_context("README.md", None),
         ];
-        
+
         let mut symbols = SymbolIndex::new();
         for file in &files {
             for symbol in &file.symbols {
                 symbols.add_symbol(symbol.clone());
             }
         }
-        
+
         let relationships = vec![
             CodeRelationship {
                 from_file: PathBuf::from("src/main.rs"),
@@ -173,12 +176,12 @@ impl ContextFixtures {
                 description: "Lib uses utils".to_string(),
             },
         ];
-        
+
         let mut metadata = HashMap::new();
         metadata.insert("language".to_string(), "rust".to_string());
         metadata.insert("build_system".to_string(), "cargo".to_string());
         metadata.insert("total_files".to_string(), files.len().to_string());
-        
+
         CodebaseContext {
             root_path: root,
             files,
@@ -189,9 +192,14 @@ impl ContextFixtures {
         }
     }
     */
-    
+
     /// Create a sample symbol
-    pub fn create_symbol(name: &str, symbol_type: SymbolType, file_path: &str, line: u32) -> Symbol {
+    pub fn create_symbol(
+        name: &str,
+        symbol_type: SymbolType,
+        file_path: &str,
+        line: u32,
+    ) -> Symbol {
         Symbol {
             name: name.to_string(),
             symbol_type,
@@ -244,7 +252,7 @@ impl CodegenFixtures {
             },
         }
     }*/
-    
+
     /// Create sample code generation prompts
     pub fn create_sample_prompts() -> Vec<String> {
         vec![
@@ -255,19 +263,20 @@ impl CodegenFixtures {
             "Implement error handling for network operations".to_string(),
         ]
     }
-    
+
     /// Create sample code templates
     pub fn create_sample_templates() -> HashMap<String, String> {
         let mut templates = HashMap::new();
-        
+
         templates.insert(
             "rust_function".to_string(),
             r#"/// {{description}}
 pub fn {{name}}({{params}}) -> {{return_type}} {
     {{body}}
-}"#.to_string(),
+}"#
+            .to_string(),
         );
-        
+
         templates.insert(
             "rust_struct".to_string(),
             r#"/// {{description}}
@@ -282,16 +291,18 @@ impl {{name}} {
             {{field_assignments}}
         }
     }
-}"#.to_string(),
+}"#
+            .to_string(),
         );
-        
+
         templates.insert(
             "python_function".to_string(),
             r#"def {{name}}({{params}}) -> {{return_type}}:
     """{{description}}"""
-    {{body}}"#.to_string(),
+    {{body}}"#
+                .to_string(),
         );
-        
+
         templates.insert(
             "python_class".to_string(),
             r#"class {{name}}:
@@ -300,9 +311,10 @@ impl {{name}} {
     def __init__(self, {{constructor_params}}):
         {{field_assignments}}
     
-    {{methods}}"#.to_string(),
+    {{methods}}"#
+                .to_string(),
         );
-        
+
         templates
     }
 }
@@ -377,7 +389,7 @@ pub struct ConfigFixtures;
             keybindings: HashMap::new(),
         }
     }
-    
+
     /// Create sample configuration for different environments
     pub fn create_dev_config() -> Config {
         let mut config = Self::create_test_config();
@@ -386,7 +398,7 @@ pub struct ConfigFixtures;
         config.agents.max_concurrent_agents = 5;
         config
     }
-    
+
     pub fn create_prod_config() -> Config {
         let mut config = Self::create_test_config();
         config.general.log_level = "info".to_string();
@@ -403,51 +415,60 @@ impl ShellFixtures {
     /// Create sample shell commands and expected outputs
     pub fn create_sample_commands() -> HashMap<String, (String, i32)> {
         let mut commands = HashMap::new();
-        
-        commands.insert(
-            "echo hello".to_string(),
-            ("hello\n".to_string(), 0)
-        );
-        
+
+        commands.insert("echo hello".to_string(), ("hello\n".to_string(), 0));
+
         commands.insert(
             "ls -la".to_string(),
             ("total 8\ndrwxr-xr-x  2 user user 4096 Jan  1 12:00 .\ndrwxr-xr-x  3 user user 4096 Jan  1 12:00 ..\n-rw-r--r--  1 user user    0 Jan  1 12:00 file.txt\n".to_string(), 0)
         );
-        
+
         commands.insert(
             "cargo check".to_string(),
             ("    Checking test-project v0.1.0\nFinished dev [unoptimized + debuginfo] target(s) in 1.23s\n".to_string(), 0)
         );
-        
+
         commands.insert(
             "git status".to_string(),
-            ("On branch main\nnothing to commit, working tree clean\n".to_string(), 0)
+            (
+                "On branch main\nnothing to commit, working tree clean\n".to_string(),
+                0,
+            ),
         );
-        
+
         commands.insert(
             "python --version".to_string(),
-            ("Python 3.9.7\n".to_string(), 0)
+            ("Python 3.9.7\n".to_string(), 0),
         );
-        
+
         commands.insert(
             "invalid_command".to_string(),
-            ("command not found: invalid_command\n".to_string(), 127)
+            ("command not found: invalid_command\n".to_string(), 127),
         );
-        
+
         commands
     }
-    
+
     /// Create sample environment variables
     pub fn create_sample_env_vars() -> HashMap<String, String> {
         let mut env_vars = HashMap::new();
-        
-        env_vars.insert("PATH".to_string(), "/usr/bin:/bin:/usr/local/bin".to_string());
+
+        env_vars.insert(
+            "PATH".to_string(),
+            "/usr/bin:/bin:/usr/local/bin".to_string(),
+        );
         env_vars.insert("HOME".to_string(), "/home/testuser".to_string());
         env_vars.insert("SHELL".to_string(), "/bin/bash".to_string());
         env_vars.insert("LANG".to_string(), "en_US.UTF-8".to_string());
-        env_vars.insert("CARGO_HOME".to_string(), "/home/testuser/.cargo".to_string());
-        env_vars.insert("RUSTUP_HOME".to_string(), "/home/testuser/.rustup".to_string());
-        
+        env_vars.insert(
+            "CARGO_HOME".to_string(),
+            "/home/testuser/.cargo".to_string(),
+        );
+        env_vars.insert(
+            "RUSTUP_HOME".to_string(),
+            "/home/testuser/.rustup".to_string(),
+        );
+
         env_vars
     }
 }
@@ -467,17 +488,33 @@ impl UIFixtures {
             "WindowResize(80, 24)".to_string(),
         ]
     }
-    
+
     /// Create sample notification data
     pub fn create_sample_notifications() -> Vec<(String, String, String)> {
         vec![
-            ("Info".to_string(), "Task Started".to_string(), "Code generation task has started".to_string()),
-            ("Success".to_string(), "Task Completed".to_string(), "Code generation completed successfully".to_string()),
-            ("Warning".to_string(), "Low Memory".to_string(), "System memory usage is high".to_string()),
-            ("Error".to_string(), "Build Failed".to_string(), "Cargo build failed with 3 errors".to_string()),
+            (
+                "Info".to_string(),
+                "Task Started".to_string(),
+                "Code generation task has started".to_string(),
+            ),
+            (
+                "Success".to_string(),
+                "Task Completed".to_string(),
+                "Code generation completed successfully".to_string(),
+            ),
+            (
+                "Warning".to_string(),
+                "Low Memory".to_string(),
+                "System memory usage is high".to_string(),
+            ),
+            (
+                "Error".to_string(),
+                "Build Failed".to_string(),
+                "Cargo build failed with 3 errors".to_string(),
+            ),
         ]
     }
-    
+
     /// Create sample theme configurations
     pub fn create_sample_themes() -> Vec<String> {
         vec![
@@ -495,90 +532,90 @@ impl UIFixtures {
 /*#[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_agent_fixtures() {
         let tasks = AgentFixtures::create_sample_tasks();
         assert_eq!(tasks.len(), 4);
-        
+
         let task = &tasks[0];
         assert_eq!(task.priority, TaskPriority::High);
         assert!(task.context.contains_key("test_key"));
-        
+
         let code_task = AgentFixtures::create_code_generation_task("create a function");
         assert!(code_task.description.contains("Generate code"));
         assert!(code_task.context.contains_key("prompt"));
     }
-    
+
     #[test]
     fn test_context_fixtures() {
         let file_context = ContextFixtures::create_file_context("src/main.rs", Some("rust"));
         assert_eq!(file_context.language, Some("rust".to_string()));
         assert!(!file_context.symbols.is_empty());
         assert!(!file_context.imports.is_empty());
-        
+
         let codebase_context = ContextFixtures::create_codebase_context("/test/project");
         assert_eq!(codebase_context.files.len(), 5);
         assert!(!codebase_context.relationships.is_empty());
         assert!(!codebase_context.dependencies.is_empty());
     }
-    
+
     #[test]
     fn test_codegen_fixtures() {
         let config = CodegenFixtures::create_generation_config();
         assert_eq!(config.style.indent_size, 4);
         assert_eq!(config.ai_model.default_model, "test-model");
-        
+
         let prompts = CodegenFixtures::create_sample_prompts();
         assert_eq!(prompts.len(), 5);
         assert!(prompts[0].contains("factorial"));
-        
+
         let templates = CodegenFixtures::create_sample_templates();
         assert!(templates.contains_key("rust_function"));
         assert!(templates.contains_key("python_class"));
     }
-    
+
     #[test]
     fn test_config_fixtures() {
         let config = ConfigFixtures::create_test_config();
         assert_eq!(config.general.log_level, "debug");
         assert_eq!(config.agents.max_concurrent_agents, 3);
         assert_eq!(config.ui.theme, "dark");
-        
+
         let dev_config = ConfigFixtures::create_dev_config();
         assert_eq!(dev_config.general.log_level, "debug");
         assert!(!dev_config.general.telemetry_enabled);
-        
+
         let prod_config = ConfigFixtures::create_prod_config();
         assert_eq!(prod_config.general.log_level, "info");
         assert!(prod_config.general.backup_enabled);
     }
-    
+
     #[test]
     fn test_shell_fixtures() {
         let commands = ShellFixtures::create_sample_commands();
         assert!(commands.contains_key("echo hello"));
-        
+
         if let Some((output, exit_code)) = commands.get("echo hello") {
             assert_eq!(output, "hello\n");
             assert_eq!(*exit_code, 0);
         }
-        
+
         let env_vars = ShellFixtures::create_sample_env_vars();
         assert!(env_vars.contains_key("PATH"));
         assert!(env_vars.contains_key("HOME"));
     }
-    
+
     #[test]
     fn test_ui_fixtures() {
         let events = UIFixtures::create_sample_events();
         assert_eq!(events.len(), 6);
         assert!(events[0].contains("Enter"));
-        
+
         let notifications = UIFixtures::create_sample_notifications();
         assert_eq!(notifications.len(), 4);
         assert_eq!(notifications[0].0, "Info");
-        
+
         let themes = UIFixtures::create_sample_themes();
         assert!(themes.contains(&"Dark".to_string()));
         assert!(themes.contains(&"Light".to_string()));

@@ -6,14 +6,14 @@
 pub mod analyzer;
 pub mod indexer;
 pub mod repository;
-pub mod symbols;
 pub mod semantic;
+pub mod symbols;
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
-use semantic::{SemanticAnalyzer, SemanticAnalysis};
+use semantic::{SemanticAnalysis, SemanticAnalyzer};
 
 /// Complete context information about a codebase
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,19 +158,19 @@ pub struct AnalysisConfig {
 pub enum ContextError {
     #[error("Path not found: {0}")]
     PathNotFound(PathBuf),
-    
+
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
-    
+
     #[error("Analysis failed: {0}")]
     AnalysisFailed(String),
-    
+
     #[error("Indexing failed: {0}")]
     IndexingFailed(String),
-    
+
     #[error("Repository analysis failed: {0}")]
     RepositoryAnalysisFailed(String),
-    
+
     #[error("Cache error: {0}")]
     CacheError(String),
 }
@@ -187,40 +187,109 @@ impl ContextManager {
             semantic_cache: HashMap::new(),
         })
     }
-    
+
     /// Analyze a codebase and build comprehensive context
     pub async fn analyze_codebase(
         &mut self,
         path: PathBuf,
         config: AnalysisConfig,
     ) -> Result<CodebaseContext, ContextError> {
+        let path_str = path.to_string_lossy().to_string();
+        
+        println!(
+            "Starting codebase analysis for: {}",
+            path_str
+        );
+        
         // Check cache first
         if config.cache_results {
             if let Some(cached_context) = self.cache.get(&path) {
+                println!(
+                    "Cache hit for codebase analysis: {}",
+                    path_str
+                );
+                
                 return Ok(cached_context.clone());
             }
         }
-        
+
         let start_time = std::time::Instant::now();
-        
+
         // Analyze the file structure and content
-        let files = self.analyzer.analyze_files(&path, &config).await?;
-        
+        println!("Analyzing file structure and content for: {}", path_str);
+        let files = match self.analyzer.analyze_files(&path, &config).await {
+            Ok(files) => {
+                println!(
+                    "Successfully analyzed {} files",
+                    files.len()
+                );
+                files
+            }
+            Err(e) => {
+                println!(
+                    "Failed to analyze files for {}: {}",
+                    path_str,
+                    e
+                );
+                return Err(e);
+            }
+        };
+
         // Build symbol index
-        let symbols = self.indexer.index_symbols(&files).await?;
+        println!(
+            "Building symbol index for {} files",
+            files.len()
+        );
         
+        let symbols = match self.indexer.index_symbols(&files).await {
+            Ok(symbols) => {
+                println!(
+                    "Successfully indexed {} symbols",
+                    symbols.total_symbols()
+                );
+                symbols
+            }
+            Err(e) => {
+                println!(
+                    "Failed to build symbol index for {}: {}",
+                    path_str,
+                    e
+                );
+                return Err(e);
+            }
+        };
+
         // Analyze dependencies
         let dependencies = if config.analyze_dependencies {
-            self.analyzer.analyze_dependencies(&path, &files).await?
+            println!("Analyzing dependencies for: {}", path_str);
+            match self.analyzer.analyze_dependencies(&path, &files).await {
+                Ok(deps) => {
+                    println!(
+                        "Found {} dependencies",
+                        deps.len()
+                    );
+                    deps
+                }
+                Err(e) => {
+                    println!(
+                        "Dependency analysis failed for {}: {}",
+                        path_str,
+                        e
+                    );
+                    Vec::new()
+                }
+            }
         } else {
             Vec::new()
         };
-        
+
         // Get repository information if available
         let repository_info = self.repository.analyze(&path).await.ok();
-        
+
         // Perform semantic analysis if deep analysis is enabled
         let semantic_analysis = if config.deep_analysis {
+            println!("Performing deep semantic analysis for: {}", path_str);
+            
             // Create a preliminary context for semantic analysis
             let temp_context = CodebaseContext {
                 root_path: path.clone(),
@@ -231,13 +300,24 @@ impl ContextManager {
                 semantic_analysis: None,
                 metadata: ContextMetadata::default(), // Temporary metadata
             };
-            
+
             // Check semantic cache first
             if let Some(cached_semantic) = self.semantic_cache.get(&path) {
+                println!("Semantic analysis cache hit for: {}", path_str);
                 Some(cached_semantic.clone())
             } else {
+                let semantic_start = std::time::Instant::now();
                 match self.semantic_analyzer.analyze(&temp_context).await {
                     Ok(analysis) => {
+                        let semantic_duration = semantic_start.elapsed();
+                        
+                        println!(
+                            "Semantic analysis completed in {}ms with {} patterns and {} relationships",
+                            semantic_duration.as_millis(),
+                            analysis.patterns.len(),
+                            analysis.relationships.len()
+                        );
+                        
                         // Cache semantic analysis
                         if config.cache_results {
                             self.semantic_cache.insert(path.clone(), analysis.clone());
@@ -245,7 +325,13 @@ impl ContextManager {
                         Some(analysis)
                     }
                     Err(err) => {
-                        eprintln!("Warning: Semantic analysis failed: {}", err);
+                        println!(
+                            "Semantic analysis failed for {}: {} (took {}ms)",
+                            path_str,
+                            err,
+                            semantic_start.elapsed().as_millis()
+                        );
+                        
                         None
                     }
                 }
@@ -253,21 +339,26 @@ impl ContextManager {
         } else {
             None
         };
-        
+
         let analysis_duration = start_time.elapsed();
-        
+        let total_lines: usize = files.iter().map(|f| f.line_count).sum();
+        let languages = Self::count_languages(&files);
+        let total_symbols = symbols.total_symbols();
+        let semantic_patterns = semantic_analysis.as_ref().map(|s| s.patterns.len()).unwrap_or(0);
+        let semantic_relationships = semantic_analysis.as_ref().map(|s| s.relationships.len()).unwrap_or(0);
+
         // Build metadata
         let metadata = ContextMetadata {
             analysis_timestamp: std::time::SystemTime::now(),
             total_files: files.len(),
-            total_lines: files.iter().map(|f| f.line_count).sum(),
-            languages: Self::count_languages(&files),
+            total_lines,
+            languages: languages.clone(),
             analysis_duration_ms: analysis_duration.as_millis() as u64,
-            indexed_symbols: symbols.total_symbols(),
-            semantic_patterns_found: semantic_analysis.as_ref().map(|s| s.patterns.len()).unwrap_or(0),
-            semantic_relationships: semantic_analysis.as_ref().map(|s| s.relationships.len()).unwrap_or(0),
+            indexed_symbols: total_symbols,
+            semantic_patterns_found: semantic_patterns,
+            semantic_relationships,
         };
-        
+
         let context = CodebaseContext {
             root_path: path.clone(),
             files,
@@ -277,15 +368,25 @@ impl ContextManager {
             semantic_analysis,
             metadata,
         };
-        
+
         // Cache the result
         if config.cache_results {
-            self.cache.insert(path, context.clone());
+            self.cache.insert(path.clone(), context.clone());
         }
-        
+
+        println!(
+            "Codebase analysis completed for {} in {}ms: {} files, {} lines, {} symbols, {} languages",
+            path_str,
+            analysis_duration.as_millis(),
+            context.metadata.total_files,
+            total_lines,
+            total_symbols,
+            languages.len()
+        );
+
         Ok(context)
     }
-    
+
     /// Get context for specific files within a codebase
     pub async fn get_file_context(
         &self,
@@ -293,17 +394,20 @@ impl ContextManager {
         context: &CodebaseContext,
     ) -> Result<Vec<FileContext>, ContextError> {
         let mut file_contexts = Vec::new();
-        
+
         for path in file_paths {
-            if let Some(file_context) = context.files.iter()
-                .find(|f| f.path == *path || f.relative_path == *path) {
+            if let Some(file_context) = context
+                .files
+                .iter()
+                .find(|f| f.path == *path || f.relative_path == *path)
+            {
                 file_contexts.push(file_context.clone());
             }
         }
-        
+
         Ok(file_contexts)
     }
-    
+
     /// Find related files based on relationships
     pub fn find_related_files(
         &self,
@@ -312,20 +416,22 @@ impl ContextManager {
         relationship_types: &[RelationshipType],
     ) -> Vec<PathBuf> {
         let mut related_files = HashSet::new();
-        
-        if let Some(file_context) = context.files.iter()
-            .find(|f| f.path == *file_path || f.relative_path == *file_path) {
-            
+
+        if let Some(file_context) = context
+            .files
+            .iter()
+            .find(|f| f.path == *file_path || f.relative_path == *file_path)
+        {
             for relationship in &file_context.relationships {
                 if relationship_types.contains(&relationship.relationship_type) {
                     related_files.insert(relationship.target_file.clone());
                 }
             }
         }
-        
+
         related_files.into_iter().collect()
     }
-    
+
     /// Search for symbols in the context
     pub fn search_symbols(
         &self,
@@ -335,7 +441,7 @@ impl ContextManager {
     ) -> Vec<symbols::Symbol> {
         context.symbols.search(query, symbol_types)
     }
-    
+
     /// Update context for changed files
     pub async fn update_context(
         &mut self,
@@ -343,25 +449,73 @@ impl ContextManager {
         context: &mut CodebaseContext,
         config: &AnalysisConfig,
     ) -> Result<(), ContextError> {
+        let update_start = std::time::Instant::now();
+        let changed_files_count = changed_files.len();
+        
+        println!(
+            "Updating context for {} changed files in {}",
+            changed_files_count,
+            context.root_path.to_string_lossy()
+        );
+        
         // Re-analyze changed files
-        let updated_files = self.analyzer.analyze_specific_files(changed_files, config).await?;
+        let updated_files = match self
+            .analyzer
+            .analyze_specific_files(changed_files, config)
+            .await {
+                Ok(files) => {
+                    println!("Successfully re-analyzed {} changed files", files.len());
+                    files
+                }
+                Err(e) => {
+                    println!("Failed to re-analyze changed files: {}", e);
+                    return Err(e);
+                }
+            };
+
+        let mut updated_count = 0;
+        let mut added_count = 0;
         
         // Update the context
         for updated_file in updated_files {
-            if let Some(existing_file) = context.files.iter_mut()
-                .find(|f| f.path == updated_file.path) {
+            if let Some(existing_file) = context
+                .files
+                .iter_mut()
+                .find(|f| f.path == updated_file.path)
+            {
                 *existing_file = updated_file;
+                updated_count += 1;
             } else {
                 context.files.push(updated_file);
+                added_count += 1;
             }
         }
-        
+
         // Re-index symbols for updated files
-        self.indexer.update_symbols(&context.files, &mut context.symbols).await?;
+        match self.indexer
+            .update_symbols(&context.files, &mut context.symbols)
+            .await {
+                Ok(()) => {
+                    println!("Symbol index updated successfully");
+                }
+                Err(e) => {
+                    println!("Failed to update symbol index: {}", e);
+                    return Err(e);
+                }
+            }
+
+        let update_duration = update_start.elapsed();
         
+        println!(
+            "Context update completed in {}ms: {} files updated, {} files added",
+            update_duration.as_millis(),
+            updated_count,
+            added_count
+        );
+
         Ok(())
     }
-    
+
     /// Helper function to count languages in files
     fn count_languages(files: &[FileContext]) -> HashMap<String, usize> {
         let mut language_counts = HashMap::new();
@@ -370,21 +524,26 @@ impl ContextManager {
         }
         language_counts
     }
-    
+
     /// Get semantic analysis for a codebase if available
-    pub fn get_semantic_analysis<'a>(&self, context: &'a CodebaseContext) -> Option<&'a SemanticAnalysis> {
+    pub fn get_semantic_analysis<'a>(
+        &self,
+        context: &'a CodebaseContext,
+    ) -> Option<&'a SemanticAnalysis> {
         context.semantic_analysis.as_ref()
     }
-    
+
     /// Perform standalone semantic analysis on existing context
     pub async fn analyze_semantics(
         &mut self,
         context: &CodebaseContext,
     ) -> Result<SemanticAnalysis, ContextError> {
-        self.semantic_analyzer.analyze(context).await
+        self.semantic_analyzer
+            .analyze(context)
+            .await
             .map_err(|e| ContextError::AnalysisFailed(format!("Semantic analysis failed: {}", e)))
     }
-    
+
     /// Get context suggestions based on semantic analysis
     pub fn get_context_suggestions(
         &self,
@@ -393,10 +552,18 @@ impl ContextManager {
     ) -> Vec<semantic::ContextSuggestion> {
         if let Some(semantic_analysis) = &context.semantic_analysis {
             // Simple keyword matching for suggestions - could be enhanced with AI
-            semantic_analysis.context_suggestions.iter()
+            semantic_analysis
+                .context_suggestions
+                .iter()
                 .filter(|suggestion| {
-                    suggestion.description.to_lowercase().contains(&query.to_lowercase()) ||
-                    suggestion.rationale.to_lowercase().contains(&query.to_lowercase())
+                    suggestion
+                        .description
+                        .to_lowercase()
+                        .contains(&query.to_lowercase())
+                        || suggestion
+                            .rationale
+                            .to_lowercase()
+                            .contains(&query.to_lowercase())
                 })
                 .cloned()
                 .collect()
@@ -404,7 +571,7 @@ impl ContextManager {
             Vec::new()
         }
     }
-    
+
     /// Clear semantic cache
     pub fn clear_semantic_cache(&mut self) {
         self.semantic_cache.clear();

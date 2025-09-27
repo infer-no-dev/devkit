@@ -15,7 +15,7 @@ pub enum Action {
     SwitchToAgentView,
     SwitchToSettingsView,
     SwitchToHelpView,
-    
+
     // Input actions
     ConfirmInput,
     CancelInput,
@@ -26,7 +26,7 @@ pub enum Action {
     MoveCursorRight,
     MoveCursorStart,
     MoveCursorEnd,
-    
+
     // Scrolling actions
     ScrollUp,
     ScrollDown,
@@ -34,22 +34,22 @@ pub enum Action {
     PageDown,
     ScrollToTop,
     ScrollToBottom,
-    
+
     // Agent actions
     StopAllAgents,
     RestartAgent,
     ShowAgentDetails,
-    
+
     // Block actions
     ClearOutput,
     FilterByType,
     FilterByAgent,
     SearchOutput,
-    
+
     // Theme actions
     NextTheme,
     PreviousTheme,
-    
+
     // Other actions
     ShowHelp,
     ToggleHelp,
@@ -58,7 +58,7 @@ pub enum Action {
     ToggleLineNumbers,
     RefreshView,
     SwitchTheme,
-    
+
     // Custom actions (for extension)
     Custom(String),
 }
@@ -73,13 +73,13 @@ pub struct KeyCombination {
 /// Context in which keybindings are active
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum KeyContext {
-    Global,          // Active in all modes
-    Normal,          // Normal navigation mode
-    Input,           // Text input mode
-    Command,         // Command entry mode
-    AgentView,       // Agent status view
-    Settings,        // Settings view
-    Help,            // Help view
+    Global,    // Active in all modes
+    Normal,    // Normal navigation mode
+    Input,     // Text input mode
+    Command,   // Command entry mode
+    AgentView, // Agent status view
+    Settings,  // Settings view
+    Help,      // Help view
 }
 
 /// Type alias for backward compatibility
@@ -101,216 +101,219 @@ impl KeyBindings {
     /// Create new keybindings with defaults
     pub fn new() -> Self {
         let mut bindings = HashMap::new();
-        
+
         // Global keybindings (active in all contexts)
         let mut global = HashMap::new();
         global.insert(
             KeyCombination::new(KeyCode::Char('q'), KeyModifiers::empty()),
-            Action::Quit
+            Action::Quit,
         );
         global.insert(
             KeyCombination::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
-            Action::Quit
+            Action::Quit,
         );
         global.insert(
             KeyCombination::new(KeyCode::F(1), KeyModifiers::empty()),
-            Action::ShowHelp
+            Action::ShowHelp,
         );
         global.insert(
             KeyCombination::new(KeyCode::F(5), KeyModifiers::empty()),
-            Action::RefreshView
+            Action::RefreshView,
         );
         bindings.insert(KeyContext::Global, global);
-        
+
         // Normal mode keybindings
         let mut normal = HashMap::new();
         normal.insert(
             KeyCombination::new(KeyCode::Char('i'), KeyModifiers::empty()),
-            Action::SwitchToInputMode
+            Action::SwitchToInputMode,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char(':'), KeyModifiers::empty()),
-            Action::SwitchToCommandMode
+            Action::SwitchToCommandMode,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('a'), KeyModifiers::empty()),
-            Action::SwitchToAgentView
+            Action::SwitchToAgentView,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('s'), KeyModifiers::empty()),
-            Action::SwitchToSettingsView
+            Action::SwitchToSettingsView,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('?'), KeyModifiers::empty()),
-            Action::ShowHelp
+            Action::ShowHelp,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('k'), KeyModifiers::empty()),
-            Action::ScrollUp
+            Action::ScrollUp,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('j'), KeyModifiers::empty()),
-            Action::ScrollDown
+            Action::ScrollDown,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('u'), KeyModifiers::empty()),
-            Action::PageUp
+            Action::PageUp,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('d'), KeyModifiers::empty()),
-            Action::PageDown
+            Action::PageDown,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('g'), KeyModifiers::empty()),
-            Action::ScrollToTop
+            Action::ScrollToTop,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('G'), KeyModifiers::empty()),
-            Action::ScrollToBottom
+            Action::ScrollToBottom,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('c'), KeyModifiers::empty()),
-            Action::ClearOutput
+            Action::ClearOutput,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('/'), KeyModifiers::empty()),
-            Action::SearchOutput
+            Action::SearchOutput,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('t'), KeyModifiers::empty()),
-            Action::NextTheme
+            Action::NextTheme,
         );
         normal.insert(
             KeyCombination::new(KeyCode::Char('T'), KeyModifiers::empty()),
-            Action::PreviousTheme
+            Action::PreviousTheme,
         );
         bindings.insert(KeyContext::Normal, normal);
-        
+
         // Input mode keybindings
         let mut input = HashMap::new();
         input.insert(
             KeyCombination::new(KeyCode::Esc, KeyModifiers::empty()),
-            Action::SwitchToNormalMode
+            Action::SwitchToNormalMode,
         );
         input.insert(
             KeyCombination::new(KeyCode::Enter, KeyModifiers::empty()),
-            Action::ConfirmInput
+            Action::ConfirmInput,
         );
         input.insert(
             KeyCombination::new(KeyCode::Backspace, KeyModifiers::empty()),
-            Action::DeleteChar
+            Action::DeleteChar,
         );
         input.insert(
             KeyCombination::new(KeyCode::Char('w'), KeyModifiers::CONTROL),
-            Action::DeleteWord
+            Action::DeleteWord,
         );
         input.insert(
             KeyCombination::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
-            Action::ClearInput
+            Action::ClearInput,
         );
         input.insert(
             KeyCombination::new(KeyCode::Left, KeyModifiers::empty()),
-            Action::MoveCursorLeft
+            Action::MoveCursorLeft,
         );
         input.insert(
             KeyCombination::new(KeyCode::Right, KeyModifiers::empty()),
-            Action::MoveCursorRight
+            Action::MoveCursorRight,
         );
         input.insert(
             KeyCombination::new(KeyCode::Home, KeyModifiers::empty()),
-            Action::MoveCursorStart
+            Action::MoveCursorStart,
         );
         input.insert(
             KeyCombination::new(KeyCode::End, KeyModifiers::empty()),
-            Action::MoveCursorEnd
+            Action::MoveCursorEnd,
         );
         input.insert(
             KeyCombination::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
-            Action::MoveCursorStart
+            Action::MoveCursorStart,
         );
         input.insert(
             KeyCombination::new(KeyCode::Char('e'), KeyModifiers::CONTROL),
-            Action::MoveCursorEnd
+            Action::MoveCursorEnd,
         );
         bindings.insert(KeyContext::Input, input);
-        
+
         // Command mode keybindings (similar to input mode)
         let mut command = HashMap::new();
         command.insert(
             KeyCombination::new(KeyCode::Esc, KeyModifiers::empty()),
-            Action::SwitchToNormalMode
+            Action::SwitchToNormalMode,
         );
         command.insert(
             KeyCombination::new(KeyCode::Enter, KeyModifiers::empty()),
-            Action::ConfirmInput
+            Action::ConfirmInput,
         );
         command.insert(
             KeyCombination::new(KeyCode::Backspace, KeyModifiers::empty()),
-            Action::DeleteChar
+            Action::DeleteChar,
         );
         command.insert(
             KeyCombination::new(KeyCode::Char('w'), KeyModifiers::CONTROL),
-            Action::DeleteWord
+            Action::DeleteWord,
         );
         command.insert(
             KeyCombination::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
-            Action::ClearInput
+            Action::ClearInput,
         );
         bindings.insert(KeyContext::Command, command);
-        
+
         // Agent view keybindings
         let mut agent_view = HashMap::new();
         agent_view.insert(
             KeyCombination::new(KeyCode::Esc, KeyModifiers::empty()),
-            Action::SwitchToNormalMode
+            Action::SwitchToNormalMode,
         );
         agent_view.insert(
             KeyCombination::new(KeyCode::Char('r'), KeyModifiers::empty()),
-            Action::RestartAgent
+            Action::RestartAgent,
         );
         agent_view.insert(
             KeyCombination::new(KeyCode::Char('x'), KeyModifiers::empty()),
-            Action::StopAllAgents
+            Action::StopAllAgents,
         );
         agent_view.insert(
             KeyCombination::new(KeyCode::Enter, KeyModifiers::empty()),
-            Action::ShowAgentDetails
+            Action::ShowAgentDetails,
         );
         bindings.insert(KeyContext::AgentView, agent_view);
-        
+
         // Settings view keybindings
         let mut settings = HashMap::new();
         settings.insert(
             KeyCombination::new(KeyCode::Esc, KeyModifiers::empty()),
-            Action::SwitchToNormalMode
+            Action::SwitchToNormalMode,
         );
         bindings.insert(KeyContext::Settings, settings);
-        
+
         // Help view keybindings
         let mut help = HashMap::new();
         help.insert(
             KeyCombination::new(KeyCode::Esc, KeyModifiers::empty()),
-            Action::SwitchToNormalMode
+            Action::SwitchToNormalMode,
         );
         help.insert(
             KeyCombination::new(KeyCode::Char('q'), KeyModifiers::empty()),
-            Action::SwitchToNormalMode
+            Action::SwitchToNormalMode,
         );
         bindings.insert(KeyContext::Help, help);
-        
+
         Self { bindings }
     }
-    
+
     /// Get action for a key combination in a specific context
-    pub fn get_action(&self, combination: &KeyCombination, context: &KeyContext) -> Option<&Action> {
-        
+    pub fn get_action(
+        &self,
+        combination: &KeyCombination,
+        context: &KeyContext,
+    ) -> Option<&Action> {
         // Check context-specific bindings first
         if let Some(context_bindings) = self.bindings.get(context) {
             if let Some(action) = context_bindings.get(&combination) {
                 return Some(action);
             }
         }
-        
+
         // Check global bindings
         if let Some(global_bindings) = self.bindings.get(&KeyContext::Global) {
             global_bindings.get(&combination)
@@ -318,7 +321,7 @@ impl KeyBindings {
             None
         }
     }
-    
+
     /// Add or update a key binding
     pub fn bind_key(&mut self, context: KeyContext, combination: KeyCombination, action: Action) {
         self.bindings
@@ -326,7 +329,7 @@ impl KeyBindings {
             .or_insert_with(HashMap::new)
             .insert(combination, action);
     }
-    
+
     /// Remove a key binding
     pub fn unbind_key(&mut self, context: &KeyContext, combination: &KeyCombination) -> bool {
         if let Some(context_bindings) = self.bindings.get_mut(context) {
@@ -335,16 +338,19 @@ impl KeyBindings {
             false
         }
     }
-    
+
     /// Get all bindings for a context
-    pub fn get_bindings_for_context(&self, context: &KeyContext) -> Option<&HashMap<KeyCombination, Action>> {
+    pub fn get_bindings_for_context(
+        &self,
+        context: &KeyContext,
+    ) -> Option<&HashMap<KeyCombination, Action>> {
         self.bindings.get(context)
     }
-    
+
     /// Get help text for keybindings in a specific context
     pub fn get_help_text(&self, context: &KeyContext) -> Vec<String> {
         let mut help_lines = Vec::new();
-        
+
         // Add global bindings
         if let Some(global_bindings) = self.bindings.get(&KeyContext::Global) {
             help_lines.push("Global Commands:".to_string());
@@ -353,7 +359,7 @@ impl KeyBindings {
             }
             help_lines.push(String::new()); // Empty line
         }
-        
+
         // Add context-specific bindings
         if let Some(context_bindings) = self.bindings.get(context) {
             help_lines.push(format!("{:?} Mode Commands:", context));
@@ -361,10 +367,10 @@ impl KeyBindings {
                 help_lines.push(format!("  {} - {}", key.to_string(), action.description()));
             }
         }
-        
+
         help_lines
     }
-    
+
     /// Load keybindings from a configuration
     pub fn load_from_config(&mut self, config: &HashMap<String, HashMap<String, String>>) {
         for (context_name, context_bindings) in config {
@@ -372,7 +378,7 @@ impl KeyBindings {
                 for (key_string, action_string) in context_bindings {
                     if let (Ok(combination), Ok(action)) = (
                         KeyCombination::from_string(key_string),
-                        action_string.parse::<Action>()
+                        action_string.parse::<Action>(),
                     ) {
                         self.bind_key(context.clone(), combination, action);
                     }
@@ -389,19 +395,30 @@ impl KeybindingManager {
             bindings: KeyBindings::default(),
         }
     }
-    
+
     /// Get action for a key combination in a context
-    pub fn get_action(&self, key: KeyCode, modifiers: KeyModifiers, context: &KeyContext) -> Option<Action> {
+    pub fn get_action(
+        &self,
+        key: KeyCode,
+        modifiers: KeyModifiers,
+        context: &KeyContext,
+    ) -> Option<Action> {
         let combination = KeyCombination::new(key, modifiers);
         self.bindings.get_action(&combination, context).cloned()
     }
-    
+
     /// Add a new key binding
-    pub fn bind_key(&mut self, context: KeyContext, key: KeyCode, modifiers: KeyModifiers, action: Action) {
+    pub fn bind_key(
+        &mut self,
+        context: KeyContext,
+        key: KeyCode,
+        modifiers: KeyModifiers,
+        action: Action,
+    ) {
         let combination = KeyCombination::new(key, modifiers);
         self.bindings.bind_key(context, combination, action);
     }
-    
+
     /// Get help text for context
     pub fn get_help_text(&self, context: &KeyContext) -> Vec<String> {
         self.bindings.get_help_text(context)
@@ -419,7 +436,7 @@ impl KeyCombination {
     pub fn new(key: KeyCode, modifiers: KeyModifiers) -> Self {
         Self { key, modifiers }
     }
-    
+
     /// Create from a KeyEvent
     pub fn from_key_event(event: &KeyEvent) -> Self {
         Self {
@@ -427,17 +444,17 @@ impl KeyCombination {
             modifiers: event.modifiers,
         }
     }
-    
+
     /// Parse from string representation (e.g., "Ctrl+C", "Alt+F4")
     pub fn from_string(s: &str) -> Result<Self, String> {
         let parts: Vec<&str> = s.split('+').collect();
         if parts.is_empty() {
             return Err("Empty key combination".to_string());
         }
-        
+
         let mut modifiers = KeyModifiers::empty();
         let key_part = parts[parts.len() - 1];
-        
+
         for part in &parts[..parts.len() - 1] {
             match part.to_lowercase().as_str() {
                 "ctrl" | "control" => modifiers |= KeyModifiers::CONTROL,
@@ -447,7 +464,7 @@ impl KeyCombination {
                 _ => return Err(format!("Unknown modifier: {}", part)),
             }
         }
-        
+
         let key = match key_part.to_lowercase().as_str() {
             "enter" | "return" => KeyCode::Enter,
             "space" => KeyCode::Char(' '),
@@ -471,19 +488,17 @@ impl KeyCombination {
                     return Err(format!("Invalid function key: {}", s));
                 }
             }
-            s if s.len() == 1 => {
-                KeyCode::Char(s.chars().next().unwrap())
-            }
+            s if s.len() == 1 => KeyCode::Char(s.chars().next().unwrap()),
             _ => return Err(format!("Unknown key: {}", key_part)),
         };
-        
+
         Ok(Self { key, modifiers })
     }
-    
+
     /// Convert to string representation
     pub fn to_string(&self) -> String {
         let mut parts = Vec::new();
-        
+
         if self.modifiers.contains(KeyModifiers::CONTROL) {
             parts.push("Ctrl");
         }
@@ -496,7 +511,7 @@ impl KeyCombination {
         if self.modifiers.contains(KeyModifiers::SUPER) {
             parts.push("Super");
         }
-        
+
         let key_str = match self.key {
             KeyCode::Char(c) => c.to_string(),
             KeyCode::Enter => "Enter".to_string(),
@@ -516,7 +531,7 @@ impl KeyCombination {
             KeyCode::F(n) => format!("F{}", n),
             _ => format!("{:?}", self.key),
         };
-        
+
         parts.push(&key_str);
         parts.join("+")
     }
@@ -571,7 +586,7 @@ impl Action {
 
 impl std::str::FromStr for KeyContext {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "global" => Ok(KeyContext::Global),
@@ -588,7 +603,7 @@ impl std::str::FromStr for KeyContext {
 
 impl std::str::FromStr for Action {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "quit" => Ok(Action::Quit),

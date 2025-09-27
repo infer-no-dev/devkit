@@ -7,12 +7,11 @@
 //! - Property-based testing
 //! - Mock data generation
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
-use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot};
 
 /// Test result capture for analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,13 +73,13 @@ impl TestContext {
     pub fn create_temp_dir(&mut self) -> Result<&Path, std::io::Error> {
         if self.temp_dir.is_none() {
             let temp_dir = std::env::temp_dir()
-                .join("agentic_dev_env_tests")
+                .join("devkit_tests")
                 .join(&self.test_name);
-            
+
             std::fs::create_dir_all(&temp_dir)?;
             self.temp_dir = Some(temp_dir);
         }
-        
+
         Ok(self.temp_dir.as_ref().unwrap())
     }
 
@@ -160,9 +159,9 @@ pub struct TestAssertions;
 impl TestAssertions {
     /// Assert that execution time is within expected bounds
     pub fn assert_execution_time_within(
-        duration: Duration, 
-        min: Duration, 
-        max: Duration
+        duration: Duration,
+        min: Duration,
+        max: Duration,
     ) -> Result<(), String> {
         if duration < min {
             return Err(format!("Execution too fast: {:?} < {:?}", duration, min));
@@ -174,10 +173,7 @@ impl TestAssertions {
     }
 
     /// Assert that memory usage is within acceptable bounds
-    pub fn assert_memory_usage_within(
-        used: usize, 
-        max: usize
-    ) -> Result<(), String> {
+    pub fn assert_memory_usage_within(used: usize, max: usize) -> Result<(), String> {
         if used > max {
             return Err(format!("Memory usage too high: {} > {}", used, max));
         }
@@ -187,7 +183,7 @@ impl TestAssertions {
     /// Assert that a collection contains expected elements
     pub fn assert_contains_all<T: PartialEq + std::fmt::Debug>(
         collection: &[T],
-        expected: &[T]
+        expected: &[T],
     ) -> Result<(), String> {
         for item in expected {
             if !collection.contains(item) {
@@ -208,14 +204,14 @@ impl TestAssertions {
         Fut: std::future::Future<Output = Result<T, String>>,
     {
         let start = Instant::now();
-        
+
         while start.elapsed() < timeout {
             match condition().await {
                 Ok(result) => return Ok(result),
                 Err(_) => tokio::time::sleep(check_interval).await,
             }
         }
-        
+
         condition().await
     }
 }
@@ -241,9 +237,9 @@ impl PropertyGenerator {
 
     /// Generate random strings for testing
     pub fn generate_strings(&self, count: usize, min_len: usize, max_len: usize) -> Vec<String> {
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
-        
+        use rand::{Rng, SeedableRng};
+
         let mut rng = StdRng::seed_from_u64(self.seed);
         let mut strings = Vec::new();
 
@@ -261,16 +257,17 @@ impl PropertyGenerator {
     /// Generate random file paths for testing
     pub fn generate_file_paths(&self, count: usize) -> Vec<PathBuf> {
         let strings = self.generate_strings(count, 5, 20);
-        strings.into_iter()
+        strings
+            .into_iter()
             .map(|s| PathBuf::from(format!("src/{}.rs", s)))
             .collect()
     }
 
     /// Generate random numbers within range
     pub fn generate_numbers(&self, count: usize, min: i32, max: i32) -> Vec<i32> {
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
-        
+        use rand::{Rng, SeedableRng};
+
         let mut rng = StdRng::seed_from_u64(self.seed);
         (0..count).map(|_| rng.gen_range(min..=max)).collect()
     }
@@ -350,6 +347,7 @@ impl MockDataFactory {
                     input_panel_height: 3,
                 },
             },
+            logging: crate::logging::LogConfig::default(),
             keybindings: HashMap::new(),
         }
     }
@@ -372,6 +370,8 @@ impl MockDataFactory {
                     3 => crate::agents::TaskPriority::Critical,
                     _ => crate::agents::TaskPriority::Normal,
                 },
+                deadline: None,
+                metadata: HashMap::new(),
             })
             .collect()
     }
@@ -387,19 +387,17 @@ impl MockDataFactory {
                 line_count: i * 10,
                 last_modified: SystemTime::now(),
                 content_hash: format!("mock_hash_{}", i),
-                symbols: vec![
-                    crate::context::symbols::Symbol {
-                        name: format!("mock_function_{}", i),
-                        symbol_type: crate::context::symbols::SymbolType::Function,
-                        file_path: PathBuf::from("src/test_symbol.rs"),
-                        line_number: 1,
-                        column: 1,
-                        signature: Some("fn test_symbol()".to_string()),
-                        documentation: Some("Test symbol".to_string()),
-                        visibility: crate::context::symbols::Visibility::Public,
-                        references: Vec::new(),
-                    }
-                ],
+                symbols: vec![crate::context::symbols::Symbol {
+                    name: format!("mock_function_{}", i),
+                    symbol_type: crate::context::symbols::SymbolType::Function,
+                    file_path: PathBuf::from("src/test_symbol.rs"),
+                    line_number: 1,
+                    column: 1,
+                    signature: Some("fn test_symbol()".to_string()),
+                    documentation: Some("Test symbol".to_string()),
+                    visibility: crate::context::symbols::Visibility::Public,
+                    references: Vec::new(),
+                }],
                 imports: vec![
                     "std::collections::HashMap".to_string(),
                     "serde::{Serialize, Deserialize}".to_string(),
@@ -439,14 +437,17 @@ impl TestRunner {
         let result = if self.config.timeout > Duration::ZERO {
             match tokio::time::timeout(self.config.timeout, test_fn(context)).await {
                 Ok(result) => result,
-                Err(_) => Err(format!("Test '{}' timed out after {:?}", test_name, self.config.timeout)),
+                Err(_) => Err(format!(
+                    "Test '{}' timed out after {:?}",
+                    test_name, self.config.timeout
+                )),
             }
         } else {
             test_fn(context).await
         };
 
         let duration = start_time.elapsed();
-        
+
         let test_result = TestResult {
             test_name: test_name.to_string(),
             success: result.is_ok(),
@@ -472,7 +473,7 @@ impl TestRunner {
         Fut: std::future::Future<Output = Result<(), String>> + Send,
     {
         let suite_start = Instant::now();
-        
+
         if self.config.parallel_execution {
             self.run_tests_parallel(tests).await
         } else {
@@ -481,7 +482,7 @@ impl TestRunner {
 
         let suite_duration = suite_start.elapsed();
         let results = self.results.lock().unwrap().clone();
-        
+
         TestSuiteReport {
             total_tests: results.len(),
             passed: results.iter().filter(|r| r.success).count(),
@@ -512,7 +513,7 @@ impl TestRunner {
         Fut: std::future::Future<Output = Result<(), String>> + Send,
     {
         use tokio::sync::Semaphore;
-        
+
         let semaphore = Arc::new(Semaphore::new(self.config.max_parallel_tests));
         let mut handles = Vec::new();
 
@@ -525,7 +526,7 @@ impl TestRunner {
                 let _permit = permit; // Keep permit alive
                 runner.run_test(&test_name, test_fn).await
             });
-            
+
             handles.push(handle);
         }
 
@@ -567,13 +568,16 @@ impl TestSuiteReport {
         println!("✅ Passed: {}", self.passed);
         println!("❌ Failed: {}", self.failed);
         println!("⏱️  Duration: {:?}", self.duration);
-        
+
         if self.failed > 0 {
             println!("\n❌ Failed Tests:");
             for result in &self.results {
                 if !result.success {
-                    println!("  • {} - {}", result.test_name, 
-                        result.error_message.as_deref().unwrap_or("Unknown error"));
+                    println!(
+                        "  • {} - {}",
+                        result.test_name,
+                        result.error_message.as_deref().unwrap_or("Unknown error")
+                    );
                 }
             }
         }
@@ -581,8 +585,10 @@ impl TestSuiteReport {
         if let Some(benchmarks) = &self.benchmarks {
             println!("\n📊 Performance Benchmarks:");
             for benchmark in benchmarks {
-                println!("  • {} - {:?} ({} iterations)", 
-                    benchmark.name, benchmark.duration, benchmark.iterations);
+                println!(
+                    "  • {} - {:?} ({} iterations)",
+                    benchmark.name, benchmark.duration, benchmark.iterations
+                );
             }
         }
     }
@@ -602,9 +608,10 @@ impl TestSuiteReport {
 #[macro_export]
 macro_rules! test_case {
     ($name:expr, $test_fn:expr) => {
-        ($name, |_ctx: $crate::testing::test_utils::TestContext| async move {
-            $test_fn().await
-        })
+        (
+            $name,
+            |_ctx: $crate::testing::test_utils::TestContext| async move { $test_fn().await },
+        )
     };
 }
 
@@ -612,19 +619,27 @@ macro_rules! test_case {
 #[macro_export]
 macro_rules! benchmark_test {
     ($name:expr, $iterations:expr, $test_fn:expr) => {
-        ($name, |_ctx: $crate::testing::test_utils::TestContext| async move {
-            let start = std::time::Instant::now();
-            for _ in 0..$iterations {
-                $test_fn().await?;
-            }
-            let duration = start.elapsed();
-            
-            // Record benchmark information in context metadata
-            println!("Benchmark '{}': {:?} for {} iterations ({:?} per iteration)", 
-                $name, duration, $iterations, duration / $iterations);
-            
-            Ok(())
-        })
+        (
+            $name,
+            |_ctx: $crate::testing::test_utils::TestContext| async move {
+                let start = std::time::Instant::now();
+                for _ in 0..$iterations {
+                    $test_fn().await?;
+                }
+                let duration = start.elapsed();
+
+                // Record benchmark information in context metadata
+                println!(
+                    "Benchmark '{}': {:?} for {} iterations ({:?} per iteration)",
+                    $name,
+                    duration,
+                    $iterations,
+                    duration / $iterations
+                );
+
+                Ok(())
+            },
+        )
     };
 }
 
@@ -639,13 +654,15 @@ mod tests {
             performance_benchmarks: true,
             ..Default::default()
         };
-        
+
         let runner = TestRunner::new(config);
-        
-        let test_result = runner.run_test("basic_test", |_ctx| async {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            Ok(())
-        }).await;
+
+        let test_result = runner
+            .run_test("basic_test", |_ctx| async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                Ok(())
+            })
+            .await;
 
         assert!(test_result.success);
         assert!(test_result.duration >= Duration::from_millis(10));
@@ -655,7 +672,7 @@ mod tests {
     #[test]
     fn test_property_generator() {
         let generator = PropertyGenerator::with_seed(12345);
-        
+
         let strings = generator.generate_strings(5, 3, 10);
         assert_eq!(strings.len(), 5);
         for s in &strings {

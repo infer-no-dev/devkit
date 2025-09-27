@@ -2,24 +2,24 @@
 //!
 //! This program demonstrates the AI-powered agent functionality
 
-use std::sync::Arc;
 use devkit::agents::{AgentSystem, AgentTask, TaskPriority};
 use devkit::ai::AIManager;
 use devkit::config::{Config, ConfigManager};
 use serde_json::json;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     tracing_subscriber::fmt::init();
-    
+
     println!("🤖 Testing AI-Integrated Agents");
     println!("============================");
-    
+
     // Load configuration
     let mut config_manager = ConfigManager::new(None)?;
     config_manager.load()?;
-    
+
     // Initialize AI manager
     let ai_manager = match AIManager::from_config(config_manager.config()).await {
         Ok(manager) => {
@@ -32,17 +32,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             None
         }
     };
-    
+
     // Create agent system with AI manager if available
     let agent_system = match &ai_manager {
         Some(ai_mgr) => Arc::new(AgentSystem::with_ai_manager(ai_mgr.clone())),
-        None => Arc::new(AgentSystem::new())
+        None => Arc::new(AgentSystem::new()),
     };
-    
+
     // Initialize agents
     agent_system.initialize().await;
     println!("✅ Agent system initialized");
-    
+
     // Test 1: Code Analysis Agent
     println!("\n🔍 Test 1: Code Analysis Agent");
     println!("------------------------------");
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }),
         priority: TaskPriority::High,
     };
-    
+
     match agent_system.submit_task(analysis_task).await {
         Ok(result) => {
             println!("✅ Analysis completed!");
@@ -70,14 +70,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("❌ Analysis failed: {}", e);
         }
     }
-    
+
     // Test 2: Code Generation Agent
     println!("\n🛠️ Test 2: Code Generation Agent");
     println!("--------------------------------");
     let generation_task = AgentTask {
         id: "test_generation".to_string(),
         task_type: "generate_code".to_string(),
-        description: "Create a simple HTTP client in Rust that makes GET requests with error handling".to_string(),
+        description:
+            "Create a simple HTTP client in Rust that makes GET requests with error handling"
+                .to_string(),
         context: json!({
             "language": "rust",
             "features": ["error_handling", "async"],
@@ -85,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }),
         priority: TaskPriority::Normal,
     };
-    
+
     match agent_system.submit_task(generation_task).await {
         Ok(result) => {
             println!("✅ Code generation completed!");
@@ -104,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("❌ Code generation failed: {}", e);
         }
     }
-    
+
     // Test 3: Debugging Agent
     println!("\n🐛 Test 3: Debugging Agent");
     println!("-------------------------");
@@ -119,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }),
         priority: TaskPriority::High,
     };
-    
+
     match agent_system.submit_task(debug_task).await {
         Ok(result) => {
             println!("✅ Debugging analysis completed!");
@@ -129,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("❌ Debugging failed: {}", e);
         }
     }
-    
+
     // Test 4: Test Generation Agent
     println!("\n🧪 Test 4: Test Generation Agent");
     println!("-------------------------------");
@@ -144,7 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }),
         priority: TaskPriority::Normal,
     };
-    
+
     match agent_system.submit_task(test_task).await {
         Ok(result) => {
             println!("✅ Test generation completed!");
@@ -162,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("❌ Test generation failed: {}", e);
         }
     }
-    
+
     println!("\n🎉 Agent testing completed!");
     Ok(())
 }

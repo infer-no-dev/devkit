@@ -111,19 +111,19 @@ pub struct CodeModification {
 pub enum CodeGenError {
     #[error("Language detection failed: {0}")]
     LanguageDetectionFailed(String),
-    
+
     #[error("Code analysis failed: {0}")]
     AnalysisFailed(String),
-    
+
     #[error("Generation failed: {0}")]
     GenerationFailed(String),
-    
+
     #[error("Template error: {0}")]
     TemplateError(String),
-    
+
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
-    
+
     #[error("Generation error: {0}")]
     GenerationError(String),
 }
@@ -139,18 +139,18 @@ impl CodeGenerator {
             ai_manager: None,
         })
     }
-    
+
     /// Set the AI manager for enhanced code generation
     pub fn set_ai_manager(&mut self, ai_manager: Arc<AIManager>) {
         self.generator.set_ai_manager(ai_manager.clone());
         self.ai_manager = Some(ai_manager);
     }
-    
+
     /// Check if AI is available
     pub fn has_ai(&self) -> bool {
         self.ai_manager.is_some()
     }
-    
+
     /// Generate code from a natural language prompt using AI when available
     pub async fn generate_from_prompt(
         &self,
@@ -158,36 +158,44 @@ impl CodeGenerator {
     ) -> Result<GenerationResult, CodeGenError> {
         // Analyze the prompt and determine intent
         let intent = self.analyzer.analyze_prompt(&request.prompt)?;
-        
+
         // Detect or confirm the target language
         let language = match &request.config.target_language {
             Some(lang) => lang.clone(),
-            None => self.language_detector.detect_from_context(&request.context)?,
+            None => self
+                .language_detector
+                .detect_from_context(&request.context)?,
         };
-        
+
         // Use AI-powered generation if available, otherwise fallback to templates
         if self.has_ai() {
-            self.generator.generate_with_ai(
-                &request.prompt,
-                &language,
-                &request.context,
-                &request.config,
-            ).await
+            self.generator
+                .generate_with_ai(
+                    &request.prompt,
+                    &language,
+                    &request.context,
+                    &request.config,
+                )
+                .await
         } else {
             // Fallback to template-based generation
             let start_time = std::time::Instant::now();
-            let generated_code = self.generate_with_templates(
-                &request.prompt,
-                &language,
-                &request.context,
-                &request.config,
-            ).await?;
-            
+            let generated_code = self
+                .generate_with_templates(
+                    &request.prompt,
+                    &language,
+                    &request.context,
+                    &request.config,
+                )
+                .await?;
+
             let generation_time = start_time.elapsed();
-            
+
             // Analyze the generated code for improvements
-            let suggestions = self.analyzer.analyze_generated_code(&generated_code, &language)?;
-            
+            let suggestions = self
+                .analyzer
+                .analyze_generated_code(&generated_code, &language)?;
+
             Ok(GenerationResult {
                 generated_code,
                 language,
@@ -203,7 +211,7 @@ impl CodeGenerator {
             })
         }
     }
-    
+
     /// Suggest code improvements for existing code
     pub async fn suggest_improvements(
         &self,
@@ -211,9 +219,11 @@ impl CodeGenerator {
         file_path: &str,
         context: &CodebaseContext,
     ) -> Result<Vec<CodeModification>, CodeGenError> {
-        self.analyzer.suggest_improvements(code, file_path, context).await
+        self.analyzer
+            .suggest_improvements(code, file_path, context)
+            .await
     }
-    
+
     /// Complete code based on partial input
     pub async fn complete_code(
         &self,
@@ -221,9 +231,11 @@ impl CodeGenerator {
         cursor_position: usize,
         context: &CodebaseContext,
     ) -> Result<Vec<String>, CodeGenError> {
-        self.generator.complete_code(partial_code, cursor_position, context).await
+        self.generator
+            .complete_code(partial_code, cursor_position, context)
+            .await
     }
-    
+
     /// Refactor code according to specified rules
     pub async fn refactor_code(
         &self,
@@ -233,7 +245,7 @@ impl CodeGenerator {
     ) -> Result<GenerationResult, CodeGenError> {
         self.generator.refactor(code, refactor_type, context).await
     }
-    
+
     /// Generate code from a GenerationRequest - main entry point for CLI
     pub async fn generate_code(&self, request: &GenerationRequest) -> Result<String, CodeGenError> {
         if self.has_ai() {
@@ -242,21 +254,24 @@ impl CodeGenerator {
             self.generate_code_with_templates(request).await
         }
     }
-    
+
     /// Generate code using AI when available
-    async fn generate_code_with_ai(&self, request: &GenerationRequest) -> Result<String, CodeGenError> {
+    async fn generate_code_with_ai(
+        &self,
+        request: &GenerationRequest,
+    ) -> Result<String, CodeGenError> {
         use crate::ai::{ChatMessage, ChatRequest};
-        
+
         if let Some(ai_manager) = &self.ai_manager {
             // Build comprehensive prompt for AI
             let system_prompt = self.build_ai_system_prompt(&request);
             let user_prompt = self.build_ai_user_prompt(&request);
-            
+
             let messages = vec![
                 ChatMessage::system(system_prompt),
                 ChatMessage::user(user_prompt),
             ];
-            
+
             let mut parameters = crate::ai::ModelParameters::default();
             if let Some(temp) = request.config.temperature {
                 parameters.temperature = Some(temp);
@@ -264,37 +279,50 @@ impl CodeGenerator {
             if let Some(max_tokens) = request.config.max_tokens {
                 parameters.max_tokens = Some(max_tokens);
             }
-            
+
             let chat_request = ChatRequest {
                 model: "llama3.2:latest".to_string(), // Use default model
                 messages,
                 parameters: Some(parameters),
                 stream: false,
             };
-            
+
             // Generate using AI
             match ai_manager.chat_completion_default(chat_request).await {
                 Ok(response) => {
-                    let processed_code = self.post_process_ai_response(&response.message.content, request)?;
+                    let processed_code =
+                        self.post_process_ai_response(&response.message.content, request)?;
                     Ok(processed_code)
-                },
-                Err(e) => Err(CodeGenError::GenerationFailed(format!("AI generation failed: {}", e)))
+                }
+                Err(e) => Err(CodeGenError::GenerationFailed(format!(
+                    "AI generation failed: {}",
+                    e
+                ))),
             }
         } else {
-            Err(CodeGenError::GenerationFailed("AI manager not available".to_string()))
+            Err(CodeGenError::GenerationFailed(
+                "AI manager not available".to_string(),
+            ))
         }
     }
-    
+
     /// Generate code using templates as fallback
-    async fn generate_code_with_templates(&self, request: &GenerationRequest) -> Result<String, CodeGenError> {
+    async fn generate_code_with_templates(
+        &self,
+        request: &GenerationRequest,
+    ) -> Result<String, CodeGenError> {
         let language = request.config.target_language.as_deref().unwrap_or("rust");
         let generated = self.generate_basic_code_structure(&request.prompt, language);
         Ok(generated)
     }
-    
+
     fn build_ai_system_prompt(&self, request: &GenerationRequest) -> String {
-        let language = request.config.target_language.as_deref().unwrap_or("the most appropriate language");
-        
+        let language = request
+            .config
+            .target_language
+            .as_deref()
+            .unwrap_or("the most appropriate language");
+
         format!(
             "You are an expert software developer. Generate high-quality, production-ready code in {}. \n\n\
             Requirements:\n\
@@ -307,69 +335,81 @@ impl CodeGenerator {
             language
         )
     }
-    
+
     fn build_ai_user_prompt(&self, request: &GenerationRequest) -> String {
         let mut prompt = format!("Generate code for: {}\n", request.prompt);
-        
+
         if let Some(language) = &request.config.target_language {
             prompt.push_str(&format!("Language: {}\n", language));
         }
-        
+
         if let Some(file_path) = &request.file_path {
             prompt.push_str(&format!("Target file: {}\n", file_path));
         }
-        
+
         if !request.constraints.is_empty() {
             prompt.push_str("\nConstraints:\n");
             for constraint in &request.constraints {
                 prompt.push_str(&format!("- {}\n", constraint));
             }
         }
-        
+
         // Add generation config hints
         if let Some(max_tokens) = request.config.max_tokens {
             if max_tokens < 500 {
                 prompt.push_str("\nNote: Keep code concise due to length constraints.\n");
             }
         }
-        
+
         prompt
     }
-    
-    fn post_process_ai_response(&self, response: &str, request: &GenerationRequest) -> Result<String, CodeGenError> {
+
+    fn post_process_ai_response(
+        &self,
+        response: &str,
+        request: &GenerationRequest,
+    ) -> Result<String, CodeGenError> {
         let mut code = response.trim().to_string();
-        
+
         // Remove markdown code blocks if present
         if code.starts_with("```") {
             let lines: Vec<&str> = code.lines().collect();
             if lines.len() > 2 && lines.last().unwrap().trim() == "```" {
-                code = lines[1..lines.len()-1].join("\n");
+                code = lines[1..lines.len() - 1].join("\n");
             }
         }
-        
+
         // Add file header if requested
         if let Some(file_path) = &request.file_path {
             let header = self.generate_file_header(file_path, &request.prompt);
             code = format!("{}\n\n{}", header, code);
         }
-        
+
         if code.trim().is_empty() {
-            return Err(CodeGenError::GenerationFailed("AI generated empty code".to_string()));
+            return Err(CodeGenError::GenerationFailed(
+                "AI generated empty code".to_string(),
+            ));
         }
-        
+
         Ok(code)
     }
-    
+
     fn generate_file_header(&self, file_path: &str, prompt: &str) -> String {
         let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
-        let short_prompt = prompt.lines().next().unwrap_or(prompt).chars().take(60).collect::<String>();
-        
+        let short_prompt = prompt
+            .lines()
+            .next()
+            .unwrap_or(prompt)
+            .chars()
+            .take(60)
+            .collect::<String>();
+
         format!(
             "// Generated by Agentic Dev Environment\n// File: {}\n// Created: {}\n// Prompt: {}",
             file_path, timestamp, short_prompt
         )
     }
-    
+
     fn generate_basic_code_structure(&self, prompt: &str, language: &str) -> String {
         match language.to_lowercase().as_str() {
             "rust" => self.generate_rust_fallback(prompt),
@@ -378,10 +418,13 @@ impl CodeGenerator {
             "typescript" | "ts" => self.generate_ts_fallback(prompt),
             "go" => self.generate_go_fallback(prompt),
             "java" => self.generate_java_fallback(prompt),
-            _ => format!("// Generated code for: {}\n// TODO: Implement functionality", prompt)
+            _ => format!(
+                "// Generated code for: {}\n// TODO: Implement functionality",
+                prompt
+            ),
         }
     }
-    
+
     fn generate_rust_fallback(&self, prompt: &str) -> String {
         format!(
             "// Generated based on: {}\n\nuse std::{{error::Error, result::Result}};\n\n/// TODO: Implement based on prompt\npub fn generated_function() -> Result<(), Box<dyn Error>> {{\n    todo!(\"Implement: {}\");\n}}\n\n#[cfg(test)]\nmod tests {{\n    use super::*;\n\n    #[test]\n    fn test_generated_function() {{\n        // TODO: Add meaningful tests\n        assert!(true);\n    }}\n}}",
@@ -389,7 +432,7 @@ impl CodeGenerator {
             prompt.lines().next().unwrap_or(prompt)
         )
     }
-    
+
     fn generate_python_fallback(&self, prompt: &str) -> String {
         format!(
             "\"\"\"\nGenerated based on: {}\n\"\"\"\n\ndef generated_function():\n    \"\"\"TODO: Implement based on prompt\"\"\"\n    raise NotImplementedError(\"Implement: {}\")\n\n\nif __name__ == \"__main__\":\n    generated_function()",
@@ -397,7 +440,7 @@ impl CodeGenerator {
             prompt.lines().next().unwrap_or(prompt)
         )
     }
-    
+
     fn generate_js_fallback(&self, prompt: &str) -> String {
         format!(
             "/**\n * Generated based on: {}\n */\nfunction generatedFunction() {{\n    // TODO: Implement based on prompt\n    throw new Error('Implement: {}');\n}}\n\nmodule.exports = {{ generatedFunction }};",
@@ -405,7 +448,7 @@ impl CodeGenerator {
             prompt.lines().next().unwrap_or(prompt)
         )
     }
-    
+
     fn generate_ts_fallback(&self, prompt: &str) -> String {
         format!(
             "/**\n * Generated based on: {}\n */\nexport function generatedFunction(): void {{\n    // TODO: Implement based on prompt\n    throw new Error('Implement: {}');\n}}\n\nexport default generatedFunction;",
@@ -413,7 +456,7 @@ impl CodeGenerator {
             prompt.lines().next().unwrap_or(prompt)
         )
     }
-    
+
     fn generate_go_fallback(&self, prompt: &str) -> String {
         format!(
             "package main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n)\n\n// GeneratedFunction based on: {}\nfunc GeneratedFunction() {{\n\tlog.Fatal(\"TODO: Implement: {}\")\n}}\n\nfunc main() {{\n\tGeneratedFunction()\n}}",
@@ -421,7 +464,7 @@ impl CodeGenerator {
             prompt.lines().next().unwrap_or(prompt)
         )
     }
-    
+
     fn generate_java_fallback(&self, prompt: &str) -> String {
         format!(
             "/**\n * Generated based on: {}\n */\npublic class GeneratedClass {{\n    \n    /**\n     * TODO: Implement based on prompt\n     */\n    public void generatedMethod() {{\n        throw new RuntimeException(\"Implement: {}\");\n    }}\n    \n    public static void main(String[] args) {{\n        new GeneratedClass().generatedMethod();\n    }}\n}}",
@@ -429,7 +472,7 @@ impl CodeGenerator {
             prompt.lines().next().unwrap_or(prompt)
         )
     }
-    
+
     /// Generate code using templates based on prompt analysis
     async fn generate_with_templates(
         &self,
@@ -440,22 +483,29 @@ impl CodeGenerator {
     ) -> Result<String, CodeGenError> {
         // Analyze prompt to determine what template to use
         let template_name = self.select_template_from_prompt(prompt, language)?;
-        
+
         // Extract variables from the prompt
         let variables = self.extract_variables_from_prompt(prompt, &template_name)?;
-        
+
         // Apply the template
         let generated_code = self.templates.apply_template(&template_name, &variables)?;
-        
+
         Ok(generated_code)
     }
-    
+
     /// Select appropriate template based on prompt analysis
-    fn select_template_from_prompt(&self, prompt: &str, language: &str) -> Result<String, CodeGenError> {
+    fn select_template_from_prompt(
+        &self,
+        prompt: &str,
+        language: &str,
+    ) -> Result<String, CodeGenError> {
         let prompt_lower = prompt.to_lowercase();
-        
+
         // Simple heuristics to determine template type
-        if prompt_lower.contains("function") || prompt_lower.contains("method") || prompt_lower.contains("fn") {
+        if prompt_lower.contains("function")
+            || prompt_lower.contains("method")
+            || prompt_lower.contains("fn")
+        {
             Ok(format!("{}_function", language))
         } else if prompt_lower.contains("struct") || prompt_lower.contains("class") {
             if language == "rust" && prompt_lower.contains("struct") {
@@ -475,22 +525,30 @@ impl CodeGenerator {
             Ok(format!("{}_function", language))
         }
     }
-    
+
     /// Extract template variables from the natural language prompt
-    fn extract_variables_from_prompt(&self, prompt: &str, template_name: &str) -> Result<HashMap<String, String>, CodeGenError> {
+    fn extract_variables_from_prompt(
+        &self,
+        prompt: &str,
+        template_name: &str,
+    ) -> Result<HashMap<String, String>, CodeGenError> {
         let mut variables = HashMap::new();
-        
+
         // Get the template to understand what variables we need
-        let template = self.templates.get_template(template_name)
-            .ok_or_else(|| CodeGenError::TemplateError(format!("Template '{}' not found", template_name)))?;
-        
+        let template = self.templates.get_template(template_name).ok_or_else(|| {
+            CodeGenError::TemplateError(format!("Template '{}' not found", template_name))
+        })?;
+
         // Simple extraction logic - this can be enhanced with NLP
         let words: Vec<&str> = prompt.split_whitespace().collect();
-        
+
         // Try to extract function/class/struct name
         for (i, word) in words.iter().enumerate() {
-            if word.to_lowercase().contains("function") || word.to_lowercase().contains("method") ||
-               word.to_lowercase().contains("struct") || word.to_lowercase().contains("class") {
+            if word.to_lowercase().contains("function")
+                || word.to_lowercase().contains("method")
+                || word.to_lowercase().contains("struct")
+                || word.to_lowercase().contains("class")
+            {
                 if let Some(next_word) = words.get(i + 1) {
                     // Clean the name (remove punctuation)
                     let name = next_word.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
@@ -501,13 +559,16 @@ impl CodeGenerator {
                 }
             }
         }
-        
+
         // If no name found, try to extract from "create/make/build X" patterns
         if !variables.contains_key("name") {
             for (i, word) in words.iter().enumerate() {
-                if ["create", "make", "build", "implement", "write"].contains(&word.to_lowercase().as_str()) {
+                if ["create", "make", "build", "implement", "write"]
+                    .contains(&word.to_lowercase().as_str())
+                {
                     if let Some(next_word) = words.get(i + 1) {
-                        let name = next_word.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                        let name =
+                            next_word.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
                         if !name.is_empty() && name.len() > 1 {
                             variables.insert("name".to_string(), name.to_string());
                             break;
@@ -516,34 +577,42 @@ impl CodeGenerator {
                 }
             }
         }
-        
+
         // Set default name if still not found
         if !variables.contains_key("name") {
             variables.insert("name".to_string(), "generated_item".to_string());
         }
-        
+
         // Use the prompt as description
         variables.insert("description".to_string(), prompt.to_string());
-        
+
         // Set reasonable defaults for other common variables
-        if template.variables.iter().any(|v| v.name == "parameters" && !variables.contains_key("parameters")) {
+        if template
+            .variables
+            .iter()
+            .any(|v| v.name == "parameters" && !variables.contains_key("parameters"))
+        {
             variables.insert("parameters".to_string(), "".to_string());
         }
-        
-        if template.variables.iter().any(|v| v.name == "return_type" && !variables.contains_key("return_type")) {
+
+        if template
+            .variables
+            .iter()
+            .any(|v| v.name == "return_type" && !variables.contains_key("return_type"))
+        {
             if template_name.starts_with("rust") {
                 variables.insert("return_type".to_string(), "()".to_string());
             }
         }
-        
+
         Ok(variables)
     }
-    
+
     /// Get available templates for a language
     pub fn get_templates_for_language(&self, language: &str) -> Vec<&templates::Template> {
         self.templates.get_templates_for_language(language)
     }
-    
+
     /// List all available template names
     pub fn list_templates(&self) -> Vec<String> {
         self.templates.list_templates()

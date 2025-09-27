@@ -15,7 +15,10 @@ impl InteractiveMode {
 
     /// Start the interactive development session
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("{}", "🚀 Starting Interactive Development Mode".green().bold());
+        println!(
+            "{}",
+            "🚀 Starting Interactive Development Mode".green().bold()
+        );
         println!("Type 'help' for available commands or 'quit' to exit.\n");
 
         loop {
@@ -55,7 +58,10 @@ impl InteractiveMode {
         println!("  {} - Exit interactive mode", "quit/exit".cyan());
         println!("\n{}", "Coming Soon:".bold());
         println!("  {} - Analyze current codebase", "analyze".dim());
-        println!("  {} - Generate code from description", "generate <prompt>".dim());
+        println!(
+            "  {} - Generate code from description",
+            "generate <prompt>".dim()
+        );
         println!("  {} - Get project status", "status".dim());
         println!("  {} - Show configuration", "config".dim());
         println!();
