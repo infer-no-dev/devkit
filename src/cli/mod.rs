@@ -129,6 +129,9 @@ pub enum Commands {
 
     /// Run end-to-end demo workflow
     Demo(DemoArgs),
+
+    /// System blueprint operations
+    Blueprint(BlueprintArgs),
 }
 
 /// Project initialization arguments
@@ -534,6 +537,75 @@ pub struct ShellArgs {
     pub command: ShellCommands,
 }
 
+/// Blueprint system arguments
+#[derive(Args)]
+pub struct BlueprintArgs {
+    #[command(subcommand)]
+    pub command: BlueprintCommands,
+}
+
+#[derive(Subcommand)]
+pub enum BlueprintCommands {
+    /// Extract system blueprint from codebase
+    Extract {
+        /// Source codebase path
+        #[arg(short, long, default_value = ".")]
+        source: PathBuf,
+        /// Output blueprint file
+        #[arg(short, long, default_value = "system_blueprint.toml")]
+        output: PathBuf,
+        /// Include detailed analysis
+        #[arg(long)]
+        detailed: bool,
+    },
+    /// Generate project from blueprint
+    Generate {
+        /// Blueprint file path
+        blueprint: PathBuf,
+        /// Output directory
+        #[arg(short, long, default_value = "./generated_project")]
+        output: PathBuf,
+        /// Preview mode (don't create files)
+        #[arg(short, long)]
+        preview: bool,
+    },
+    /// Replicate current system
+    Replicate {
+        /// Target directory for replication
+        #[arg(short, long, default_value = "./replicated_system")]
+        target: PathBuf,
+        /// Preserve git history
+        #[arg(long)]
+        preserve_git: bool,
+        /// Skip validation of generated code
+        #[arg(long)]
+        skip_validation: bool,
+        /// Dry run (show what would be done)
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Validate blueprint file
+    Validate {
+        /// Blueprint file path
+        blueprint: PathBuf,
+    },
+    /// Show blueprint information
+    Info {
+        /// Blueprint file path
+        blueprint: PathBuf,
+        /// Show detailed information
+        #[arg(short, long)]
+        detailed: bool,
+    },
+    /// Compare blueprints
+    Compare {
+        /// First blueprint file
+        blueprint1: PathBuf,
+        /// Second blueprint file
+        blueprint2: PathBuf,
+    },
+}
+
 /// Demo workflow arguments
 #[derive(Args)]
 pub struct DemoArgs {
@@ -670,6 +742,7 @@ impl CliRunner {
             Commands::Status(args) => self.run_status(args).await,
             Commands::Shell(args) => self.run_shell(args.command).await,
             Commands::Demo(args) => self.run_demo(args).await,
+            Commands::Blueprint(args) => self.run_blueprint(args.command).await,
         }
     }
 
@@ -873,5 +946,12 @@ impl CliRunner {
 
     async fn run_demo(&mut self, args: DemoArgs) -> Result<(), Box<dyn std::error::Error>> {
         commands::demo::run(self, args).await
+    }
+
+    async fn run_blueprint(
+        &mut self,
+        command: BlueprintCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        commands::blueprint::run(self, command).await
     }
 }

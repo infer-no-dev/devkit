@@ -5,6 +5,7 @@
 
 pub mod agents;
 pub mod ai;
+pub mod blueprint;
 pub mod cli;
 pub mod codegen;
 pub mod config;

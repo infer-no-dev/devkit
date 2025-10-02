@@ -6,6 +6,7 @@
 // Module declarations
 mod agents;
 mod ai;
+mod blueprint;
 mod cli;
 mod codegen;
 mod config;

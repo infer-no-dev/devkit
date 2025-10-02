@@ -273,6 +273,7 @@ impl CliValidator {
             Commands::Status(args) => self.validate_status_args(args, &mut result),
             Commands::Shell(args) => self.validate_shell_args(args, &mut result),
             Commands::Demo(args) => self.validate_demo_args(args, &mut result),
+            Commands::Blueprint(args) => self.validate_blueprint_args(args, &mut result),
         }
 
         result.is_valid = result.errors.is_empty();
@@ -685,6 +686,55 @@ impl CliValidator {
     fn validate_status_args(&self, _args: &StatusArgs, _result: &mut ValidationResult) {}
     fn validate_shell_args(&self, _args: &ShellArgs, _result: &mut ValidationResult) {}
     fn validate_demo_args(&self, _args: &DemoArgs, _result: &mut ValidationResult) {}
+
+    /// Validate blueprint arguments
+    fn validate_blueprint_args(&self, args: &BlueprintArgs, result: &mut ValidationResult) {
+        use crate::cli::BlueprintCommands;
+        
+        match &args.command {
+            BlueprintCommands::Extract { source, output, .. } => {
+                self.validate_directory_path(source, "source", result);
+                
+                if let Some(parent) = output.parent() {
+                    if !parent.exists() {
+                        result.errors.push(ValidationError::DirectoryNotFound {
+                            path: parent.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+            BlueprintCommands::Generate { blueprint, output, .. } => {
+                self.validate_file_path(blueprint, "blueprint", result);
+                
+                if let Some(parent) = output.parent() {
+                    if !parent.exists() {
+                        result.errors.push(ValidationError::DirectoryNotFound {
+                            path: parent.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+            BlueprintCommands::Replicate { target, .. } => {
+                if let Some(parent) = target.parent() {
+                    if !parent.exists() {
+                        result.errors.push(ValidationError::DirectoryNotFound {
+                            path: parent.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+            BlueprintCommands::Validate { blueprint } => {
+                self.validate_file_path(blueprint, "blueprint", result);
+            }
+            BlueprintCommands::Info { blueprint, .. } => {
+                self.validate_file_path(blueprint, "blueprint", result);
+            }
+            BlueprintCommands::Compare { blueprint1, blueprint2 } => {
+                self.validate_file_path(blueprint1, "first blueprint", result);
+                self.validate_file_path(blueprint2, "second blueprint", result);
+            }
+        }
+    }
 
     // Helper validation methods
 
