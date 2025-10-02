@@ -99,6 +99,8 @@ pub struct ContextMetadata {
     pub indexed_symbols: usize,
     pub semantic_patterns_found: usize,
     pub semantic_relationships: usize,
+    pub total_size_bytes: u64,
+    pub language_breakdown: HashMap<String, usize>,
 }
 
 impl Default for ContextMetadata {
@@ -112,6 +114,8 @@ impl Default for ContextMetadata {
             indexed_symbols: 0,
             semantic_patterns_found: 0,
             semantic_relationships: 0,
+            total_size_bytes: 0,
+            language_breakdown: HashMap::new(),
         }
     }
 }
@@ -342,6 +346,7 @@ impl ContextManager {
 
         let analysis_duration = start_time.elapsed();
         let total_lines: usize = files.iter().map(|f| f.line_count).sum();
+        let total_size_bytes: u64 = files.iter().map(|f| f.size_bytes).sum();
         let languages = Self::count_languages(&files);
         let total_symbols = symbols.total_symbols();
         let semantic_patterns = semantic_analysis.as_ref().map(|s| s.patterns.len()).unwrap_or(0);
@@ -357,6 +362,8 @@ impl ContextManager {
             indexed_symbols: total_symbols,
             semantic_patterns_found: semantic_patterns,
             semantic_relationships,
+            total_size_bytes,
+            language_breakdown: languages.clone(),
         };
 
         let context = CodebaseContext {
@@ -575,6 +582,18 @@ impl ContextManager {
     /// Clear semantic cache
     pub fn clear_semantic_cache(&mut self) {
         self.semantic_cache.clear();
+    }
+    
+    /// Analyze directory with optional breakdown for profiling
+    pub async fn analyze_directory(
+        &mut self,
+        path: &std::path::Path,
+        include_breakdown: bool,
+    ) -> Result<CodebaseContext, ContextError> {
+        let mut config = AnalysisConfig::default();
+        config.deep_analysis = include_breakdown;
+        
+        self.analyze_codebase(path.to_path_buf(), config).await
     }
 }
 
