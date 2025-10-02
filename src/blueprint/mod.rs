@@ -10,8 +10,13 @@ use anyhow::Result;
 
 pub mod generator;
 pub mod extractor;
-pub mod replicator;
 pub mod templates;
+pub mod replicator;
+pub mod languages;
+
+#[cfg(test)]
+pub mod tests;
+pub mod evolution;
 
 /// Complete system blueprint containing all information needed for self-replication
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -991,6 +996,39 @@ impl Default for MaintenanceStrategy {
             backup_procedures: "Unknown".to_string(),
             disaster_recovery: "Unknown".to_string(),
             capacity_planning: "Unknown".to_string(),
+        }
+    }
+}
+
+impl Default for ModuleStructure {
+    fn default() -> Self {
+        Self {
+            primary_types: Vec::new(),
+            functions: Vec::new(),
+            constants: Vec::new(),
+            internal_patterns: Vec::new(),
+        }
+    }
+}
+
+impl Default for ModuleTestingStrategy {
+    fn default() -> Self {
+        Self {
+            test_types: Vec::new(),
+            coverage_target: 0.0,
+            test_patterns: Vec::new(),
+            mock_strategies: Vec::new(),
+        }
+    }
+}
+
+impl Default for ModulePerformanceProfile {
+    fn default() -> Self {
+        Self {
+            latency_characteristics: "Unknown".to_string(),
+            memory_usage: "Unknown".to_string(),
+            scalability_limits: None,
+            optimization_opportunities: Vec::new(),
         }
     }
 }

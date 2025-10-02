@@ -74,8 +74,10 @@ async fn test_analyze_python_project() {
 fn test_symbol_creation() {
     let symbol = Symbol {
         name: "test_function".to_string(),
+        qualified_name: Some("test.rs:test_function".to_string()),
         symbol_type: SymbolType::Function,
         file_path: std::path::PathBuf::from("test.rs"),
+        line: 10,
         line_number: 10,
         column: 5,
         signature: Some("fn test_function()".to_string()),
@@ -96,8 +98,10 @@ fn test_symbol_index() {
     
     let symbol = Symbol {
         name: "test_symbol".to_string(),
+        qualified_name: Some("test.rs:test_symbol".to_string()),
         symbol_type: SymbolType::Variable,
         file_path: std::path::PathBuf::from("test.rs"),
+        line: 5,
         line_number: 5,
         column: 0,
         signature: None,

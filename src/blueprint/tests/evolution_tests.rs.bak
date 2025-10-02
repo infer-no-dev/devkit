@@ -1,0 +1,531 @@
+//! Comprehensive tests for BlueprintEvolutionTracker
+
+use crate::blueprint::evolution::{
+    BlueprintVersion, BlueprintEvolutionTracker, EvolutionEntry,
+    BlueprintChange, ChangeType, ChangeCategory, ImpactLevel
+};
+use crate::blueprint::tests::{TestUtils, TestChange, TestAssertions};
+use anyhow::Result;
+
+#[cfg(test)]
+mod evolution_tracker_tests {
+    use super::*;
+
+    mod basic_functionality_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_tracker_creation() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            assert_eq!(tracker.get_current_version(), None);
+            assert!(tracker.list_branches().is_empty());
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_tracker_initialization() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            assert_eq!(tracker.get_current_version(), Some(&version));
+            let branches = tracker.list_branches();
+            assert_eq!(branches.len(), 1);
+            assert_eq!(branches[0], "main");
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_tracker_save_and_load() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+            tracker.save().await?;
+
+            // Create a new tracker and load
+            let mut tracker2 = TestUtils::create_test_tracker(&temp_dir);
+            tracker2.load().await?;
+
+            assert_eq!(tracker2.get_current_version(), Some(&version));
+            assert_eq!(tracker2.list_branches(), vec!["main"]);
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_add_evolution_entry() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version1 = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            let blueprint = TestUtils::create_test_blueprint("test-app", "1.1.0");
+            let changes = vec![
+                TestUtils::create_test_change(
+                    ChangeType::Modified,
+                    ChangeCategory::Module,
+                    "modules.auth",
+                    "Updated authentication module",
+                    ImpactLevel::Medium
+                )
+            ];
+
+            let version2 = BlueprintVersion::new(1, 1, 0);
+            let entry = TestUtils::create_test_entry(version2.clone(), blueprint, changes);
+
+            tracker.add_entry(entry).await?;
+
+            assert_eq!(tracker.get_current_version(), Some(&version2));
+            let history = tracker.get_history().unwrap();
+            assert_eq!(history.len(), 1);
+
+            Ok(())
+        }
+    }
+
+    mod branching_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_create_branch() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            // Create a new branch
+            tracker.create_branch("feature-auth".to_string()).await?;
+
+            let branches = tracker.list_branches();
+            assert_eq!(branches.len(), 2);
+            assert!(branches.contains(&"main".to_string()));
+            assert!(branches.contains(&"feature-auth".to_string()));
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_create_duplicate_branch_fails() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            tracker.create_branch("feature-auth".to_string()).await?;
+            let result = tracker.create_branch("feature-auth".to_string()).await;
+
+            assert!(result.is_err());
+            TestAssertions::assert_error_contains(&result, "already exists");
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_checkout_branch() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            tracker.create_branch("feature-auth".to_string()).await?;
+            tracker.checkout_branch("feature-auth".to_string())?;
+
+            // Current branch should be changed (this would require accessing the current_branch field)
+            // For now, we'll test by adding entries and checking they go to the right branch
+            let blueprint = TestUtils::create_test_blueprint("test-app", "1.1.0");
+            let entry = TestUtils::create_test_entry(
+                BlueprintVersion::new(1, 1, 0),
+                blueprint,
+                vec![]
+            );
+
+            tracker.add_entry(entry).await?;
+
+            // Switch back to main - it should still be at 1.0.0
+            tracker.checkout_branch("main".to_string())?;
+            assert_eq!(tracker.get_current_version(), Some(&BlueprintVersion::new(1, 0, 0)));
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_checkout_nonexistent_branch_fails() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            let result = tracker.checkout_branch("nonexistent".to_string());
+            assert!(result.is_err());
+            TestAssertions::assert_error_contains(&result, "does not exist");
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_branch_history_isolation() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            // Add entry to main branch
+            let blueprint1 = TestUtils::create_test_blueprint("test-app", "1.1.0");
+            let entry1 = TestUtils::create_test_entry(
+                BlueprintVersion::new(1, 1, 0),
+                blueprint1,
+                vec![]
+            );
+            tracker.add_entry(entry1).await?;
+
+            // Create and switch to feature branch
+            tracker.create_branch("feature".to_string()).await?;
+            tracker.checkout_branch("feature".to_string())?;
+
+            // Add entry to feature branch
+            let blueprint2 = TestUtils::create_test_blueprint("test-app", "1.2.0");
+            let entry2 = TestUtils::create_test_entry(
+                BlueprintVersion::new(1, 2, 0),
+                blueprint2,
+                vec![]
+            );
+            tracker.add_entry(entry2).await?;
+
+            // Feature branch should have version 1.2.0
+            assert_eq!(tracker.get_current_version(), Some(&BlueprintVersion::new(1, 2, 0)));
+
+            // Switch back to main - should be at 1.1.0
+            tracker.checkout_branch("main".to_string())?;
+            assert_eq!(tracker.get_current_version(), Some(&BlueprintVersion::new(1, 1, 0)));
+
+            Ok(())
+        }
+    }
+
+    mod history_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_empty_history() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            assert!(tracker.get_history().is_none());
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_history_ordering() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            // Add multiple entries
+            for i in 1..=3 {
+                let blueprint = TestUtils::create_test_blueprint("test-app", &format!("1.{}.0", i));
+                let entry = TestUtils::create_test_entry(
+                    BlueprintVersion::new(1, i, 0),
+                    blueprint,
+                    vec![]
+                );
+                tracker.add_entry(entry).await?;
+                
+                // Small delay to ensure different timestamps
+                tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+            }
+
+            let history = tracker.get_history().unwrap();
+            assert_eq!(history.len(), 3);
+
+            // History should be in chronological order (oldest first)
+            for i in 0..2 {
+                assert!(history[i].metadata.created_at <= history[i + 1].metadata.created_at);
+            }
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_get_specific_version() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            let target_version = BlueprintVersion::new(1, 5, 0);
+            let blueprint = TestUtils::create_test_blueprint("test-app", "1.5.0");
+            let entry = TestUtils::create_test_entry(target_version.clone(), blueprint, vec![]);
+            tracker.add_entry(entry).await?;
+
+            let found_entry = tracker.get_version(&target_version);
+            assert!(found_entry.is_some());
+            assert_eq!(found_entry.unwrap().metadata.version, target_version);
+
+            // Test non-existent version
+            let nonexistent_version = BlueprintVersion::new(2, 0, 0);
+            assert!(tracker.get_version(&nonexistent_version).is_none());
+
+            Ok(())
+        }
+    }
+
+    mod persistence_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_persistence_across_sessions() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let evolution_dir = temp_dir.path().join(".blueprint-evolution");
+
+            // Session 1: Initialize and add entries
+            {
+                let mut tracker = BlueprintEvolutionTracker::new(evolution_dir.clone());
+                let version = BlueprintVersion::new(1, 0, 0);
+                tracker.init().await?;
+
+                let blueprint = TestUtils::create_test_blueprint("test-app", "1.1.0");
+                let entry = TestUtils::create_test_entry(
+                    BlueprintVersion::new(1, 1, 0),
+                    blueprint,
+                    vec![]
+                );
+                tracker.add_entry(entry).await?;
+                tracker.save().await?;
+            }
+
+            // Session 2: Load and verify
+            {
+                let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
+                tracker.load().await?;
+
+                assert_eq!(tracker.get_current_version(), Some(&BlueprintVersion::new(1, 1, 0)));
+                let history = tracker.get_history().unwrap();
+                assert_eq!(history.len(), 1);
+            }
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_persistence_with_branches() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let evolution_dir = temp_dir.path().join(".blueprint-evolution");
+
+            // Session 1: Create branches
+            {
+                let mut tracker = BlueprintEvolutionTracker::new(evolution_dir.clone());
+                let version = BlueprintVersion::new(1, 0, 0);
+                tracker.init().await?;
+
+                tracker.create_branch("feature-a".to_string()).await?;
+                tracker.create_branch("feature-b".to_string()).await?;
+                tracker.save().await?;
+            }
+
+            // Session 2: Verify branches persist
+            {
+                let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
+                tracker.load().await?;
+
+                let branches = tracker.list_branches();
+                assert_eq!(branches.len(), 3); // main, feature-a, feature-b
+                assert!(branches.contains(&"main".to_string()));
+                assert!(branches.contains(&"feature-a".to_string()));
+                assert!(branches.contains(&"feature-b".to_string()));
+            }
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_corruption_recovery() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let evolution_dir = temp_dir.path().join(".blueprint-evolution");
+            
+            // Create a tracker and save valid data
+            {
+                let mut tracker = BlueprintEvolutionTracker::new(evolution_dir.clone());
+                let version = BlueprintVersion::new(1, 0, 0);
+                tracker.init().await?;
+                tracker.save().await?;
+            }
+
+            // Corrupt the config file
+            let config_file = evolution_dir.join("config.json");
+            std::fs::write(&config_file, "invalid json")?;
+
+            // Loading should fail gracefully
+            {
+                let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
+                let result = tracker.load().await;
+                assert!(result.is_err());
+            }
+
+            Ok(())
+        }
+    }
+
+    mod concurrent_access_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_concurrent_initialization() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let evolution_dir = temp_dir.path().join(".blueprint-evolution");
+
+            let tasks = vec![
+                {
+                    let dir = evolution_dir.clone();
+                    move || async move {
+                        let mut tracker = BlueprintEvolutionTracker::new(dir);
+                        let version = BlueprintVersion::new(1, 0, 0);
+                        tracker.init().await
+                    }
+                },
+                {
+                    let dir = evolution_dir.clone();
+                    move || async move {
+                        let mut tracker = BlueprintEvolutionTracker::new(dir);
+                        let version = BlueprintVersion::new(1, 0, 0);
+                        tracker.init().await
+                    }
+                }
+            ];
+
+            let results = TestUtils::run_concurrent_test(tasks).await;
+            
+            // At least one should succeed, others might fail due to race condition
+            let successes = results.iter().filter(|r| r.is_ok()).count();
+            assert!(successes >= 1, "At least one initialization should succeed");
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_concurrent_branch_creation() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let evolution_dir = temp_dir.path().join(".blueprint-evolution");
+
+            // Initialize tracker first
+            {
+                let mut tracker = BlueprintEvolutionTracker::new(evolution_dir.clone());
+                let version = BlueprintVersion::new(1, 0, 0);
+                tracker.init().await?;
+                tracker.save().await?;
+            }
+
+            let tasks = vec![
+                {
+                    let dir = evolution_dir.clone();
+                    move || async move {
+                        let mut tracker = BlueprintEvolutionTracker::new(dir);
+                        tracker.load().await?;
+                        tracker.create_branch("feature-1".to_string()).await
+                    }
+                },
+                {
+                    let dir = evolution_dir.clone();
+                    move || async move {
+                        let mut tracker = BlueprintEvolutionTracker::new(dir);
+                        tracker.load().await?;
+                        tracker.create_branch("feature-2".to_string()).await
+                    }
+                }
+            ];
+
+            let results = TestUtils::run_concurrent_test(tasks).await;
+            
+            // Both should succeed as they create different branches
+            for result in results {
+                assert!(result.is_ok(), "Branch creation should succeed: {:?}", result);
+            }
+
+            Ok(())
+        }
+    }
+
+    mod error_handling_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_initialize_twice_fails() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            tracker.init().await?;
+
+            // Second initialization should fail
+            let result = tracker.init().await;
+            assert!(result.is_err());
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_add_entry_without_initialization() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let mut tracker = TestUtils::create_test_tracker(&temp_dir);
+
+            let blueprint = TestUtils::create_test_blueprint("test-app", "1.0.0");
+            let entry = TestUtils::create_test_entry(
+                BlueprintVersion::new(1, 0, 0),
+                blueprint,
+                vec![]
+            );
+
+            let result = tracker.add_entry(entry).await;
+            assert!(result.is_err());
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_invalid_evolution_directory() -> Result<()> {
+            // Try to create tracker in a non-existent directory
+            let invalid_path = std::path::PathBuf::from("/non/existent/path/.blueprint-evolution");
+            let mut tracker = BlueprintEvolutionTracker::new(invalid_path);
+
+            let version = BlueprintVersion::new(1, 0, 0);
+            let result = tracker.init().await;
+            
+            // Should fail due to permission/path issues
+            assert!(result.is_err());
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn test_load_from_empty_directory() -> Result<()> {
+            let temp_dir = TestUtils::create_temp_dir()?;
+            let evolution_dir = temp_dir.path().join(".blueprint-evolution");
+            std::fs::create_dir_all(&evolution_dir)?;
+
+            let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
+            let result = tracker.load().await;
+
+            // Should fail gracefully when no config exists
+            assert!(result.is_err());
+
+            Ok(())
+        }
+    }
+}

@@ -389,8 +389,10 @@ impl MockDataFactory {
                 content_hash: format!("mock_hash_{}", i),
                 symbols: vec![crate::context::symbols::Symbol {
                     name: format!("mock_function_{}", i),
+                    qualified_name: Some(format!("src/test_symbol.rs:mock_function_{}", i)),
                     symbol_type: crate::context::symbols::SymbolType::Function,
                     file_path: PathBuf::from("src/test_symbol.rs"),
+                    line: 1,
                     line_number: 1,
                     column: 1,
                     signature: Some("fn test_symbol()".to_string()),

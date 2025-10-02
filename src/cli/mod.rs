@@ -604,6 +604,9 @@ pub enum BlueprintCommands {
         /// Second blueprint file
         blueprint2: PathBuf,
     },
+    /// Blueprint evolution and versioning
+    #[command(subcommand)]
+    Evolution(commands::evolution::EvolutionCommand),
 }
 
 /// Demo workflow arguments

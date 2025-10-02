@@ -225,28 +225,30 @@ impl SystemReplicator {
     }
 
     /// Recursively collect files in directory
-    async fn collect_files_recursive(&self, dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-        if !dir.exists() {
-            return Ok(());
-        }
-
-        let mut entries = fs::read_dir(dir).await?;
-        
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            
-            if path.is_dir() {
-                // Skip target directory and other build artifacts
-                let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if !matches!(dir_name, "target" | ".git" | "node_modules" | ".cargo") {
-                    self.collect_files_recursive(&path, files).await?;
-                }
-            } else {
-                files.push(path);
+    fn collect_files_recursive<'a>(&'a self, dir: &'a Path, files: &'a mut Vec<PathBuf>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + 'a>> {
+        Box::pin(async move {
+            if !dir.exists() {
+                return Ok(());
             }
-        }
-        
-        Ok(())
+
+            let mut entries = fs::read_dir(dir).await?;
+            
+            while let Some(entry) = entries.next_entry().await? {
+                let path = entry.path();
+                
+                if path.is_dir() {
+                    // Skip target directory and other build artifacts
+                    let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if !matches!(dir_name, "target" | ".git" | "node_modules" | ".cargo") {
+                        self.collect_files_recursive(&path, files).await?;
+                    }
+                } else {
+                    files.push(path);
+                }
+            }
+            
+            Ok(())
+        })
     }
 
     /// Validate generated code
@@ -390,25 +392,27 @@ impl SystemReplicator {
     }
 
     /// Check if directory contains test files
-    async fn directory_contains_tests(&self, dir: &Path) -> Result<bool> {
-        let mut entries = fs::read_dir(dir).await?;
-        
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
+    fn directory_contains_tests<'a>(&'a self, dir: &'a Path) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool>> + 'a>> {
+        Box::pin(async move {
+            let mut entries = fs::read_dir(dir).await?;
             
-            if path.is_file() && path.extension() == Some(std::ffi::OsStr::new("rs")) {
-                let content = fs::read_to_string(&path).await?;
-                if content.contains("#[test]") || content.contains("#[tokio::test]") {
-                    return Ok(true);
-                }
-            } else if path.is_dir() {
-                if self.directory_contains_tests(&path).await? {
-                    return Ok(true);
+            while let Some(entry) = entries.next_entry().await? {
+                let path = entry.path();
+                
+                if path.is_file() && path.extension() == Some(std::ffi::OsStr::new("rs")) {
+                    let content = fs::read_to_string(&path).await?;
+                    if content.contains("#[test]") || content.contains("#[tokio::test]") {
+                        return Ok(true);
+                    }
+                } else if path.is_dir() {
+                    if self.directory_contains_tests(&path).await? {
+                        return Ok(true);
+                    }
                 }
             }
-        }
-        
-        Ok(false)
+            
+            Ok(false)
+        })
     }
 
     /// Validate tests

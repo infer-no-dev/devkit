@@ -22,13 +22,35 @@ pub enum SymbolType {
     Unknown,
 }
 
+impl std::fmt::Display for SymbolType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SymbolType::Function => write!(f, "Function"),
+            SymbolType::Method => write!(f, "Method"),
+            SymbolType::Struct => write!(f, "Struct"),
+            SymbolType::Class => write!(f, "Class"),
+            SymbolType::Interface => write!(f, "Interface"),
+            SymbolType::Enum => write!(f, "Enum"),
+            SymbolType::Variable => write!(f, "Variable"),
+            SymbolType::Constant => write!(f, "Constant"),
+            SymbolType::Module => write!(f, "Module"),
+            SymbolType::Namespace => write!(f, "Namespace"),
+            SymbolType::Type => write!(f, "Type"),
+            SymbolType::Trait => write!(f, "Trait"),
+            SymbolType::Unknown => write!(f, "Unknown"),
+        }
+    }
+}
+
 /// A symbol definition in the codebase
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Symbol {
     pub name: String,
+    pub qualified_name: Option<String>,
     pub symbol_type: SymbolType,
     pub file_path: PathBuf,
-    pub line_number: usize,
+    pub line: usize,
+    pub line_number: usize, // Keep for backward compatibility
     pub column: usize,
     pub signature: Option<String>,
     pub documentation: Option<String>,
@@ -224,8 +246,10 @@ impl Symbol {
     ) -> Self {
         Self {
             name,
+            qualified_name: None,
             symbol_type,
             file_path,
+            line: line_number,
             line_number,
             column,
             signature: None,

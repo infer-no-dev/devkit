@@ -1,0 +1,269 @@
+{
+  "metadata": {
+    "name": "sample-system",
+    "version": "1.0.0",
+    "description": "A sample system blueprint for testing evolution commands",
+    "architecture_paradigm": "microservices",
+    "primary_language": "rust",
+    "creation_timestamp": "2024-01-15T10:30:00Z",
+    "generator_version": "0.1.0"
+  },
+  "architecture": {
+    "system_type": "microservices",
+    "concurrency_model": {
+      "primary_pattern": "async_tasks",
+      "synchronization_primitives": ["Arc", "RwLock", "Mutex"],
+      "shared_state_strategy": "actor_model",
+      "deadlock_prevention": ["hierarchical_locking", "timeout_based"],
+      "performance_characteristics": "high_throughput_low_latency"
+    },
+    "data_flow": {
+      "primary_pattern": "event_driven",
+      "message_passing": {
+        "channel_types": ["mpsc", "broadcast", "oneshot"],
+        "serialization": "serde_json",
+        "error_propagation": "result_based",
+        "backpressure_handling": "bounded_channels"
+      },
+      "data_transformation": [],
+      "persistence_strategy": {
+        "primary_storage": "postgresql",
+        "caching_layers": [],
+        "backup_strategy": "incremental_daily",
+        "data_retention": "30_days"
+      }
+    },
+    "error_handling": {
+      "error_types": [],
+      "propagation_strategy": "anyhow_context",
+      "recovery_mechanisms": ["retry", "circuit_breaker"],
+      "logging_strategy": "structured_tracing",
+      "user_facing_errors": "sanitized_messages"
+    },
+    "resource_management": {
+      "memory_management": "rust_ownership",
+      "file_handle_management": "tokio_fs",
+      "network_connection_pooling": "connection_pools",
+      "cleanup_patterns": ["RAII", "drop_guards"],
+      "resource_limits": {}
+    },
+    "scalability_approach": "horizontal_scaling",
+    "key_decisions": []
+  },
+  "modules": [
+    {
+      "name": "api_gateway",
+      "purpose": "Route and authenticate requests",
+      "dependencies": [],
+      "public_interface": [],
+      "internal_structure": {
+        "primary_types": [],
+        "functions": [],
+        "constants": [],
+        "internal_patterns": []
+      },
+      "testing_strategy": {
+        "test_types": ["unit", "integration"],
+        "coverage_target": 80.0,
+        "test_patterns": [],
+        "mock_strategies": []
+      },
+      "performance_characteristics": {
+        "latency_characteristics": "sub_100ms",
+        "memory_usage": "low",
+        "scalability_limits": null,
+        "optimization_opportunities": []
+      }
+    },
+    {
+      "name": "user_service",
+      "purpose": "Manage user accounts and authentication",
+      "dependencies": [],
+      "public_interface": [],
+      "internal_structure": {
+        "primary_types": [],
+        "functions": [],
+        "constants": [],
+        "internal_patterns": []
+      },
+      "testing_strategy": {
+        "test_types": ["unit", "integration"],
+        "coverage_target": 90.0,
+        "test_patterns": [],
+        "mock_strategies": []
+      },
+      "performance_characteristics": {
+        "latency_characteristics": "sub_200ms",
+        "memory_usage": "medium",
+        "scalability_limits": null,
+        "optimization_opportunities": []
+      }
+    }
+  ],
+  "patterns": {
+    "creational_patterns": [],
+    "structural_patterns": [],
+    "behavioral_patterns": [],
+    "architectural_patterns": [],
+    "anti_patterns_avoided": []
+  },
+  "implementation": {
+    "language_specific_features": [],
+    "third_party_dependencies": [
+      {
+        "crate_name": "tokio",
+        "version": "1.0",
+        "purpose": "Async runtime",
+        "integration_pattern": "core_runtime",
+        "alternatives_evaluated": ["async-std"],
+        "selection_criteria": ["ecosystem", "performance"]
+      },
+      {
+        "crate_name": "serde",
+        "version": "1.0",
+        "purpose": "Serialization",
+        "integration_pattern": "data_transform",
+        "alternatives_evaluated": ["bincode"],
+        "selection_criteria": ["flexibility", "json_support"]
+      }
+    ],
+    "custom_implementations": [],
+    "optimization_techniques": [],
+    "platform_specific_code": []
+  },
+  "configuration": {
+    "hierarchy": [],
+    "formats_supported": [],
+    "validation_approach": "config_validation",
+    "hot_reload_capability": false,
+    "environment_handling": {
+      "environment_types": [],
+      "configuration_differences": {},
+      "promotion_strategy": "gitops"
+    },
+    "secret_management": {
+      "storage_method": "env_vars",
+      "encryption_approach": "at_rest",
+      "rotation_strategy": "manual",
+      "access_control": "rbac"
+    }
+  },
+  "testing": {
+    "test_pyramid": {
+      "unit_tests": {
+        "percentage_of_tests": 70.0,
+        "frameworks_used": [],
+        "patterns": [],
+        "execution_strategy": "parallel"
+      },
+      "integration_tests": {
+        "percentage_of_tests": 20.0,
+        "frameworks_used": [],
+        "patterns": [],
+        "execution_strategy": "sequential"
+      },
+      "system_tests": {
+        "percentage_of_tests": 8.0,
+        "frameworks_used": [],
+        "patterns": [],
+        "execution_strategy": "sequential"
+      },
+      "acceptance_tests": {
+        "percentage_of_tests": 2.0,
+        "frameworks_used": [],
+        "patterns": [],
+        "execution_strategy": "manual"
+      }
+    },
+    "test_automation": {
+      "ci_integration": "github_actions",
+      "test_triggers": ["push", "pr"],
+      "parallel_execution": true,
+      "reporting_strategy": "coverage_reports"
+    },
+    "test_data_management": {
+      "data_generation_strategy": "factories",
+      "fixture_management": "test_containers",
+      "cleanup_strategy": "automatic",
+      "sensitive_data_handling": "anonymized"
+    },
+    "performance_testing": {
+      "load_testing": "criterion",
+      "stress_testing": "manual",
+      "benchmarking_approach": "micro_benchmarks",
+      "profiling_tools": []
+    },
+    "security_testing": {
+      "vulnerability_scanning": "automated",
+      "penetration_testing": "periodic",
+      "dependency_auditing": "cargo_audit",
+      "security_code_analysis": "clippy_security"
+    }
+  },
+  "performance": {
+    "critical_paths": [],
+    "caching_strategies": [],
+    "resource_pooling": [],
+    "lazy_loading": [],
+    "batch_processing": []
+  },
+  "security": {
+    "authentication": {
+      "primary_method": "jwt",
+      "multi_factor": false,
+      "session_management": "stateless",
+      "credential_storage": "hashed"
+    },
+    "authorization": {
+      "model": "RBAC",
+      "granularity": "endpoint",
+      "enforcement_points": ["api_gateway"],
+      "policy_management": "centralized"
+    },
+    "data_protection": {
+      "encryption_at_rest": "aes256",
+      "encryption_in_transit": "tls1.3",
+      "key_management": "external_service",
+      "data_classification": ["public", "internal", "confidential"]
+    },
+    "communication_security": {
+      "protocol_security": "https_only",
+      "certificate_management": "lets_encrypt",
+      "api_security": "rate_limiting",
+      "inter_service_communication": "mTLS"
+    },
+    "input_validation": {
+      "validation_layers": ["api_gateway", "service_layer"],
+      "sanitization_approach": "allowlist",
+      "injection_prevention": ["prepared_statements", "input_encoding"],
+      "error_handling": "fail_secure"
+    }
+  },
+  "deployment": {
+    "deployment_model": "containerized",
+    "infrastructure": {
+      "architecture_type": "containerized",
+      "orchestration": "kubernetes",
+      "service_discovery": "dns",
+      "load_balancing": "nginx_ingress"
+    },
+    "scaling_strategy": {
+      "horizontal_scaling": "hpa",
+      "vertical_scaling": "manual",
+      "auto_scaling_triggers": ["cpu", "memory"],
+      "resource_limits": {}
+    },
+    "monitoring": {
+      "metrics_collection": "prometheus",
+      "logging_strategy": "structured_logs",
+      "alerting_rules": [],
+      "health_checks": []
+    },
+    "maintenance": {
+      "update_strategy": "rolling_updates",
+      "backup_procedures": "automated_daily",
+      "disaster_recovery": "multi_region",
+      "capacity_planning": "quarterly"
+    }
+  }
+}

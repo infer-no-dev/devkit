@@ -6,8 +6,10 @@
 
 pub mod agent;
 pub mod analyze;
+pub mod blueprint;
 pub mod config;
 pub mod demo;
+pub mod evolution;
 pub mod generate;
 pub mod init;
 pub mod inspect;

@@ -89,8 +89,10 @@ impl ContextFixtures {
             Some("rust") => {
                 symbols.push(Symbol {
                     name: "main".to_string(),
+                    qualified_name: Some("src/main.rs:main".to_string()),
                     symbol_type: SymbolType::Function,
                     file_path: PathBuf::from("src/main.rs"),
+                    line: 10,
                     line_number: 10,
                     column: 1,
                     signature: Some("fn main()".to_string()),
@@ -106,8 +108,10 @@ impl ContextFixtures {
             Some("python") => {
                 symbols.push(Symbol {
                     name: "main".to_string(),
+                    qualified_name: Some("src/lib.rs:main".to_string()),
                     symbol_type: SymbolType::Function,
                     file_path: PathBuf::from("src/lib.rs"),
+                    line: 5,
                     line_number: 5,
                     column: 8,
                     signature: Some("fn helper()".to_string()),
@@ -202,8 +206,10 @@ impl ContextFixtures {
     ) -> Symbol {
         Symbol {
             name: name.to_string(),
+            qualified_name: Some(format!("{}:{}", file_path, name)),
             symbol_type,
             file_path: PathBuf::from(file_path),
+            line: line as usize,
             line_number: line as usize,
             column: 1,
             signature: Some(format!("fn {}()", name)),

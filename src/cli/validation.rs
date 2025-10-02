@@ -733,6 +733,10 @@ impl CliValidator {
                 self.validate_file_path(blueprint1, "first blueprint", result);
                 self.validate_file_path(blueprint2, "second blueprint", result);
             }
+            BlueprintCommands::Evolution(_) => {
+                // Evolution command has its own validation logic within the command handler
+                // For now, we don't add additional validation here
+            }
         }
     }
 

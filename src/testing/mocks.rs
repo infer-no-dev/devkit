@@ -359,6 +359,8 @@ impl MockCodebaseAnalyzer {
                 indexed_symbols: 0,
                 semantic_patterns_found: 0,
                 semantic_relationships: 0,
+                total_size_bytes: 0,
+                language_breakdown: std::collections::HashMap::new(),
             },
         })
     }
@@ -585,6 +587,8 @@ mod tests {
                 indexed_symbols: 0,
                 semantic_patterns_found: 0,
                 semantic_relationships: 0,
+                total_size_bytes: 0,
+                language_breakdown: std::collections::HashMap::new(),
             },
         };
 

@@ -37,6 +37,10 @@ pub async fn run(
         BlueprintCommands::Compare { blueprint1, blueprint2 } => {
             compare_blueprints(cli, blueprint1, blueprint2).await
         }
+        BlueprintCommands::Evolution(evolution_cmd) => {
+            super::evolution::handle_evolution_command(evolution_cmd).await
+                .map_err(|e| e.into())
+        }
     }
 }
 

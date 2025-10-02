@@ -250,22 +250,24 @@ mod symbol_tests {
         // Update with new location
         let updated_symbol = Symbol {
             name: "test_func".to_string(),
+            qualified_name: Some("src/main.rs:test_func".to_string()),
             symbol_type: SymbolType::Function,
-            location: SymbolLocation {
-                file: PathBuf::from("src/main.rs"),
-                line: 15, // Changed line number
-                column: 1,
-            },
-            visibility: "private".to_string(), // Changed visibility
+            file_path: PathBuf::from("src/main.rs"),
+            line: 15, // Changed line number
+            line_number: 15,
+            column: 1,
+            signature: None,
             documentation: Some("Updated documentation".to_string()),
+            visibility: crate::context::symbols::Visibility::Private,
+            references: Vec::new(),
         };
 
         index.add_symbol(updated_symbol);
 
         let results = index.search_by_name("test_func");
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].location.line, 15);
-        assert_eq!(results[0].visibility, "private");
+        assert_eq!(results[0].line, 15);
+        assert!(matches!(results[0].visibility, crate::context::symbols::Visibility::Private));
     }
 
     #[test]
