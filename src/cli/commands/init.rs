@@ -355,18 +355,22 @@ async fn create_project_structure(
 
     // Create files from templates
     for (file_path, content_template) in &template.files {
-        let full_path = project_path.join(file_path);
+        // Process template variables in file path
+        let file_path_str = file_path.to_string_lossy();
+        let processed_file_path_str = process_template_variables(&file_path_str, &template_vars);
+        let processed_file_path = PathBuf::from(processed_file_path_str);
+        let full_path = project_path.join(&processed_file_path);
 
         // Ensure parent directory exists
         if let Some(parent) = full_path.parent() {
             ensure_directory(parent)?;
         }
 
-        // Process template variables
+        // Process template variables in content
         let content = process_template_variables(content_template, &template_vars);
 
         fs::write(&full_path, content)?;
-        runner.print_verbose(&format!("Created file: {}", file_path.display()));
+        runner.print_verbose(&format!("Created file: {}", processed_file_path.display()));
     }
 
     // Create language-specific configuration files

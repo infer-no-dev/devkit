@@ -22,11 +22,14 @@ pub async fn run(
     let quiet = runner.quiet();
     let format = runner.format().clone();
 
-    runner.print_info(&format!(
-        "🔍 Starting codebase analysis of {} target{}",
-        targets.len(),
-        if targets.len() == 1 { "" } else { "s" }
-    ));
+    // Only show info messages for non-JSON/YAML formats
+    if !matches!(format, OutputFormat::Json | OutputFormat::Yaml) {
+        runner.print_info(&format!(
+            "🔍 Starting codebase analysis of {} target{}",
+            targets.len(),
+            if targets.len() == 1 { "" } else { "s" }
+        ));
+    }
 
     if verbose {
         for target in &targets {
@@ -97,7 +100,9 @@ pub async fn run(
             ));
         }
 
-        runner.print_info(&format!("📁 Analyzing: {}", target.display()));
+        if !matches!(format, OutputFormat::Json | OutputFormat::Yaml) {
+            runner.print_info(&format!("📁 Analyzing: {}", target.display()));
+        }
 
         // Perform the analysis (get fresh reference each time to avoid borrowing conflicts)
         let result = {
@@ -109,12 +114,14 @@ pub async fn run(
 
         match result {
             Ok(context) => {
-                runner.print_success(&format!(
-                    "✅ Analysis complete: {} files, {} symbols, {} languages",
-                    context.metadata.total_files,
-                    context.metadata.indexed_symbols,
-                    context.metadata.languages.len()
-                ));
+                if !matches!(format, OutputFormat::Json | OutputFormat::Yaml) {
+                    runner.print_success(&format!(
+                        "✅ Analysis complete: {} files, {} symbols, {} languages",
+                        context.metadata.total_files,
+                        context.metadata.indexed_symbols,
+                        context.metadata.languages.len()
+                    ));
+                }
 
                 all_contexts.push(context);
             }
@@ -148,8 +155,13 @@ pub async fn run(
         runner.print_success(&format!("Results exported to {}", export_path.display()));
     } else {
         // Print to stdout
-        if !quiet {
+        // For JSON/YAML formats, only output the content (no extra formatting)
+        if matches!(format, OutputFormat::Json | OutputFormat::Yaml) {
+            println!("{}", output_content);
+        } else if !quiet {
             println!("\n{}", output_content);
+        } else {
+            println!("{}", output_content);
         }
     }
 
@@ -158,10 +170,12 @@ pub async fn run(
     }
 
     let duration = start_time.elapsed();
-    runner.print_success(&format!(
-        "🎉 Analysis completed in {:.2}s",
-        duration.as_secs_f64()
-    ));
+    if !matches!(format, OutputFormat::Json | OutputFormat::Yaml) {
+        runner.print_success(&format!(
+            "🎉 Analysis completed in {:.2}s",
+            duration.as_secs_f64()
+        ));
+    }
 
     Ok(())
 }

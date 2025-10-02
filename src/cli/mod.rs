@@ -792,7 +792,7 @@ impl CliRunner {
     }
 
     /// Initialize agent system if not already done
-    async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.agent_system.is_none() {
             self.ensure_context_manager().await?;
 

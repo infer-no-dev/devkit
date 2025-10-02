@@ -231,6 +231,9 @@ async fn check_context_status(
     let start_time = Instant::now();
     let mut details = HashMap::new();
 
+    // Initialize context manager if needed
+    let _ = runner.ensure_context_manager().await;
+
     let (status, message) = if runner.context_manager.is_some() {
         details.insert("initialized".to_string(), "true".to_string());
 
@@ -277,6 +280,9 @@ async fn check_agent_status(
 ) -> Result<ComponentStatus, Box<dyn std::error::Error>> {
     let start_time = Instant::now();
     let mut details = HashMap::new();
+
+    // Initialize agent system if needed (this also ensures context manager)
+    let _ = runner.ensure_agent_system().await;
 
     let (status, message) = if runner.agent_system.is_some() {
         details.insert("initialized".to_string(), "true".to_string());
@@ -331,6 +337,45 @@ async fn check_agent_status(
     })
 }
 
+/// Check if shell integration is actually installed
+fn check_shell_integration_installed(shell: &str) -> bool {
+    use std::path::PathBuf;
+    
+    let home = match std::env::var("HOME") {
+        Ok(h) => h,
+        Err(_) => return false,
+    };
+    
+    // Check for completion files
+    let completion_file = match shell {
+        "bash" => Some(PathBuf::from(&home).join(".local/share/bash-completion/completions/devkit")),
+        "zsh" => Some(PathBuf::from(&home).join(".local/share/zsh/site-functions/_devkit")),
+        "fish" => Some(PathBuf::from(&home).join(".config/fish/completions/devkit.fish")),
+        _ => None,
+    };
+    
+    // Check for shell aliases in config files
+    let config_file = match shell {
+        "bash" => Some(PathBuf::from(&home).join(".bashrc")),
+        "zsh" => Some(PathBuf::from(&home).join(".zshrc")),
+        "fish" => Some(PathBuf::from(&home).join(".config/fish/config.fish")),
+        _ => None,
+    };
+    
+    let completion_exists = completion_file
+        .as_ref()
+        .map(|p| p.exists())
+        .unwrap_or(false);
+    
+    let aliases_exist = config_file
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|content| content.contains("devkit shell integration"))
+        .unwrap_or(false);
+    
+    completion_exists && aliases_exist
+}
+
 /// Check shell integration status
 async fn check_shell_status() -> Result<ComponentStatus, Box<dyn std::error::Error>> {
     let start_time = Instant::now();
@@ -346,8 +391,8 @@ async fn check_shell_status() -> Result<ComponentStatus, Box<dyn std::error::Err
     let is_supported = supported_shells.contains(&shell_name);
     details.insert("supported".to_string(), is_supported.to_string());
 
-    // Check if completions are installed (simplified check)
-    let completions_installed = std::env::var("AGENTIC_COMPLETIONS_INSTALLED").is_ok();
+    // Check if completions are installed
+    let completions_installed = check_shell_integration_installed(shell_name);
     details.insert(
         "completions_installed".to_string(),
         completions_installed.to_string(),
