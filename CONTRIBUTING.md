@@ -27,12 +27,54 @@ Thank you for your interest in contributing to devkit! This document provides gu
    rustup component add rustfmt clippy
    ```
 
-4. **Build and test:**
+4. **Set up AI backend (for code generation):**
    ```bash
-   cargo build
+   # Install Ollama from https://ollama.ai
+   # Pull the default model
+   ollama pull llama3.2:latest
+   ```
+
+5. **Build and test:**
+   ```bash
+   cargo build --release  # Release mode recommended for performance
    cargo test
    cargo clippy -- -D warnings
    ```
+
+6. **Try the working features:**
+   ```bash
+   # Check system status
+   cargo run -- status
+   
+   # Install shell integration (aliases and completions)
+   cargo run -- shell install
+   
+   # Test code generation
+   cargo run -- generate "create a hello world function in rust"
+   
+   # Test codebase analysis
+   cargo run -- analyze ./src --format json
+   ```
+
+## ✅ Current Working Features
+
+As of the latest updates, these features are fully functional:
+
+- ✅ **AI-powered code generation** using Ollama/local LLMs
+- ✅ **Codebase analysis** with tree-sitter parsing and symbol indexing
+- ✅ **Shell integration** with completions and aliases (bash, zsh, fish, PowerShell)
+- ✅ **System status monitoring** with health checks
+- ✅ **Multi-format output** (JSON, YAML, text) for analysis
+- ✅ **Cross-platform support** (Linux, macOS, Windows)
+- ✅ **Configuration management** with project-specific settings
+
+### 🔧 Features In Development
+
+- 🚧 **Interactive mode** for conversational development
+- 🚧 **Multi-agent coordination** with task prioritization
+- 🚧 **Advanced AI model switching** (OpenAI, Anthropic, etc.)
+- 🚧 **Enhanced error handling** and logging systems
+- 🚧 **Integration test suite** for end-to-end workflows
 
 ## 🎯 Types of Contributions
 
@@ -98,9 +140,14 @@ cargo test --release
 # Run the full test suite
 cargo test --all-features
 
-# Test examples
-cargo run --example test_agents
-cargo run --example test_shell
+# Test core functionality manually
+cargo run -- status
+cargo run -- generate "test function" --language rust
+cargo run -- analyze ./src --format json
+
+# Test shell integration
+cargo run -- shell status
+cargo run -- shell install --dry-run
 
 # Verify no warnings
 cargo clippy -- -D warnings
@@ -165,6 +212,42 @@ src/
 ├── shell/          # Shell integration
 ├── ui/            # Terminal UI components
 └── main.rs        # Application entry point
+```
+
+### Adding New CLI Commands
+
+To add a new command to the CLI:
+
+1. **Add to `src/cli.rs`:**
+```rust
+#[derive(Subcommand)]
+pub enum Commands {
+    // ... existing commands
+    YourCommand {
+        #[arg(help = "Description of the argument")]
+        input: String,
+        #[arg(long, help = "Optional flag")]
+        flag: bool,
+    },
+}
+```
+
+2. **Handle in `src/main.rs`:**
+```rust
+Commands::YourCommand { input, flag } => {
+    commands::your_command::execute(input, flag).await?;
+}
+```
+
+3. **Create command implementation:**
+```rust
+// src/commands/your_command.rs
+use anyhow::Result;
+
+pub async fn execute(input: String, flag: bool) -> Result<()> {
+    println!("Executing command with input: {}, flag: {}", input, flag);
+    Ok(())
+}
 ```
 
 ### Adding New Agents
@@ -242,12 +325,28 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 ### Bug Reports
 Include:
-- **Environment**: OS, Rust version, devkit version
+- **Environment**: OS, Rust version, devkit version (`devkit --version`)
+- **AI Backend**: Ollama status (`ollama list`), model availability
+- **Shell**: Which shell you're using (bash, zsh, fish, PowerShell)
 - **Steps to reproduce**: Exact commands/actions
 - **Expected behavior**: What should happen
 - **Actual behavior**: What actually happens
 - **Error messages**: Full error output
+- **System status**: Output of `devkit status`
+- **Configuration**: Contents of `.devkit/config.toml` if relevant
 - **Additional context**: Logs, configurations, etc.
+
+### Testing Your Bug Fix
+```bash
+# Test the specific scenario
+cargo run -- [your-failing-command]
+
+# Verify system health
+cargo run -- status
+
+# Test with different configurations
+RUST_LOG=debug cargo run -- [command] # for detailed logs
+```
 
 ### Feature Requests
 Include:
