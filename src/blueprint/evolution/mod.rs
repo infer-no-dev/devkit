@@ -17,7 +17,7 @@ pub use migration::*;
 pub use generators::*;
 
 /// Semantic version for blueprints
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlueprintVersion {
     pub major: u32,
     pub minor: u32,
@@ -47,9 +47,11 @@ impl BlueprintVersion {
             (version_str, None)
         };
 
-        let parts: Vec<&str> = version_part.split('-').collect();
-        let (core_version, pre_release) = if parts.len() > 1 {
-            (parts[0], Some(parts[1].to_string()))
+        // Find the first '-' and split there to get core version and prerelease
+        let (core_version, pre_release) = if let Some(dash_pos) = version_part.find('-') {
+            let core = &version_part[..dash_pos];
+            let prerelease = &version_part[dash_pos + 1..];
+            (core, Some(prerelease.to_string()))
         } else {
             (version_part, None)
         };
@@ -124,6 +126,34 @@ impl BlueprintVersion {
         self.patch += 1;
         self.pre_release = None;
         self.build = None;
+    }
+}
+
+impl PartialOrd for BlueprintVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BlueprintVersion {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        
+        // First compare major, minor, patch
+        match (self.major.cmp(&other.major), self.minor.cmp(&other.minor), self.patch.cmp(&other.patch)) {
+            (Ordering::Equal, Ordering::Equal, Ordering::Equal) => {
+                // Same core version, now compare prerelease
+                match (&self.pre_release, &other.pre_release) {
+                    (None, None) => Ordering::Equal,
+                    (None, Some(_)) => Ordering::Greater, // Normal version > prerelease version
+                    (Some(_), None) => Ordering::Less,    // Prerelease version < normal version
+                    (Some(a), Some(b)) => a.cmp(b),      // Compare prerelease strings
+                }
+            },
+            (Ordering::Equal, Ordering::Equal, patch_ord) => patch_ord,
+            (Ordering::Equal, minor_ord, _) => minor_ord,
+            (major_ord, _, _) => major_ord,
+        }
     }
 }
 

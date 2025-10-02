@@ -859,7 +859,11 @@ jobs:
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: ${{ matrix.rust-version || 'stable' }}
+        {{#if testing_strategy.test_automation.parallel_execution}}
+        toolchain: {{{matrix_rust_version}}}
+        {{else}}
+        toolchain: stable
+        {{/if}}
         profile: minimal
         override: true
         components: rustfmt, clippy
@@ -871,7 +875,7 @@ jobs:
           ~/.cargo/registry
           ~/.cargo/git
           target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: {{{github_cache_key}}}
 
     - name: Check formatting
       run: cargo fmt --all -- --check

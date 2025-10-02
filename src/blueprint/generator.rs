@@ -316,6 +316,8 @@ impl<'a> BlueprintGenerator<'a> {
         let ci_context = CIContext {
             testing_strategy: blueprint.testing.clone(),
             deployment_strategy: blueprint.deployment.clone(),
+            matrix_rust_version: r"${{ matrix.rust-version }}".to_string(),
+            github_cache_key: r"${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}".to_string(),
         };
 
         let template = &self.templates["ci_yml"];
@@ -383,6 +385,8 @@ struct DocumentationContext {
 struct CIContext {
     testing_strategy: TestingStrategy,
     deployment_strategy: DeploymentStrategy,
+    matrix_rust_version: String,
+    github_cache_key: String,
 }
 
 // Handlebars helpers
