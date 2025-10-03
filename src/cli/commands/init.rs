@@ -389,6 +389,8 @@ async fn create_language_config(
     match template.language.as_str() {
         "rust" => {
             let cargo_toml = project_path.join("Cargo.toml");
+            // Sanitize project name for Cargo package/bin names
+            let crate_name = sanitize_crate_name(&args.name);
             let cargo_content = format!(
                 r#"[package]
 name = "{}"
@@ -408,10 +410,10 @@ license = "MIT OR Apache-2.0"
 name = "{}"
 path = "src/main.rs"
 "#,
-                args.name,
+                crate_name,
                 template.config.dependencies.join("\n"),
                 template.config.dev_dependencies.join("\n"),
-                args.name
+                crate_name
             );
             fs::write(&cargo_toml, cargo_content)?;
         }
@@ -664,6 +666,40 @@ fn process_template_variables(content: &str, vars: &HashMap<String, String>) -> 
     }
 
     result
+}
+
+/// Convert a provided project identifier (which may be a path like "./my-app")
+/// into a valid Cargo crate name. This:
+/// - uses only the final path segment
+/// - lowercases the name
+/// - replaces invalid characters with underscores
+/// - ensures the first character is a letter or underscore
+fn sanitize_crate_name(input: &str) -> String {
+    use std::path::Path;
+    let base = Path::new(input)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(input);
+
+    let mut out: String = base
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'a'..='z' | '0'..='9' | '_' | '-' => if c == '-' { '_' } else { c },
+            _ => '_',
+        })
+        .collect();
+
+    if out.is_empty() {
+        out = "project".to_string();
+    }
+
+    let first = out.chars().next().unwrap();
+    if !matches!(first, 'a'..='z' | '_') {
+        out.insert(0, '_');
+    }
+
+    out
 }
 
 // Template file contents
