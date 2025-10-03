@@ -151,11 +151,11 @@ async fn list_environments(runner: &CliRunner) -> Result<(), Box<dyn std::error:
 async fn edit_config(_runner: &CliRunner) -> Result<(), Box<dyn std::error::Error>> {
     // For now, just provide instructions
     println!("To edit configuration manually, edit your config file:");
-    println!("  ~/.config/agentic-dev-env/config.toml");
+    println!("  ~/.config/devkit-env/config.toml");
     println!("");
     println!("Or use the 'set' command to modify specific values:");
-    println!("  agentic-dev config set codegen.ai_model_settings.default_model 'llama3.2:latest'");
-    println!("  agentic-dev config set codegen.ai_model_settings.temperature 0.8");
+    println!("  devkit config set codegen.ai_model_settings.default_model 'llama3.2:latest'");
+    println!("  devkit config set codegen.ai_model_settings.temperature 0.8");
     Ok(())
 }
 
@@ -165,7 +165,7 @@ async fn reset_config(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(_section) = section {
         runner.print_warning("Section-specific reset not yet implemented");
-        println!("Please use 'agentic-dev config reset' to reset entire configuration");
+        println!("Please use 'devkit config reset' to reset entire configuration");
     } else {
         runner.config_manager_mut().reset_to_default();
         if let Err(e) = runner.config_manager_mut().save() {

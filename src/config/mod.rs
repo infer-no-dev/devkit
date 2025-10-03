@@ -218,7 +218,7 @@ impl ConfigManager {
         let config_path = config_path.unwrap_or_else(|| {
             dirs::config_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join("agentic-dev-env")
+                .join("devkit-env")
                 .join("config.toml")
         });
 
@@ -259,7 +259,7 @@ impl ConfigManager {
         let config_path = config_path.unwrap_or_else(|| {
             dirs::config_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join("agentic-dev-env")
+                .join("devkit-env")
                 .join("config.toml")
         });
 

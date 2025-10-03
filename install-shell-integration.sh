@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Agentic Development Environment - Shell Integration Installer
-# This script installs shell integration for the agentic-dev-env tool
+# This script installs shell integration for the devkit-env tool
 
 set -euo pipefail
 
 # Configuration
-PROJECT_DIR="/home/rga/projects/agentic-dev-env"
-BINARY_NAME="agentic-dev-env"
+PROJECT_DIR="/home/rga/projects/devkit-env"
+BINARY_NAME="devkit-env"
 SHELL_NAME=$(basename "$SHELL")
 
 # Colors for output
@@ -111,7 +111,7 @@ install_alias() {
 # Agentic Development Environment
 export AGENTIC_DEV_ENV_HOME=\"$PROJECT_DIR\"
 alias ade=\"$BINARY_PATH\"
-alias agentic-dev-env=\"$BINARY_PATH\"
+alias devkit-env=\"$BINARY_PATH\"
 
 # Helper functions
 ade-start() {
@@ -131,7 +131,7 @@ ade-analyze() {
 # Agentic Development Environment (placeholder - build not ready)
 export AGENTIC_DEV_ENV_HOME=\"$PROJECT_DIR\"
 alias ade=\"echo 'Build the project first with: cd $PROJECT_DIR && cargo build --release'\"
-alias agentic-dev-env=\"echo 'Build the project first with: cd $PROJECT_DIR && cargo build --release'\"
+alias devkit-env=\"echo 'Build the project first with: cd $PROJECT_DIR && cargo build --release'\"
 "
             fi
             ;;
@@ -141,7 +141,7 @@ alias agentic-dev-env=\"echo 'Build the project first with: cd $PROJECT_DIR && c
 # Agentic Development Environment
 set -gx AGENTIC_DEV_ENV_HOME \"$PROJECT_DIR\"
 alias ade \"$BINARY_PATH\"
-alias agentic-dev-env \"$BINARY_PATH\"
+alias devkit-env \"$BINARY_PATH\"
 
 # Helper functions
 function ade-start
@@ -161,7 +161,7 @@ end
 # Agentic Development Environment (placeholder - build not ready)
 set -gx AGENTIC_DEV_ENV_HOME \"$PROJECT_DIR\"
 alias ade \"echo 'Build the project first with: cd $PROJECT_DIR && cargo build --release'\"
-alias agentic-dev-env \"echo 'Build the project first with: cd $PROJECT_DIR && cargo build --release'\"
+alias devkit-env \"echo 'Build the project first with: cd $PROJECT_DIR && cargo build --release'\"
 "
             fi
             ;;
@@ -182,10 +182,10 @@ generate_completions() {
     
     case "$SHELL_NAME" in
         bash)
-            cat > "$COMPLETION_DIR/agentic-dev-env" << 'EOF'
+            cat > "$COMPLETION_DIR/devkit-env" << 'EOF'
 #!/bin/bash
 
-_agentic_dev_env_completions() {
+_devkit_env_completions() {
     local cur prev
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
@@ -224,16 +224,16 @@ _agentic_dev_env_completions() {
     esac
 }
 
-complete -F _agentic_dev_env_completions agentic-dev-env
-complete -F _agentic_dev_env_completions ade
+complete -F _devkit_env_completions devkit-env
+complete -F _devkit_env_completions ade
 EOF
             print_success "Bash completion installed"
             ;;
         zsh)
-            cat > "$COMPLETION_DIR/_agentic-dev-env" << 'EOF'
-#compdef agentic-dev-env ade
+            cat > "$COMPLETION_DIR/_devkit-env" << 'EOF'
+#compdef devkit-env ade
 
-_agentic_dev_env() {
+_devkit_env() {
     local state line
     typeset -A opt_args
     
@@ -283,44 +283,44 @@ _agentic_dev_env() {
     esac
 }
 
-_agentic_dev_env "$@"
+_devkit_env "$@"
 EOF
             print_success "Zsh completion installed"
             ;;
         fish)
-            cat > "$COMPLETION_DIR/agentic-dev-env.fish" << 'EOF'
-# Completions for agentic-dev-env
+            cat > "$COMPLETION_DIR/devkit-env.fish" << 'EOF'
+# Completions for devkit-env
 
-complete -c agentic-dev-env -f
+complete -c devkit-env -f
 complete -c ade -f
 
 # Subcommands
-complete -c agentic-dev-env -n "__fish_use_subcommand" -a "start" -d "Start the interactive development environment"
-complete -c agentic-dev-env -n "__fish_use_subcommand" -a "init" -d "Initialize configuration for a new project"
-complete -c agentic-dev-env -n "__fish_use_subcommand" -a "config" -d "Configure the development environment"
-complete -c agentic-dev-env -n "__fish_use_subcommand" -a "analyze" -d "Analyze a codebase and generate context"
-complete -c agentic-dev-env -n "__fish_use_subcommand" -a "generate" -d "Generate code from a natural language prompt"
-complete -c agentic-dev-env -n "__fish_use_subcommand" -a "version" -d "Show version information"
+complete -c devkit-env -n "__fish_use_subcommand" -a "start" -d "Start the interactive development environment"
+complete -c devkit-env -n "__fish_use_subcommand" -a "init" -d "Initialize configuration for a new project"
+complete -c devkit-env -n "__fish_use_subcommand" -a "config" -d "Configure the development environment"
+complete -c devkit-env -n "__fish_use_subcommand" -a "analyze" -d "Analyze a codebase and generate context"
+complete -c devkit-env -n "__fish_use_subcommand" -a "generate" -d "Generate code from a natural language prompt"
+complete -c devkit-env -n "__fish_use_subcommand" -a "version" -d "Show version information"
 
 # Options for start subcommand
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from start" -l project -d "Project path to analyze" -r
+complete -c devkit-env -n "__fish_seen_subcommand_from start" -l project -d "Project path to analyze" -r
 
 # Options for config subcommand
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from config" -l show -d "Show current configuration"
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from config" -l reset -d "Reset to default configuration"
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from config" -l export -d "Export configuration to JSON" -r
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from config" -l import -d "Import configuration from JSON" -r
+complete -c devkit-env -n "__fish_seen_subcommand_from config" -l show -d "Show current configuration"
+complete -c devkit-env -n "__fish_seen_subcommand_from config" -l reset -d "Reset to default configuration"
+complete -c devkit-env -n "__fish_seen_subcommand_from config" -l export -d "Export configuration to JSON" -r
+complete -c devkit-env -n "__fish_seen_subcommand_from config" -l import -d "Import configuration from JSON" -r
 
 # Options for analyze subcommand
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from analyze" -l output -d "Output file for analysis results" -r
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from analyze" -l dependencies -d "Include dependency analysis"
+complete -c devkit-env -n "__fish_seen_subcommand_from analyze" -l output -d "Output file for analysis results" -r
+complete -c devkit-env -n "__fish_seen_subcommand_from analyze" -l dependencies -d "Include dependency analysis"
 
 # Options for generate subcommand
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from generate" -l file -d "Target file path" -r
-complete -c agentic-dev-env -n "__fish_seen_subcommand_from generate" -l language -d "Target programming language" -xa "rust python javascript typescript go java c cpp"
+complete -c devkit-env -n "__fish_seen_subcommand_from generate" -l file -d "Target file path" -r
+complete -c devkit-env -n "__fish_seen_subcommand_from generate" -l language -d "Target programming language" -xa "rust python javascript typescript go java c cpp"
 
 # Copy completions for ade alias
-complete -c ade -w agentic-dev-env
+complete -c ade -w devkit-env
 EOF
             print_success "Fish completion installed"
             ;;
@@ -335,7 +335,7 @@ create_desktop_entry() {
     mkdir -p "$desktop_dir"
     
     if [[ -n "$BINARY_PATH" && -f "$BINARY_PATH" ]]; then
-        cat > "$desktop_dir/agentic-dev-env.desktop" << EOF
+        cat > "$desktop_dir/devkit-env.desktop" << EOF
 [Desktop Entry]
 Version=1.0
 Name=Agentic Development Environment
@@ -378,8 +378,8 @@ main() {
     echo "  2. Or run: source $CONFIG_FILE"
     echo
     echo "Available commands:"
-    echo "  • ade                 - Short alias for agentic-dev-env"
-    echo "  • agentic-dev-env     - Full command name"
+    echo "  • ade                 - Short alias for devkit-env"
+    echo "  • devkit-env     - Full command name"
     echo "  • ade-start [path]    - Start interactive mode"
     echo "  • ade-generate <text> - Generate code from description"
     echo "  • ade-analyze [path]  - Analyze codebase"

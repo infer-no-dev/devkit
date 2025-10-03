@@ -1,4 +1,4 @@
-//! Comprehensive testing framework for agentic-dev-env
+//! Comprehensive testing framework for devkit-env
 //!
 //! This module contains unit tests, integration tests, and end-to-end tests
 //! for all major components of the system.

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agentic_dev_env::codegen::*;
-use agentic_dev_env::context::CodebaseContext;
-use agentic_dev_env::testing::{
+use devkit_env::codegen::*;
+use devkit_env::context::CodebaseContext;
+use devkit_env::testing::{
     fixtures::{CodegenFixtures, ContextFixtures},
     mocks::{MockCodeGenerator, MockLanguageDetector, MockTemplateManager},
     TestEnvironment,

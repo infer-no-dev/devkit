@@ -13,7 +13,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 use std::fs;
 
-use agentic_dev_env::{
+use devkit_env::{
     testing::{
         TestRunner, TestContext, TestSuiteConfig, TestAssertions,
         BenchmarkCollector, PropertyGenerator, MockDataFactory,
@@ -65,7 +65,7 @@ pub struct TestResult {
     pub passed: bool,
     pub duration: Duration,
     pub details: String,
-    pub benchmark_data: Option<Vec<agentic_dev_env::testing::BenchmarkMeasurement>>,
+    pub benchmark_data: Option<Vec<devkit_env::testing::BenchmarkMeasurement>>,
 }
 
 impl TestWorkflow {
@@ -439,7 +439,7 @@ impl TestWorkflow {
     fn test_agent_creation_lifecycle(&self) -> Box<dyn Fn(TestContext) -> futures::future::BoxFuture<'static, Result<(), String>> + Send> {
         Box::new(|ctx| {
             Box::pin(async move {
-                use agentic_dev_env::agents::agent_types::CodeGenerationAgent;
+                use devkit_env::agents::agent_types::CodeGenerationAgent;
                 
                 let agent = CodeGenerationAgent::new();
                 assert_eq!(agent.name(), "CodeGenerationAgent");

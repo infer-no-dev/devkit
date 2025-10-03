@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use agentic_dev_env::testing::{
+use devkit_env::testing::{
     fixtures::{AgentFixtures, CodegenFixtures, ConfigFixtures, ContextFixtures, ShellFixtures},
     mocks::{MockAgent, MockCodeGenerator, MockCodebaseAnalyzer, MockCommandExecutor},
     TestChannels, TestEnvironment, TestTime,
 };
-use agentic_dev_env::{agents::*, codegen::*, config::*, context::*, shell::*};
+use devkit_env::{agents::*, codegen::*, config::*, context::*, shell::*};
 
 /// End-to-end integration tests for complete workflows
 mod end_to_end_tests {

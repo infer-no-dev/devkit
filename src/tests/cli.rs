@@ -72,7 +72,7 @@ fn test_cli_argument_parsing() {
     
     // Test analyze command parsing
     let cli = Cli::try_parse_from(&[
-        "agentic-dev",
+        "devkit",
         "analyze", 
         "src/",
         "--depth", "deep",
@@ -100,7 +100,7 @@ fn test_global_options() {
     use clap::Parser;
     
     let cli = Cli::try_parse_from(&[
-        "agentic-dev",
+        "devkit",
         "--verbose",
         "--format", "json",
         "analyze",

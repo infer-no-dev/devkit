@@ -3,10 +3,10 @@
 //! This example shows how to set up and use the Ollama Local LLM integration
 //! for AI-powered code generation in the agentic development environment.
 
-use agentic_dev_env::ai::AIManager;
-use agentic_dev_env::codegen::{CodeGenerator, GenerationConfig, GenerationRequest};
-use agentic_dev_env::config::{AIModelConfig, OllamaConfig};
-use agentic_dev_env::context::CodebaseContext;
+use devkit_env::ai::AIManager;
+use devkit_env::codegen::{CodeGenerator, GenerationConfig, GenerationRequest};
+use devkit_env::config::{AIModelConfig, OllamaConfig};
+use devkit_env::context::CodebaseContext;
 use std::sync::Arc;
 
 #[tokio::main]

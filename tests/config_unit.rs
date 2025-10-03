@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use agentic_dev_env::{
+use devkit_env::{
     config::{Config, ConfigError, ConfigManager},
     testing::{
         MockDataFactory, PropertyGenerator, TestAssertions, TestContext, TestEnvironment,

@@ -102,8 +102,8 @@ impl HelpSystem {
         }
 
         guide.push_str("For more detailed help on any command, use:\n");
-        guide.push_str(&"  agentic-dev <command> --help\n\n".italic().to_string());
-        guide.push_str("Visit our documentation at: https://agentic-dev.dev/docs\n");
+        guide.push_str(&"  devkit <command> --help\n\n".italic().to_string());
+        guide.push_str("Visit our documentation at: https://devkit.dev/docs\n");
 
         guide
     }
@@ -236,22 +236,22 @@ impl HelpSystem {
             CommonOption {
                 flag: "-v, --verbose".to_string(),
                 description: "Enable verbose output".to_string(),
-                example: Some("agentic-dev --verbose analyze .".to_string()),
+                example: Some("devkit --verbose analyze .".to_string()),
             },
             CommonOption {
                 flag: "-q, --quiet".to_string(),
                 description: "Suppress non-essential output".to_string(),
-                example: Some("agentic-dev --quiet generate 'create function'".to_string()),
+                example: Some("devkit --quiet generate 'create function'".to_string()),
             },
             CommonOption {
                 flag: "-c, --config <PATH>".to_string(),
                 description: "Specify custom configuration file".to_string(),
-                example: Some("agentic-dev --config custom.toml analyze".to_string()),
+                example: Some("devkit --config custom.toml analyze".to_string()),
             },
             CommonOption {
                 flag: "--format <FORMAT>".to_string(),
                 description: "Output format (text, json, yaml)".to_string(),
-                example: Some("agentic-dev --format json status".to_string()),
+                example: Some("devkit --format json status".to_string()),
             },
         ];
     }
@@ -260,11 +260,11 @@ impl HelpSystem {
     fn populate_getting_started_guide(&mut self) {
         self.getting_started_guide = vec![
             "Install the agentic development environment and ensure prerequisites are met".to_string(),
-            "Initialize a new project: `agentic-dev init my-project --language rust`".to_string(),
-            "Navigate to your project and analyze the codebase: `agentic-dev analyze .`".to_string(),
-            "Start the interactive mode for guided development: `agentic-dev interactive`".to_string(),
-            "Generate code with natural language: `agentic-dev generate 'create a REST API handler'`".to_string(),
-            "Configure your preferences: `agentic-dev config show` and `agentic-dev config set`".to_string(),
+            "Initialize a new project: `devkit init my-project --language rust`".to_string(),
+            "Navigate to your project and analyze the codebase: `devkit analyze .`".to_string(),
+            "Start the interactive mode for guided development: `devkit interactive`".to_string(),
+            "Generate code with natural language: `devkit generate 'create a REST API handler'`".to_string(),
+            "Configure your preferences: `devkit config show` and `devkit config set`".to_string(),
             "Explore advanced features like custom agents and templates".to_string(),
         ];
     }
@@ -282,17 +282,17 @@ impl HelpSystem {
             examples: vec![
                 HelpExample {
                     description: "Create a new Rust project".to_string(),
-                    command: "agentic-dev init my-rust-app --language rust".to_string(),
+                    command: "devkit init my-rust-app --language rust".to_string(),
                     expected_output: Some("✅ Project 'my-rust-app' created successfully".to_string()),
                 },
                 HelpExample {
                     description: "Create Python project with specific template".to_string(),
-                    command: "agentic-dev init ml-project --language python --template machine-learning".to_string(),
+                    command: "devkit init ml-project --language python --template machine-learning".to_string(),
                     expected_output: None,
                 },
                 HelpExample {
                     description: "Create project without git initialization".to_string(),
-                    command: "agentic-dev init simple-project --no-git".to_string(),
+                    command: "devkit init simple-project --no-git".to_string(),
                     expected_output: None,
                 },
             ],
@@ -343,17 +343,17 @@ impl HelpSystem {
             examples: vec![
                 HelpExample {
                     description: "Generate a simple function".to_string(),
-                    command: "agentic-dev generate 'create a function to calculate fibonacci numbers'".to_string(),
+                    command: "devkit generate 'create a function to calculate fibonacci numbers'".to_string(),
                     expected_output: Some("Generated fibonacci.rs with recursive implementation".to_string()),
                 },
                 HelpExample {
                     description: "Generate with specific context files".to_string(),
-                    command: "agentic-dev generate 'add error handling' --context src/main.rs --context src/lib.rs".to_string(),
+                    command: "devkit generate 'add error handling' --context src/main.rs --context src/lib.rs".to_string(),
                     expected_output: None,
                 },
                 HelpExample {
                     description: "Preview without writing files".to_string(),
-                    command: "agentic-dev generate 'create REST API endpoints' --preview".to_string(),
+                    command: "devkit generate 'create REST API endpoints' --preview".to_string(),
                     expected_output: None,
                 },
             ],
@@ -399,17 +399,17 @@ impl HelpSystem {
             examples: vec![
                 HelpExample {
                     description: "Analyze current directory".to_string(),
-                    command: "agentic-dev analyze".to_string(),
+                    command: "devkit analyze".to_string(),
                     expected_output: Some("Found 25 files, 150 symbols, 12 dependencies".to_string()),
                 },
                 HelpExample {
                     description: "Deep analysis with specific types".to_string(),
-                    command: "agentic-dev analyze --depth deep --analysis-types symbols,dependencies,quality".to_string(),
+                    command: "devkit analyze --depth deep --analysis-types symbols,dependencies,quality".to_string(),
                     expected_output: None,
                 },
                 HelpExample {
                     description: "Export analysis results".to_string(),
-                    command: "agentic-dev analyze --export analysis.json --format json".to_string(),
+                    command: "devkit analyze --export analysis.json --format json".to_string(),
                     expected_output: None,
                 },
             ],
@@ -455,17 +455,17 @@ impl HelpSystem {
             examples: vec![
                 HelpExample {
                     description: "Start interactive mode".to_string(),
-                    command: "agentic-dev interactive".to_string(),
+                    command: "devkit interactive".to_string(),
                     expected_output: Some("Launching interactive mode...".to_string()),
                 },
                 HelpExample {
                     description: "Start with specific view".to_string(),
-                    command: "agentic-dev interactive --view agents".to_string(),
+                    command: "devkit interactive --view agents".to_string(),
                     expected_output: None,
                 },
                 HelpExample {
                     description: "Monitor mode (read-only)".to_string(),
-                    command: "agentic-dev interactive --monitor".to_string(),
+                    command: "devkit interactive --monitor".to_string(),
                     expected_output: None,
                 },
             ],
@@ -506,17 +506,17 @@ impl HelpSystem {
             examples: vec![
                 HelpExample {
                     description: "List all available agents".to_string(),
-                    command: "agentic-dev agent list".to_string(),
+                    command: "devkit agent list".to_string(),
                     expected_output: Some("code-gen: running, analysis: idle, review: stopped".to_string()),
                 },
                 HelpExample {
                     description: "Start specific agents".to_string(),
-                    command: "agentic-dev agent start code-gen analysis".to_string(),
+                    command: "devkit agent start code-gen analysis".to_string(),
                     expected_output: None,
                 },
                 HelpExample {
                     description: "Create custom agent".to_string(),
-                    command: "agentic-dev agent create my-agent --agent-type refactoring".to_string(),
+                    command: "devkit agent create my-agent --agent-type refactoring".to_string(),
                     expected_output: None,
                 },
             ],
@@ -557,17 +557,17 @@ impl HelpSystem {
             examples: vec![
                 HelpExample {
                     description: "Show current configuration".to_string(),
-                    command: "agentic-dev config show".to_string(),
+                    command: "devkit config show".to_string(),
                     expected_output: None,
                 },
                 HelpExample {
                     description: "Set specific configuration value".to_string(),
-                    command: "agentic-dev config set agents.max_concurrent 8".to_string(),
+                    command: "devkit config set agents.max_concurrent 8".to_string(),
                     expected_output: Some("✅ Configuration updated".to_string()),
                 },
                 HelpExample {
                     description: "Switch to development environment".to_string(),
-                    command: "agentic-dev config environment dev".to_string(),
+                    command: "devkit config environment dev".to_string(),
                     expected_output: None,
                 },
             ],

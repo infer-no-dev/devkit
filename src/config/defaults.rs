@@ -555,7 +555,7 @@ impl SystemDefaults {
         if let Some(home) = dirs::home_dir() {
             let candidates = [
                 home.join(".config")
-                    .join("agentic-dev-env")
+                    .join("devkit-env")
                     .join("templates"),
                 home.join(".agentic").join("templates"),
                 home.join("Templates"),

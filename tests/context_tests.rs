@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agentic_dev_env::context::*;
-use agentic_dev_env::testing::{
+use devkit_env::context::*;
+use devkit_env::testing::{
     fixtures::ContextFixtures, mocks::MockCodebaseAnalyzer, TestEnvironment,
 };
 

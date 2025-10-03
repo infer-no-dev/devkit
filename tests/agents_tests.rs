@@ -4,8 +4,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
-use agentic_dev_env::agents::*;
-use agentic_dev_env::testing::{
+use devkit_env::agents::*;
+use devkit_env::testing::{
     fixtures::AgentFixtures, mocks::MockAgent, TestChannels, TestEnvironment, TestTime,
 };
 

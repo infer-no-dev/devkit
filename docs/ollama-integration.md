@@ -131,8 +131,8 @@ The integration automatically detects and configures common Ollama models:
 ### Basic Code Generation
 
 ```rust
-use agentic_dev_env::ai::AIManager;
-use agentic_dev_env::codegen::{CodeGenerator, GenerationRequest};
+use devkit_env::ai::AIManager;
+use devkit_env::codegen::{CodeGenerator, GenerationRequest};
 
 // Initialize with Ollama
 let ai_manager = AIManager::from_config(&config).await?;
@@ -159,7 +159,7 @@ println!("Generated code: {}", result.generated_code);
 ### Direct AI Chat
 
 ```rust
-use agentic_dev_env::ai::{ChatMessage, ChatRequest, ModelParameters};
+use devkit_env::ai::{ChatMessage, ChatRequest, ModelParameters};
 
 let messages = vec![
     ChatMessage::system("You are a helpful programming assistant."),
@@ -253,8 +253,8 @@ while let Some(chunk_result) = stream.recv().await {
 
 2. **Initialize AI Manager**
    ```rust
-   use agentic_dev_env::ai::AIManager;
-   use agentic_dev_env::config::Config;
+   use devkit_env::ai::AIManager;
+   use devkit_env::config::Config;
 
    let config = Config::default();
    let ai_manager = AIManager::from_config(&config).await?;

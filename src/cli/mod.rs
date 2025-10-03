@@ -41,7 +41,7 @@ fn supports_color() -> bool {
 /// Main CLI application structure
 #[derive(Parser)]
 #[command(
-    name = "agentic-dev",
+    name = "devkit",
     about = "Agentic Development Environment - AI-powered code generation and analysis",
     version = env!("CARGO_PKG_VERSION"),
     long_about = "

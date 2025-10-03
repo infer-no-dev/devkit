@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-use agentic_dev_env::{
+use devkit_env::{
     agents::agent_types::{AnalysisAgent, CodeGenerationAgent, DebuggingAgent},
     agents::{Agent, AgentResult, AgentStatus, AgentSystem, AgentTask, TaskPriority},
     config::Config,

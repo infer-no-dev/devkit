@@ -187,10 +187,10 @@ async fn run_interactive_demo(runner: &mut CliRunner) -> Result<(), Box<dyn std:
 
         // In a real implementation, we'd read user input here
         runner.print_info("To start interactive mode, run:");
-        runner.print_command("agentic-dev interactive");
+        runner.print_command("devkit interactive");
     } else {
         runner.print_info("\n🎯 To start interactive mode, run:");
-        runner.print_command("agentic-dev interactive");
+        runner.print_command("devkit interactive");
     }
 
     Ok(())

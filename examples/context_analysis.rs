@@ -7,8 +7,8 @@
 //! 4. Analyze repository information (Git integration)
 //! 5. Query the context for insights and relationships
 
-use agentic_dev_env::context::symbols::SymbolType;
-use agentic_dev_env::context::{AnalysisConfig, ContextManager};
+use devkit_env::context::symbols::SymbolType;
+use devkit_env::context::{AnalysisConfig, ContextManager};
 use std::env;
 use std::path::PathBuf;
 
@@ -375,7 +375,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Analyze symbols and return statistics by type
 fn analyze_symbols(
-    context: &agentic_dev_env::context::CodebaseContext,
+    context: &devkit_env::context::CodebaseContext,
 ) -> Vec<(SymbolType, usize)> {
     use std::collections::HashMap;
 
