@@ -86,6 +86,7 @@ impl InputHandler {
 
     /// Handle text input keys
     fn handle_text_input(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
+        eprintln!("DEBUG: Handling text input: {:?}", key_event);
         // Reset completion on most key presses
         match key_event.code {
             KeyCode::Tab => {}, // Don't reset on tab
@@ -350,6 +351,7 @@ impl InputHandler {
 
     /// Set the current input context
     pub fn set_context(&mut self, context: KeyContext) {
+        eprintln!("DEBUG: Setting input context to {:?}", context);
         self.current_context = context;
         // Reset completion when switching contexts
         self.reset_completion();

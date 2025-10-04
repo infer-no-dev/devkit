@@ -249,6 +249,7 @@ impl Application {
         match key {
             KeyCode::Char('i') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // Switch to input mode
+                eprintln!("DEBUG: Switching to input mode");
                 self.input_handler
                     .set_context(keybindings::KeyContext::Input);
                 return Ok(());
