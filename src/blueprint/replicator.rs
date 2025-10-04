@@ -1,12 +1,12 @@
 //! Blueprint Replicator
-//! 
+//!
 //! This module orchestrates the complete system self-replication process,
 //! combining blueprint extraction, validation, and project generation.
 
-use super::*;
 use super::extractor::BlueprintExtractor;
 use super::generator::BlueprintGenerator;
-use anyhow::{Result, Context as AnyhowContext};
+use super::*;
+use anyhow::{Context as AnyhowContext, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
@@ -130,7 +130,10 @@ impl SystemReplicator {
             }
             blueprint.save_to_file(&blueprint_path)?;
         }
-        println!("✅ Blueprint extracted with {} modules", blueprint.modules.len());
+        println!(
+            "✅ Blueprint extracted with {} modules",
+            blueprint.modules.len()
+        );
 
         // Step 2: Validate blueprint completeness
         println!("\n🔍 Step 2: Validating blueprint...");
@@ -150,15 +153,21 @@ impl SystemReplicator {
         if self.validate_generated && !self.dry_run {
             println!("\n✅ Step 4: Validating generated code...");
             validation_results = self.validate_generated_code(&generated_files).await?;
-            
+
             let passed = validation_results.iter().filter(|r| r.passed).count();
             let total = validation_results.len();
-            println!("✅ Validation completed: {}/{} checks passed", passed, total);
+            println!(
+                "✅ Validation completed: {}/{} checks passed",
+                passed, total
+            );
 
             for result in &validation_results {
                 if !result.passed {
-                    errors.push(format!("Validation failed: {} - {}", 
-                        result.file_path.display(), result.message));
+                    errors.push(format!(
+                        "Validation failed: {} - {}",
+                        result.file_path.display(),
+                        result.message
+                    ));
                 }
             }
         }
@@ -206,7 +215,10 @@ impl SystemReplicator {
     /// Generate project from blueprint
     async fn generate_project(&self, blueprint: &SystemBlueprint) -> Result<Vec<PathBuf>> {
         if self.dry_run {
-            println!("   [DRY RUN] Would generate project at: {:?}", self.target_path);
+            println!(
+                "   [DRY RUN] Would generate project at: {:?}",
+                self.target_path
+            );
             return Ok(vec![self.target_path.join("would_be_generated")]);
         }
 
@@ -220,22 +232,27 @@ impl SystemReplicator {
     /// Collect all generated files for validation
     async fn collect_generated_files(&self) -> Result<Vec<PathBuf>> {
         let mut files = Vec::new();
-        self.collect_files_recursive(&self.target_path, &mut files).await?;
+        self.collect_files_recursive(&self.target_path, &mut files)
+            .await?;
         Ok(files)
     }
 
     /// Recursively collect files in directory
-    fn collect_files_recursive<'a>(&'a self, dir: &'a Path, files: &'a mut Vec<PathBuf>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + 'a>> {
+    fn collect_files_recursive<'a>(
+        &'a self,
+        dir: &'a Path,
+        files: &'a mut Vec<PathBuf>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + 'a>> {
         Box::pin(async move {
             if !dir.exists() {
                 return Ok(());
             }
 
             let mut entries = fs::read_dir(dir).await?;
-            
+
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
-                
+
                 if path.is_dir() {
                     // Skip target directory and other build artifacts
                     let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -246,7 +263,7 @@ impl SystemReplicator {
                     files.push(path);
                 }
             }
-            
+
             Ok(())
         })
     }
@@ -294,7 +311,7 @@ impl SystemReplicator {
     /// Validate Rust syntax
     async fn validate_rust_syntax(&self, file: &Path) -> Result<ValidationResult> {
         let content = fs::read_to_string(file).await?;
-        
+
         // Use syn to parse Rust syntax
         match syn::parse_file(&content) {
             Ok(_) => Ok(ValidationResult {
@@ -315,7 +332,7 @@ impl SystemReplicator {
     /// Validate TOML syntax
     async fn validate_toml_syntax(&self, file: &Path) -> Result<ValidationResult> {
         let content = fs::read_to_string(file).await?;
-        
+
         match toml::from_str::<toml::Value>(&content) {
             Ok(_) => Ok(ValidationResult {
                 file_path: file.to_path_buf(),
@@ -335,7 +352,7 @@ impl SystemReplicator {
     /// Validate JSON syntax
     async fn validate_json_syntax(&self, file: &Path) -> Result<ValidationResult> {
         let content = fs::read_to_string(file).await?;
-        
+
         match serde_json::from_str::<serde_json::Value>(&content) {
             Ok(_) => Ok(ValidationResult {
                 file_path: file.to_path_buf(),
@@ -364,8 +381,10 @@ impl SystemReplicator {
         let message = if passed {
             "Project compiles successfully".to_string()
         } else {
-            format!("Compilation failed: {}", 
-                String::from_utf8_lossy(&output.stderr))
+            format!(
+                "Compilation failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
         };
 
         Ok(ValidationResult {
@@ -380,7 +399,7 @@ impl SystemReplicator {
     async fn has_tests(&self) -> Result<bool> {
         let tests_dir = self.target_path.join("tests");
         let src_tests = self.target_path.join("src");
-        
+
         let has_tests_dir = tests_dir.exists();
         let has_src_tests = if src_tests.exists() {
             self.directory_contains_tests(&src_tests).await?
@@ -392,13 +411,16 @@ impl SystemReplicator {
     }
 
     /// Check if directory contains test files
-    fn directory_contains_tests<'a>(&'a self, dir: &'a Path) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool>> + 'a>> {
+    fn directory_contains_tests<'a>(
+        &'a self,
+        dir: &'a Path,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool>> + 'a>> {
         Box::pin(async move {
             let mut entries = fs::read_dir(dir).await?;
-            
+
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
-                
+
                 if path.is_file() && path.extension() == Some(std::ffi::OsStr::new("rs")) {
                     let content = fs::read_to_string(&path).await?;
                     if content.contains("#[test]") || content.contains("#[tokio::test]") {
@@ -410,7 +432,7 @@ impl SystemReplicator {
                     }
                 }
             }
-            
+
             Ok(false)
         })
     }
@@ -428,8 +450,10 @@ impl SystemReplicator {
         let message = if passed {
             "Tests compile successfully".to_string()
         } else {
-            format!("Test compilation failed: {}", 
-                String::from_utf8_lossy(&output.stderr))
+            format!(
+                "Test compilation failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
         };
 
         Ok(ValidationResult {
@@ -455,8 +479,10 @@ impl SystemReplicator {
                 .await?;
 
             if !output.status.success() {
-                return Err(anyhow::anyhow!("Failed to copy .git directory: {}", 
-                    String::from_utf8_lossy(&output.stderr)));
+                return Err(anyhow::anyhow!(
+                    "Failed to copy .git directory: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ));
             }
 
             println!("✅ Git history preserved");
@@ -473,15 +499,27 @@ impl SystemReplicator {
         let mut report = String::new();
 
         report.push_str("# System Replication Report\n\n");
-        report.push_str(&format!("**Generated**: {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+        report.push_str(&format!(
+            "**Generated**: {}\n",
+            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        ));
         report.push_str(&format!("**Source**: `{}`\n", self.source_path.display()));
         report.push_str(&format!("**Target**: `{}`\n", self.target_path.display()));
         report.push_str(&format!("**Success**: {}\n", result.success));
-        report.push_str(&format!("**Execution Time**: {:?}\n\n", result.execution_time));
+        report.push_str(&format!(
+            "**Execution Time**: {:?}\n\n",
+            result.execution_time
+        ));
 
         report.push_str("## Summary\n\n");
-        report.push_str(&format!("- **Files Generated**: {}\n", result.generated_files.len()));
-        report.push_str(&format!("- **Validations**: {}\n", result.validation_results.len()));
+        report.push_str(&format!(
+            "- **Files Generated**: {}\n",
+            result.generated_files.len()
+        ));
+        report.push_str(&format!(
+            "- **Validations**: {}\n",
+            result.validation_results.len()
+        ));
         report.push_str(&format!("- **Warnings**: {}\n", result.warnings.len()));
         report.push_str(&format!("- **Errors**: {}\n\n", result.errors.len()));
 
@@ -503,19 +541,28 @@ impl SystemReplicator {
 
         report.push_str("## Validation Results\n\n");
         for validation in &result.validation_results {
-            let status = if validation.passed { "✅ PASS" } else { "❌ FAIL" };
-            report.push_str(&format!("- {} {:?} for `{}`: {}\n", 
+            let status = if validation.passed {
+                "✅ PASS"
+            } else {
+                "❌ FAIL"
+            };
+            report.push_str(&format!(
+                "- {} {:?} for `{}`: {}\n",
                 status,
                 validation.validation_type,
                 validation.file_path.display(),
-                validation.message));
+                validation.message
+            ));
         }
 
         if !self.dry_run {
             fs::write(&report_path, report).await?;
             println!("📊 Replication report saved to: {:?}", report_path);
         } else {
-            println!("📊 [DRY RUN] Would save replication report to: {:?}", report_path);
+            println!(
+                "📊 [DRY RUN] Would save replication report to: {:?}",
+                report_path
+            );
         }
 
         Ok(())
@@ -552,15 +599,22 @@ mod tests {
         tokio::fs::create_dir_all(&src_dir).await.unwrap();
 
         let main_rs = src_dir.join("main.rs");
-        tokio::fs::write(&main_rs, "fn main() { println!(\"Hello, world!\"); }").await.unwrap();
+        tokio::fs::write(&main_rs, "fn main() { println!(\"Hello, world!\"); }")
+            .await
+            .unwrap();
 
         let cargo_toml = temp_source.path().join("Cargo.toml");
-        tokio::fs::write(&cargo_toml, r#"
+        tokio::fs::write(
+            &cargo_toml,
+            r#"
 [package]
 name = "test-project"
 version = "0.1.0"
 edition = "2021"
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         let replicator = SystemReplicator::new(
             temp_source.path().to_path_buf(),
@@ -568,7 +622,7 @@ edition = "2021"
         );
 
         let result = replicator.replicate().await.unwrap();
-        
+
         // Basic assertions - we expect this to have some warnings/errors due to minimal setup
         // but the structure should be created
         assert!(!result.generated_files.is_empty());

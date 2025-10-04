@@ -10,11 +10,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub mod diff;
-pub mod migration;
 pub mod generators;
+pub mod migration;
 pub use diff::*;
-pub use migration::*;
 pub use generators::*;
+pub use migration::*;
 
 /// Semantic version for blueprints
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,15 +77,15 @@ impl BlueprintVersion {
     /// Convert to string representation
     pub fn to_string(&self) -> String {
         let mut version = format!("{}.{}.{}", self.major, self.minor, self.patch);
-        
+
         if let Some(ref pre_release) = self.pre_release {
             version.push_str(&format!("-{}", pre_release));
         }
-        
+
         if let Some(ref build) = self.build {
             version.push_str(&format!("+{}", build));
         }
-        
+
         version
     }
 
@@ -138,18 +138,22 @@ impl PartialOrd for BlueprintVersion {
 impl Ord for BlueprintVersion {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         use std::cmp::Ordering;
-        
+
         // First compare major, minor, patch
-        match (self.major.cmp(&other.major), self.minor.cmp(&other.minor), self.patch.cmp(&other.patch)) {
+        match (
+            self.major.cmp(&other.major),
+            self.minor.cmp(&other.minor),
+            self.patch.cmp(&other.patch),
+        ) {
             (Ordering::Equal, Ordering::Equal, Ordering::Equal) => {
                 // Same core version, now compare prerelease
                 match (&self.pre_release, &other.pre_release) {
                     (None, None) => Ordering::Equal,
                     (None, Some(_)) => Ordering::Greater, // Normal version > prerelease version
                     (Some(_), None) => Ordering::Less,    // Prerelease version < normal version
-                    (Some(a), Some(b)) => a.cmp(b),      // Compare prerelease strings
+                    (Some(a), Some(b)) => a.cmp(b),       // Compare prerelease strings
                 }
-            },
+            }
             (Ordering::Equal, Ordering::Equal, patch_ord) => patch_ord,
             (Ordering::Equal, minor_ord, _) => minor_ord,
             (major_ord, _, _) => major_ord,
@@ -253,10 +257,10 @@ pub struct MigrationScript {
 /// Type of migration operation
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MigrationType {
-    Automatic,      // Can be applied automatically
-    SemiAutomatic,  // Requires user input
-    Manual,         // Requires manual intervention
-    Rollback,       // Rollback operation
+    Automatic,     // Can be applied automatically
+    SemiAutomatic, // Requires user input
+    Manual,        // Requires manual intervention
+    Rollback,      // Rollback operation
 }
 
 /// Validation check for migration
@@ -312,7 +316,7 @@ impl BlueprintEvolutionTracker {
     /// Initialize evolution tracking in a directory
     pub async fn init(&mut self) -> Result<()> {
         tokio::fs::create_dir_all(&self.history_path).await?;
-        
+
         let config_path = self.history_path.join("evolution.json");
         let config = EvolutionConfig {
             version: BlueprintVersion::new(1, 0, 0),
@@ -320,10 +324,10 @@ impl BlueprintEvolutionTracker {
             current_branch: self.current_branch.clone(),
             branches: vec!["main".to_string()],
         };
-        
+
         let config_json = serde_json::to_string_pretty(&config)?;
         tokio::fs::write(&config_path, config_json).await?;
-        
+
         Ok(())
     }
 
@@ -336,7 +340,7 @@ impl BlueprintEvolutionTracker {
 
         let config_content = tokio::fs::read_to_string(&config_path).await?;
         let config: EvolutionConfig = serde_json::from_str(&config_content)?;
-        
+
         self.current_branch = config.current_branch;
 
         // Load all branches
@@ -361,7 +365,7 @@ impl BlueprintEvolutionTracker {
             current_branch: self.current_branch.clone(),
             branches: self.branches.keys().cloned().collect(),
         };
-        
+
         let config_path = self.history_path.join("evolution.json");
         let config_json = serde_json::to_string_pretty(&config)?;
         tokio::fs::write(&config_path, config_json).await?;
@@ -378,13 +382,14 @@ impl BlueprintEvolutionTracker {
 
     /// Add new evolution entry
     pub async fn add_entry(&mut self, entry: EvolutionEntry) -> Result<()> {
-        let branch_entries = self.branches
+        let branch_entries = self
+            .branches
             .entry(self.current_branch.clone())
             .or_insert_with(Vec::new);
-        
+
         branch_entries.push(entry);
         self.save().await?;
-        
+
         Ok(())
     }
 
@@ -416,14 +421,15 @@ impl BlueprintEvolutionTracker {
         }
 
         // Copy current branch history to new branch
-        let current_history = self.branches
+        let current_history = self
+            .branches
             .get(&self.current_branch)
             .cloned()
             .unwrap_or_default();
-        
+
         self.branches.insert(branch_name, current_history);
         self.save().await?;
-        
+
         Ok(())
     }
 
@@ -469,7 +475,7 @@ impl std::str::FromStr for BlueprintVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_blueprint_version_parsing() {
         let version = BlueprintVersion::from_str("1.2.3").unwrap();
@@ -478,7 +484,7 @@ mod tests {
         assert_eq!(version.patch, 3);
         assert_eq!(version.pre_release, None);
         assert_eq!(version.build, None);
-        
+
         let version = BlueprintVersion::from_str("2.0.0-alpha+build123").unwrap();
         assert_eq!(version.major, 2);
         assert_eq!(version.minor, 0);
@@ -486,33 +492,33 @@ mod tests {
         assert_eq!(version.pre_release, Some("alpha".to_string()));
         assert_eq!(version.build, Some("build123".to_string()));
     }
-    
+
     #[test]
     fn test_version_comparison() {
         let v1 = BlueprintVersion::new(1, 0, 0);
         let v2 = BlueprintVersion::new(2, 0, 0);
         let v3 = BlueprintVersion::new(1, 1, 0);
         let v4 = BlueprintVersion::new(1, 0, 1);
-        
+
         assert!(v2.is_breaking_change_from(&v1));
         assert!(v3.is_feature_change_from(&v1));
         assert!(v4.is_patch_change_from(&v1));
-        
+
         assert!(!v1.is_breaking_change_from(&v2));
         assert!(!v1.is_feature_change_from(&v3));
         assert!(!v1.is_patch_change_from(&v4));
     }
-    
+
     #[test]
     fn test_version_increment() {
         let mut version = BlueprintVersion::new(1, 2, 3);
-        
+
         version.increment_patch();
         assert_eq!(version.to_string(), "1.2.4");
-        
+
         version.increment_minor();
         assert_eq!(version.to_string(), "1.3.0");
-        
+
         version.increment_major();
         assert_eq!(version.to_string(), "2.0.0");
     }

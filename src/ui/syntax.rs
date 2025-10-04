@@ -86,7 +86,7 @@ impl SyntaxHighlighter {
     /// Highlight code and return styled spans
     pub fn highlight(&self, code: &str, language: &str) -> Vec<Line<'static>> {
         let theme = SyntaxTheme::default();
-        
+
         if let Some(rules) = self.language_patterns.get(language) {
             self.highlight_with_rules(code, rules, &theme)
         } else {
@@ -98,7 +98,12 @@ impl SyntaxHighlighter {
     }
 
     /// Highlight code with specific language rules
-    fn highlight_with_rules(&self, code: &str, rules: &LanguageRules, theme: &SyntaxTheme) -> Vec<Line<'static>> {
+    fn highlight_with_rules(
+        &self,
+        code: &str,
+        rules: &LanguageRules,
+        theme: &SyntaxTheme,
+    ) -> Vec<Line<'static>> {
         let mut result = Vec::new();
 
         for line in code.lines() {
@@ -110,7 +115,12 @@ impl SyntaxHighlighter {
     }
 
     /// Highlight a single line of code
-    fn highlight_line(&self, line: &str, rules: &LanguageRules, theme: &SyntaxTheme) -> Line<'static> {
+    fn highlight_line(
+        &self,
+        line: &str,
+        rules: &LanguageRules,
+        theme: &SyntaxTheme,
+    ) -> Line<'static> {
         let mut spans = Vec::new();
         let mut current_pos = 0;
         let chars: Vec<char> = line.chars().collect();
@@ -132,10 +142,7 @@ impl SyntaxHighlighter {
             // Check for line comments
             if let Some(comment_prefix) = &rules.comments.line_comment {
                 if line[current_pos..].starts_with(comment_prefix) {
-                    spans.push(Span::styled(
-                        line[current_pos..].to_string(),
-                        theme.comment,
-                    ));
+                    spans.push(Span::styled(line[current_pos..].to_string(), theme.comment));
                     break;
                 }
             }
@@ -158,8 +165,11 @@ impl SyntaxHighlighter {
             // Check for numbers
             if rules.numbers && chars[current_pos].is_ascii_digit() {
                 let start = current_pos;
-                while current_pos < chars.len() && 
-                      (chars[current_pos].is_ascii_alphanumeric() || chars[current_pos] == '.' || chars[current_pos] == '_') {
+                while current_pos < chars.len()
+                    && (chars[current_pos].is_ascii_alphanumeric()
+                        || chars[current_pos] == '.'
+                        || chars[current_pos] == '_')
+                {
                     current_pos += 1;
                 }
                 spans.push(Span::styled(
@@ -186,13 +196,14 @@ impl SyntaxHighlighter {
             // Check for identifiers (keywords, types, functions)
             if chars[current_pos].is_alphabetic() || chars[current_pos] == '_' {
                 let start = current_pos;
-                while current_pos < chars.len() && 
-                      (chars[current_pos].is_alphanumeric() || chars[current_pos] == '_') {
+                while current_pos < chars.len()
+                    && (chars[current_pos].is_alphanumeric() || chars[current_pos] == '_')
+                {
                     current_pos += 1;
                 }
-                
+
                 let identifier = chars[start..current_pos].iter().collect::<String>();
-                
+
                 let style = if rules.keywords.contains(&identifier) {
                     theme.keyword
                 } else if rules.types.contains(&identifier) {
@@ -200,16 +211,13 @@ impl SyntaxHighlighter {
                 } else {
                     theme.default
                 };
-                
+
                 spans.push(Span::styled(identifier, style));
                 continue;
             }
 
             // Default: single character
-            spans.push(Span::styled(
-                chars[current_pos].to_string(),
-                theme.default,
-            ));
+            spans.push(Span::styled(chars[current_pos].to_string(), theme.default));
             current_pos += 1;
         }
 
@@ -220,7 +228,7 @@ impl SyntaxHighlighter {
     fn extract_string(&self, line: &str, start: usize, quote_char: char) -> (String, usize) {
         let mut current = start + 1; // Skip opening quote
         let chars: Vec<char> = line.chars().collect();
-        
+
         while current < chars.len() {
             if chars[current] == quote_char {
                 current += 1; // Include closing quote
@@ -232,7 +240,7 @@ impl SyntaxHighlighter {
                 current += 1;
             }
         }
-        
+
         (chars[start..current].iter().collect(), current)
     }
 
@@ -240,37 +248,46 @@ impl SyntaxHighlighter {
     fn add_rust_support(&mut self) {
         let rust_rules = LanguageRules {
             keywords: vec![
-                "as", "break", "const", "continue", "crate", "else", "enum", "extern",
-                "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod",
-                "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct",
-                "super", "trait", "true", "type", "unsafe", "use", "where", "while",
-                "async", "await", "dyn"
-            ].iter().map(|s| s.to_string()).collect(),
-            
+                "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false",
+                "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut",
+                "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait",
+                "true", "type", "unsafe", "use", "where", "while", "async", "await", "dyn",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+
             types: vec![
-                "bool", "char", "i8", "i16", "i32", "i64", "i128", "isize",
-                "u8", "u16", "u32", "u64", "u128", "usize", "f32", "f64",
-                "String", "str", "Vec", "Option", "Result", "Box", "Arc", "Rc"
-            ].iter().map(|s| s.to_string()).collect(),
-            
+                "bool", "char", "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32",
+                "u64", "u128", "usize", "f32", "f64", "String", "str", "Vec", "Option", "Result",
+                "Box", "Arc", "Rc",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+
             strings: StringRules {
                 single_quote: true,
                 double_quote: true,
                 triple_quote: false,
             },
-            
+
             comments: CommentRules {
                 line_comment: Some("//".to_string()),
                 block_comment: Some(("/*".to_string(), "*/".to_string())),
             },
-            
+
             numbers: true,
             operators: vec![
-                "==", "!=", "<=", ">=", "&&", "||", "->", "=>", "::", "+=", "-=", "*=", "/="
-            ].iter().map(|s| s.to_string()).collect(),
+                "==", "!=", "<=", ">=", "&&", "||", "->", "=>", "::", "+=", "-=", "*=", "/=",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
         };
-        
-        self.language_patterns.insert("rust".to_string(), rust_rules.clone());
+
+        self.language_patterns
+            .insert("rust".to_string(), rust_rules.clone());
         self.language_patterns.insert("rs".to_string(), rust_rules);
     }
 
@@ -278,79 +295,148 @@ impl SyntaxHighlighter {
     fn add_python_support(&mut self) {
         let python_rules = LanguageRules {
             keywords: vec![
-                "and", "as", "assert", "break", "class", "continue", "def", "del", "elif",
-                "else", "except", "False", "finally", "for", "from", "global", "if", "import",
-                "in", "is", "lambda", "None", "nonlocal", "not", "or", "pass", "raise",
-                "return", "True", "try", "while", "with", "yield", "async", "await"
-            ].iter().map(|s| s.to_string()).collect(),
-            
+                "and", "as", "assert", "break", "class", "continue", "def", "del", "elif", "else",
+                "except", "False", "finally", "for", "from", "global", "if", "import", "in", "is",
+                "lambda", "None", "nonlocal", "not", "or", "pass", "raise", "return", "True",
+                "try", "while", "with", "yield", "async", "await",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+
             types: vec![
-                "int", "float", "str", "bool", "list", "dict", "tuple", "set", "object"
-            ].iter().map(|s| s.to_string()).collect(),
-            
+                "int", "float", "str", "bool", "list", "dict", "tuple", "set", "object",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+
             strings: StringRules {
                 single_quote: true,
                 double_quote: true,
                 triple_quote: true,
             },
-            
+
             comments: CommentRules {
                 line_comment: Some("#".to_string()),
                 block_comment: None,
             },
-            
+
             numbers: true,
             operators: vec![
-                "==", "!=", "<=", ">=", "and", "or", "not", "+=", "-=", "*=", "/=", "//="
-            ].iter().map(|s| s.to_string()).collect(),
+                "==", "!=", "<=", ">=", "and", "or", "not", "+=", "-=", "*=", "/=", "//=",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
         };
-        
-        self.language_patterns.insert("python".to_string(), python_rules.clone());
-        self.language_patterns.insert("py".to_string(), python_rules);
+
+        self.language_patterns
+            .insert("python".to_string(), python_rules.clone());
+        self.language_patterns
+            .insert("py".to_string(), python_rules);
     }
 
     /// Add JavaScript/TypeScript language support
     fn add_javascript_support(&mut self) {
         let js_rules = LanguageRules {
             keywords: vec![
-                "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-                "delete", "do", "else", "export", "extends", "false", "finally", "for",
-                "function", "if", "import", "in", "instanceof", "let", "new", "null", "return",
-                "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void",
-                "while", "with", "yield", "async", "await", "interface", "type"
-            ].iter().map(|s| s.to_string()).collect(),
-            
+                "break",
+                "case",
+                "catch",
+                "class",
+                "const",
+                "continue",
+                "debugger",
+                "default",
+                "delete",
+                "do",
+                "else",
+                "export",
+                "extends",
+                "false",
+                "finally",
+                "for",
+                "function",
+                "if",
+                "import",
+                "in",
+                "instanceof",
+                "let",
+                "new",
+                "null",
+                "return",
+                "super",
+                "switch",
+                "this",
+                "throw",
+                "true",
+                "try",
+                "typeof",
+                "var",
+                "void",
+                "while",
+                "with",
+                "yield",
+                "async",
+                "await",
+                "interface",
+                "type",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+
             types: vec![
-                "boolean", "number", "string", "object", "undefined", "symbol", "any", "void"
-            ].iter().map(|s| s.to_string()).collect(),
-            
+                "boolean",
+                "number",
+                "string",
+                "object",
+                "undefined",
+                "symbol",
+                "any",
+                "void",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+
             strings: StringRules {
                 single_quote: true,
                 double_quote: true,
                 triple_quote: false,
             },
-            
+
             comments: CommentRules {
                 line_comment: Some("//".to_string()),
                 block_comment: Some(("/*".to_string(), "*/".to_string())),
             },
-            
+
             numbers: true,
             operators: vec![
-                "===", "!==", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "=>"
-            ].iter().map(|s| s.to_string()).collect(),
+                "===", "!==", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "=>",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
         };
-        
-        self.language_patterns.insert("javascript".to_string(), js_rules.clone());
-        self.language_patterns.insert("js".to_string(), js_rules.clone());
-        self.language_patterns.insert("typescript".to_string(), js_rules.clone());
+
+        self.language_patterns
+            .insert("javascript".to_string(), js_rules.clone());
+        self.language_patterns
+            .insert("js".to_string(), js_rules.clone());
+        self.language_patterns
+            .insert("typescript".to_string(), js_rules.clone());
         self.language_patterns.insert("ts".to_string(), js_rules);
     }
 
     /// Add JSON language support
     fn add_json_support(&mut self) {
         let json_rules = LanguageRules {
-            keywords: vec!["true", "false", "null"].iter().map(|s| s.to_string()).collect(),
+            keywords: vec!["true", "false", "null"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             types: vec![],
             strings: StringRules {
                 single_quote: false,
@@ -364,8 +450,9 @@ impl SyntaxHighlighter {
             numbers: true,
             operators: vec![":".to_string()],
         };
-        
-        self.language_patterns.insert("json".to_string(), json_rules);
+
+        self.language_patterns
+            .insert("json".to_string(), json_rules);
     }
 
     /// Add Markdown language support (basic)
@@ -385,8 +472,9 @@ impl SyntaxHighlighter {
             numbers: false,
             operators: vec!["#".to_string(), "*".to_string(), "_".to_string()],
         };
-        
-        self.language_patterns.insert("markdown".to_string(), md_rules.clone());
+
+        self.language_patterns
+            .insert("markdown".to_string(), md_rules.clone());
         self.language_patterns.insert("md".to_string(), md_rules);
     }
 

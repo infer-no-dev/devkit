@@ -199,20 +199,14 @@ impl ContextManager {
         config: AnalysisConfig,
     ) -> Result<CodebaseContext, ContextError> {
         let path_str = path.to_string_lossy().to_string();
-        
-        println!(
-            "Starting codebase analysis for: {}",
-            path_str
-        );
-        
+
+        println!("Starting codebase analysis for: {}", path_str);
+
         // Check cache first
         if config.cache_results {
             if let Some(cached_context) = self.cache.get(&path) {
-                println!(
-                    "Cache hit for codebase analysis: {}",
-                    path_str
-                );
-                
+                println!("Cache hit for codebase analysis: {}", path_str);
+
                 return Ok(cached_context.clone());
             }
         }
@@ -223,42 +217,25 @@ impl ContextManager {
         println!("Analyzing file structure and content for: {}", path_str);
         let files = match self.analyzer.analyze_files(&path, &config).await {
             Ok(files) => {
-                println!(
-                    "Successfully analyzed {} files",
-                    files.len()
-                );
+                println!("Successfully analyzed {} files", files.len());
                 files
             }
             Err(e) => {
-                println!(
-                    "Failed to analyze files for {}: {}",
-                    path_str,
-                    e
-                );
+                println!("Failed to analyze files for {}: {}", path_str, e);
                 return Err(e);
             }
         };
 
         // Build symbol index
-        println!(
-            "Building symbol index for {} files",
-            files.len()
-        );
-        
+        println!("Building symbol index for {} files", files.len());
+
         let symbols = match self.indexer.index_symbols(&files).await {
             Ok(symbols) => {
-                println!(
-                    "Successfully indexed {} symbols",
-                    symbols.total_symbols()
-                );
+                println!("Successfully indexed {} symbols", symbols.total_symbols());
                 symbols
             }
             Err(e) => {
-                println!(
-                    "Failed to build symbol index for {}: {}",
-                    path_str,
-                    e
-                );
+                println!("Failed to build symbol index for {}: {}", path_str, e);
                 return Err(e);
             }
         };
@@ -268,18 +245,11 @@ impl ContextManager {
             println!("Analyzing dependencies for: {}", path_str);
             match self.analyzer.analyze_dependencies(&path, &files).await {
                 Ok(deps) => {
-                    println!(
-                        "Found {} dependencies",
-                        deps.len()
-                    );
+                    println!("Found {} dependencies", deps.len());
                     deps
                 }
                 Err(e) => {
-                    println!(
-                        "Dependency analysis failed for {}: {}",
-                        path_str,
-                        e
-                    );
+                    println!("Dependency analysis failed for {}: {}", path_str, e);
                     Vec::new()
                 }
             }
@@ -293,7 +263,7 @@ impl ContextManager {
         // Perform semantic analysis if deep analysis is enabled
         let semantic_analysis = if config.deep_analysis {
             println!("Performing deep semantic analysis for: {}", path_str);
-            
+
             // Create a preliminary context for semantic analysis
             let temp_context = CodebaseContext {
                 root_path: path.clone(),
@@ -314,14 +284,14 @@ impl ContextManager {
                 match self.semantic_analyzer.analyze(&temp_context).await {
                     Ok(analysis) => {
                         let semantic_duration = semantic_start.elapsed();
-                        
+
                         println!(
                             "Semantic analysis completed in {}ms with {} patterns and {} relationships",
                             semantic_duration.as_millis(),
                             analysis.patterns.len(),
                             analysis.relationships.len()
                         );
-                        
+
                         // Cache semantic analysis
                         if config.cache_results {
                             self.semantic_cache.insert(path.clone(), analysis.clone());
@@ -335,7 +305,7 @@ impl ContextManager {
                             err,
                             semantic_start.elapsed().as_millis()
                         );
-                        
+
                         None
                     }
                 }
@@ -349,8 +319,14 @@ impl ContextManager {
         let total_size_bytes: u64 = files.iter().map(|f| f.size_bytes).sum();
         let languages = Self::count_languages(&files);
         let total_symbols = symbols.total_symbols();
-        let semantic_patterns = semantic_analysis.as_ref().map(|s| s.patterns.len()).unwrap_or(0);
-        let semantic_relationships = semantic_analysis.as_ref().map(|s| s.relationships.len()).unwrap_or(0);
+        let semantic_patterns = semantic_analysis
+            .as_ref()
+            .map(|s| s.patterns.len())
+            .unwrap_or(0);
+        let semantic_relationships = semantic_analysis
+            .as_ref()
+            .map(|s| s.relationships.len())
+            .unwrap_or(0);
 
         // Build metadata
         let metadata = ContextMetadata {
@@ -458,31 +434,32 @@ impl ContextManager {
     ) -> Result<(), ContextError> {
         let update_start = std::time::Instant::now();
         let changed_files_count = changed_files.len();
-        
+
         println!(
             "Updating context for {} changed files in {}",
             changed_files_count,
             context.root_path.to_string_lossy()
         );
-        
+
         // Re-analyze changed files
         let updated_files = match self
             .analyzer
             .analyze_specific_files(changed_files, config)
-            .await {
-                Ok(files) => {
-                    println!("Successfully re-analyzed {} changed files", files.len());
-                    files
-                }
-                Err(e) => {
-                    println!("Failed to re-analyze changed files: {}", e);
-                    return Err(e);
-                }
-            };
+            .await
+        {
+            Ok(files) => {
+                println!("Successfully re-analyzed {} changed files", files.len());
+                files
+            }
+            Err(e) => {
+                println!("Failed to re-analyze changed files: {}", e);
+                return Err(e);
+            }
+        };
 
         let mut updated_count = 0;
         let mut added_count = 0;
-        
+
         // Update the context
         for updated_file in updated_files {
             if let Some(existing_file) = context
@@ -499,20 +476,22 @@ impl ContextManager {
         }
 
         // Re-index symbols for updated files
-        match self.indexer
+        match self
+            .indexer
             .update_symbols(&context.files, &mut context.symbols)
-            .await {
-                Ok(()) => {
-                    println!("Symbol index updated successfully");
-                }
-                Err(e) => {
-                    println!("Failed to update symbol index: {}", e);
-                    return Err(e);
-                }
+            .await
+        {
+            Ok(()) => {
+                println!("Symbol index updated successfully");
             }
+            Err(e) => {
+                println!("Failed to update symbol index: {}", e);
+                return Err(e);
+            }
+        }
 
         let update_duration = update_start.elapsed();
-        
+
         println!(
             "Context update completed in {}ms: {} files updated, {} files added",
             update_duration.as_millis(),
@@ -583,7 +562,7 @@ impl ContextManager {
     pub fn clear_semantic_cache(&mut self) {
         self.semantic_cache.clear();
     }
-    
+
     /// Analyze directory with optional breakdown for profiling
     pub async fn analyze_directory(
         &mut self,
@@ -592,7 +571,7 @@ impl ContextManager {
     ) -> Result<CodebaseContext, ContextError> {
         let mut config = AnalysisConfig::default();
         config.deep_analysis = include_breakdown;
-        
+
         self.analyze_codebase(path.to_path_buf(), config).await
     }
 }

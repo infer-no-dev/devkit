@@ -5,7 +5,7 @@
 
 use super::*;
 use anyhow::Result;
-use serde_json::{Value, Map};
+use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 
 /// Blueprint diff analyzer
@@ -72,7 +72,7 @@ pub struct ImpactAnalysis {
 /// Risk level assessment
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RiskLevel {
-    None,     // No significant risk
+    None, // No significant risk
     Low,
     Medium,
     High,
@@ -130,11 +130,11 @@ pub struct MigrationComplexity {
 /// Effort level for migration
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EffortLevel {
-    Trivial,    // < 1 hour
-    Low,        // 1-4 hours  
-    Medium,     // 1-2 days
-    High,       // 3-7 days
-    VeryHigh,   // > 1 week
+    Trivial,  // < 1 hour
+    Low,      // 1-4 hours
+    Medium,   // 1-2 days
+    High,     // 3-7 days
+    VeryHigh, // > 1 week
 }
 
 /// Difficulty of rolling back changes
@@ -219,13 +219,13 @@ impl BlueprintDiffAnalyzer {
             // Both are objects - compare keys and values
             (Value::Object(from_obj), Value::Object(to_obj)) => {
                 self.compare_objects(from_obj, to_obj, path, changes)?;
-            },
-            
+            }
+
             // Both are arrays - compare elements
             (Value::Array(from_arr), Value::Array(to_arr)) => {
                 self.compare_arrays(from_arr, to_arr, path, changes)?;
-            },
-            
+            }
+
             // Different types or values - record as modification
             (from_val, to_val) if from_val != to_val => {
                 changes.push(BlueprintChange {
@@ -237,8 +237,8 @@ impl BlueprintDiffAnalyzer {
                     description: self.generate_change_description(path, from_val, to_val),
                     impact_level: self.assess_impact_level(path, from_val, to_val),
                 });
-            },
-            
+            }
+
             // Values are the same - no change
             _ => {}
         }
@@ -259,7 +259,11 @@ impl BlueprintDiffAnalyzer {
 
         // Find added keys
         for key in to_keys.difference(&from_keys) {
-            let new_path = if path.is_empty() { key.to_string() } else { format!("{}.{}", path, key) };
+            let new_path = if path.is_empty() {
+                key.to_string()
+            } else {
+                format!("{}.{}", path, key)
+            };
             changes.push(BlueprintChange {
                 change_type: ChangeType::Added,
                 change_category: self.categorize_path(&new_path),
@@ -273,7 +277,11 @@ impl BlueprintDiffAnalyzer {
 
         // Find removed keys
         for key in from_keys.difference(&to_keys) {
-            let new_path = if path.is_empty() { key.to_string() } else { format!("{}.{}", path, key) };
+            let new_path = if path.is_empty() {
+                key.to_string()
+            } else {
+                format!("{}.{}", path, key)
+            };
             changes.push(BlueprintChange {
                 change_type: ChangeType::Removed,
                 change_category: self.categorize_path(&new_path),
@@ -287,7 +295,11 @@ impl BlueprintDiffAnalyzer {
 
         // Compare common keys
         for key in from_keys.intersection(&to_keys) {
-            let new_path = if path.is_empty() { key.to_string() } else { format!("{}.{}", path, key) };
+            let new_path = if path.is_empty() {
+                key.to_string()
+            } else {
+                format!("{}.{}", path, key)
+            };
             self.analyze_json_diff(&from_obj[*key], &to_obj[*key], &new_path, changes)?;
         }
 
@@ -304,17 +316,17 @@ impl BlueprintDiffAnalyzer {
     ) -> Result<()> {
         // For arrays, we do a simple index-based comparison
         // TODO: Implement more sophisticated array diffing (LCS algorithm)
-        
+
         let max_len = from_arr.len().max(to_arr.len());
-        
+
         for i in 0..max_len {
             let new_path = format!("{}[{}]", path, i);
-            
+
             match (from_arr.get(i), to_arr.get(i)) {
                 (Some(from_val), Some(to_val)) => {
                     // Both exist - compare
                     self.analyze_json_diff(from_val, to_val, &new_path, changes)?;
-                },
+                }
                 (Some(from_val), None) => {
                     // Removed from array
                     changes.push(BlueprintChange {
@@ -326,7 +338,7 @@ impl BlueprintDiffAnalyzer {
                         description: format!("Removed array element at index {}", i),
                         impact_level: ImpactLevel::Medium,
                     });
-                },
+                }
                 (None, Some(to_val)) => {
                     // Added to array
                     changes.push(BlueprintChange {
@@ -338,7 +350,7 @@ impl BlueprintDiffAnalyzer {
                         description: format!("Added array element at index {}", i),
                         impact_level: ImpactLevel::Medium,
                     });
-                },
+                }
                 (None, None) => unreachable!(),
             }
         }
@@ -349,7 +361,7 @@ impl BlueprintDiffAnalyzer {
     /// Categorize a path into a change category
     fn categorize_path(&self, path: &str) -> ChangeCategory {
         let path_lower = path.to_lowercase();
-        
+
         if path_lower.contains("architecture") || path_lower.contains("system_type") {
             ChangeCategory::Architecture
         } else if path_lower.contains("dependencies") || path_lower.contains("dependency") {
@@ -376,7 +388,7 @@ impl BlueprintDiffAnalyzer {
     /// Assess impact level of a change
     fn assess_impact_level(&self, path: &str, old_value: &Value, new_value: &Value) -> ImpactLevel {
         let category = self.categorize_path(path);
-        
+
         // Base impact level by category
         let base_impact = match category {
             ChangeCategory::Architecture => ImpactLevel::Critical,
@@ -401,22 +413,28 @@ impl BlueprintDiffAnalyzer {
                     ImpactLevel::High => ImpactLevel::Critical,
                     ImpactLevel::Critical => ImpactLevel::Critical,
                 }
-            },
-            (false, false) => base_impact, // Modification
+            }
+            (false, false) => base_impact,    // Modification
             (true, true) => ImpactLevel::Low, // Shouldn't happen
         }
     }
 
     /// Generate description for a change
-    fn generate_change_description(&self, path: &str, old_value: &Value, new_value: &Value) -> String {
+    fn generate_change_description(
+        &self,
+        path: &str,
+        old_value: &Value,
+        new_value: &Value,
+    ) -> String {
         let category = self.categorize_path(path);
-        
+
         match (old_value.is_null(), new_value.is_null()) {
             (true, false) => format!("Added {} to {}", self.value_summary(new_value), path),
             (false, true) => format!("Removed {} from {}", self.value_summary(old_value), path),
-            (false, false) => format!("Changed {} from {} to {}", 
-                path, 
-                self.value_summary(old_value), 
+            (false, false) => format!(
+                "Changed {} from {} to {}",
+                path,
+                self.value_summary(old_value),
                 self.value_summary(new_value)
             ),
             (true, true) => format!("No change in {}", path),
@@ -437,21 +455,27 @@ impl BlueprintDiffAnalyzer {
 
     /// Check if a path should be ignored
     fn is_path_ignored(&self, path: &str) -> bool {
-        self.ignore_paths.iter().any(|ignored| path.starts_with(ignored))
+        self.ignore_paths
+            .iter()
+            .any(|ignored| path.starts_with(ignored))
     }
 
     /// Generate diff summary
     fn generate_summary(&self, changes: &[BlueprintChange]) -> DiffSummary {
         let mut changes_by_category = HashMap::new();
         let mut changes_by_impact = HashMap::new();
-        
+
         let mut breaking_changes = 0;
         let mut new_features = 0;
         let mut bug_fixes = 0;
 
         for change in changes {
-            *changes_by_category.entry(change.change_category.clone()).or_insert(0) += 1;
-            *changes_by_impact.entry(change.impact_level.clone()).or_insert(0) += 1;
+            *changes_by_category
+                .entry(change.change_category.clone())
+                .or_insert(0) += 1;
+            *changes_by_impact
+                .entry(change.impact_level.clone())
+                .or_insert(0) += 1;
 
             match change.impact_level {
                 ImpactLevel::Critical => breaking_changes += 1,
@@ -459,7 +483,7 @@ impl BlueprintDiffAnalyzer {
                     if change.change_type == ChangeType::Added {
                         new_features += 1;
                     }
-                },
+                }
                 ImpactLevel::Medium | ImpactLevel::Low => {
                     if change.change_type == ChangeType::Modified {
                         bug_fixes += 1;
@@ -509,7 +533,8 @@ impl BlueprintDiffAnalyzer {
         let interface_impacts = self.analyze_interface_impacts(changes);
 
         // Calculate compatibility score
-        let compatibility_score = self.calculate_compatibility_score(&dependency_impacts, &interface_impacts);
+        let compatibility_score =
+            self.calculate_compatibility_score(&dependency_impacts, &interface_impacts);
 
         Ok(ImpactAnalysis {
             overall_impact_score: impact_score,
@@ -579,7 +604,7 @@ impl BlueprintDiffAnalyzer {
         // Look for patterns like "modules[0].name" or "modules.some_module"
         if let Some(modules_pos) = path.find("modules") {
             let after_modules = &path[modules_pos + 7..]; // Skip "modules"
-            
+
             // Handle array index format: modules[0].name
             if after_modules.starts_with('[') {
                 if let Some(close_bracket) = after_modules.find(']') {
@@ -587,7 +612,7 @@ impl BlueprintDiffAnalyzer {
                     return Some(format!("module_{}", index_str));
                 }
             }
-            
+
             // Handle object format: modules.module_name
             if after_modules.starts_with('.') {
                 let after_dot = &after_modules[1..];
@@ -664,13 +689,19 @@ impl BlueprintDiffAnalyzer {
             return 1.0; // Perfect compatibility
         }
 
-        let breaking_changes = interface_impacts.iter()
+        let breaking_changes = interface_impacts
+            .iter()
             .filter(|impact| impact.breaking_change)
             .count();
 
-        let major_dependency_changes = dependency_impacts.iter()
-            .filter(|impact| matches!(impact.impact_type, 
-                DependencyImpactType::Removed | DependencyImpactType::VersionChanged))
+        let major_dependency_changes = dependency_impacts
+            .iter()
+            .filter(|impact| {
+                matches!(
+                    impact.impact_type,
+                    DependencyImpactType::Removed | DependencyImpactType::VersionChanged
+                )
+            })
             .count();
 
         let total_significant_changes = breaking_changes + major_dependency_changes;
@@ -723,29 +754,33 @@ impl BlueprintDiffAnalyzer {
             match change.change_category {
                 ChangeCategory::Architecture => {
                     required_skills.insert("System Architecture".to_string());
-                },
+                }
                 ChangeCategory::Dependencies => {
                     required_skills.insert("Dependency Management".to_string());
-                },
+                }
                 ChangeCategory::Interface => {
                     required_skills.insert("API Design".to_string());
-                },
+                }
                 ChangeCategory::Security => {
                     required_skills.insert("Security Engineering".to_string());
-                },
+                }
                 _ => {}
             }
         }
 
         // Find critical path items
-        let critical_path_items = changes.iter()
+        let critical_path_items = changes
+            .iter()
             .filter(|change| change.impact_level == ImpactLevel::Critical)
             .map(|change| change.path.clone())
             .collect();
 
         // Assess rollback difficulty
-        let rollback_difficulty = if impact_analysis.interface_impacts.iter()
-            .any(|impact| impact.breaking_change) {
+        let rollback_difficulty = if impact_analysis
+            .interface_impacts
+            .iter()
+            .any(|impact| impact.breaking_change)
+        {
             RollbackDifficulty::Hard
         } else if complexity_score > 0.6 {
             RollbackDifficulty::Medium
@@ -776,20 +811,20 @@ mod tests {
     #[test]
     fn test_impact_level_assessment() {
         let analyzer = BlueprintDiffAnalyzer::new();
-        
+
         // Architecture change should be critical
         let impact = analyzer.assess_impact_level(
-            "architecture.system_type", 
-            &Value::String("monolith".to_string()), 
-            &Value::String("microservices".to_string())
+            "architecture.system_type",
+            &Value::String("monolith".to_string()),
+            &Value::String("microservices".to_string()),
         );
         assert_eq!(impact, ImpactLevel::Critical);
 
         // Documentation change should be low
         let impact = analyzer.assess_impact_level(
-            "documentation.readme", 
-            &Value::String("old".to_string()), 
-            &Value::String("new".to_string())
+            "documentation.readme",
+            &Value::String("old".to_string()),
+            &Value::String("new".to_string()),
         );
         assert_eq!(impact, ImpactLevel::Low);
     }
@@ -797,20 +832,17 @@ mod tests {
     #[test]
     fn test_module_name_extraction() {
         let analyzer = BlueprintDiffAnalyzer::new();
-        
+
         assert_eq!(
             analyzer.extract_module_name("modules[0].name"),
             Some("module_0".to_string())
         );
-        
+
         assert_eq!(
             analyzer.extract_module_name("modules.user_service.config"),
             Some("user_service".to_string())
         );
-        
-        assert_eq!(
-            analyzer.extract_module_name("config.database"),
-            None
-        );
+
+        assert_eq!(analyzer.extract_module_name("config.database"), None);
     }
 }

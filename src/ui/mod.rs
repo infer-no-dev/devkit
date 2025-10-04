@@ -181,7 +181,12 @@ impl Application {
 
         // In input or command mode, handle input keys first
         if current_context == KeyContext::Input || current_context == KeyContext::Command {
+            eprintln!(
+                "DEBUG: In input/command mode, current_context: {:?}",
+                current_context
+            );
             if let Ok(result) = self.input_handler.handle_key_event(key_event) {
+                eprintln!("DEBUG: Input handler result: {:?}", result);
                 match result {
                     input::InputResult::Command(cmd) => {
                         // Process command
@@ -320,8 +325,10 @@ impl Application {
 
     /// Process a command
     fn process_command(&mut self, command: String) {
+        eprintln!("DEBUG: Processing command: {}", command);
         // Send command to external processor if available
         if let Some(sender) = &self.command_sender {
+            eprintln!("DEBUG: Sending command to external processor");
             let _ = sender.send(command.clone());
         } else {
             // Fallback: Add command output
@@ -487,15 +494,18 @@ impl Application {
             },
             UIEvent::ToggleHelp => {
                 self.panel_manager.toggle_help();
-            },
+            }
             UIEvent::SetLayout(layout_name) => {
                 // TODO: Implement layout switching
                 eprintln!("Layout switching not yet implemented: {}", layout_name);
-            },
+            }
             UIEvent::ShowCompletions(completions) => {
                 // TODO: Implement completion display
-                eprintln!("Completion display not yet implemented: {} completions", completions.len());
-            },
+                eprintln!(
+                    "Completion display not yet implemented: {} completions",
+                    completions.len()
+                );
+            }
             UIEvent::SwitchTheme(theme_name) => {
                 if !self.theme_manager.set_theme(&theme_name) {
                     let notification = Notification::error(

@@ -3,13 +3,13 @@
 //! Provides automated migration script generation, execution, and rollback
 //! capabilities for blueprint evolution.
 
-use super::*;
 use super::diff::BlueprintDiff;
-use anyhow::{Result, Context};
+use super::*;
+use anyhow::{Context, Result};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::process::Command;
-use serde_json::Value;
 
 /// Migration engine for blueprint evolution
 pub struct MigrationEngine {
@@ -231,7 +231,11 @@ impl MigrationEngine {
     }
 
     /// Register a script generator for a specific change category
-    pub fn register_generator(&mut self, category: ChangeCategory, generator: Box<dyn ScriptGenerator>) {
+    pub fn register_generator(
+        &mut self,
+        category: ChangeCategory,
+        generator: Box<dyn ScriptGenerator>,
+    ) {
         self.script_generators.insert(category, generator);
     }
 
@@ -260,8 +264,11 @@ impl MigrationEngine {
         for change in &diff.changes {
             if let Some(generator) = self.script_generators.get(&change.change_category) {
                 if generator.can_handle_change(change) {
-                    let migration_step = generator.generate_migration_script(change, context)
-                        .with_context(|| format!("Failed to generate migration for change: {}", change.path))?;
+                    let migration_step = generator
+                        .generate_migration_script(change, context)
+                        .with_context(|| {
+                            format!("Failed to generate migration for change: {}", change.path)
+                        })?;
                     steps.push(migration_step);
                 }
             }
@@ -287,7 +294,7 @@ impl MigrationEngine {
     ) -> Result<MigrationResult> {
         let migration_id = uuid::Uuid::new_v4().to_string();
         let start_time = std::time::Instant::now();
-        
+
         let mut result = MigrationResult {
             migration_id: migration_id.clone(),
             from_version: BlueprintVersion::from_str(&context.source_blueprint.metadata.version)
@@ -306,7 +313,10 @@ impl MigrationEngine {
         // Pre-migration validation
         if let Err(validation_errors) = self.run_pre_migration_validation(&steps, context).await {
             result.status = MigrationStatus::ValidationFailed;
-            result.warnings.push(format!("Pre-migration validation failed: {}", validation_errors));
+            result.warnings.push(format!(
+                "Pre-migration validation failed: {}",
+                validation_errors
+            ));
             return Ok(result);
         }
 
@@ -326,16 +336,20 @@ impl MigrationEngine {
                 Err(e) => {
                     result.status = MigrationStatus::Failed;
                     result.failed_step = Some(step);
-                    result.warnings.push(format!("Step {} failed: {}", index + 1, e));
-                    
+                    result
+                        .warnings
+                        .push(format!("Step {} failed: {}", index + 1, e));
+
                     // Attempt rollback
                     if let Err(rollback_err) = self.attempt_rollback(&result, context).await {
-                        result.warnings.push(format!("Rollback failed: {}", rollback_err));
+                        result
+                            .warnings
+                            .push(format!("Rollback failed: {}", rollback_err));
                     } else {
                         result.status = MigrationStatus::RolledBack;
                         result.rollback_available = false;
                     }
-                    
+
                     result.execution_time = start_time.elapsed();
                     return Ok(result);
                 }
@@ -344,7 +358,10 @@ impl MigrationEngine {
 
         // Post-migration validation
         if let Err(validation_errors) = self.run_post_migration_validation(&result, context).await {
-            result.warnings.push(format!("Post-migration validation issues: {}", validation_errors));
+            result.warnings.push(format!(
+                "Post-migration validation issues: {}",
+                validation_errors
+            ));
         }
 
         result.status = MigrationStatus::Completed;
@@ -408,7 +425,9 @@ impl MigrationEngine {
         }
 
         // Check if step passed validation
-        let has_critical_errors = step_result.validation_results.iter()
+        let has_critical_errors = step_result
+            .validation_results
+            .iter()
             .any(|v| !v.passed && v.severity == ValidationSeverity::Critical);
 
         step_result.success = !has_critical_errors && step_result.error_message.is_none();
@@ -467,10 +486,10 @@ impl MigrationEngine {
         Ok(StepExecutionResult {
             success: output.status.success(),
             output: String::from_utf8_lossy(&output.stdout).to_string(),
-            error_message: if output.stderr.is_empty() { 
-                None 
-            } else { 
-                Some(String::from_utf8_lossy(&output.stderr).to_string()) 
+            error_message: if output.stderr.is_empty() {
+                None
+            } else {
+                Some(String::from_utf8_lossy(&output.stderr).to_string())
             },
             exit_code: output.status.code(),
             execution_time: std::time::Duration::default(),
@@ -579,9 +598,11 @@ impl MigrationEngine {
         step: &MigrationStep,
         context: &MigrationContext,
     ) -> Result<StepExecutionResult> {
-        let backup_path = self.config.backup_directory
-            .join(format!("backup_{}.json", chrono::Utc::now().format("%Y%m%d_%H%M%S")));
-        
+        let backup_path = self.config.backup_directory.join(format!(
+            "backup_{}.json",
+            chrono::Utc::now().format("%Y%m%d_%H%M%S")
+        ));
+
         let blueprint_json = serde_json::to_string_pretty(&context.source_blueprint)?;
         tokio::fs::write(&backup_path, blueprint_json).await?;
 
@@ -661,7 +682,10 @@ impl MigrationEngine {
 
         Ok(StepExecutionResult {
             success: !has_failures,
-            output: format!("Validation completed with {} checks", validation_results.len()),
+            output: format!(
+                "Validation completed with {} checks",
+                validation_results.len()
+            ),
             error_message: if has_failures {
                 Some("Some validation checks failed".to_string())
             } else {
@@ -698,16 +722,14 @@ impl MigrationEngine {
     fn sort_migration_steps(&self, steps: &mut Vec<MigrationStep>) -> Result<()> {
         // Topological sort based on dependencies
         // For now, just ensure pre/post migration steps are in correct order
-        steps.sort_by(|a, b| {
-            match (&a.step_type, &b.step_type) {
-                (MigrationStepType::PreMigration, _) => std::cmp::Ordering::Less,
-                (_, MigrationStepType::PreMigration) => std::cmp::Ordering::Greater,
-                (MigrationStepType::PostMigration, _) => std::cmp::Ordering::Greater,
-                (_, MigrationStepType::PostMigration) => std::cmp::Ordering::Less,
-                (MigrationStepType::Validation, _) => std::cmp::Ordering::Greater,
-                (_, MigrationStepType::Validation) => std::cmp::Ordering::Less,
-                _ => std::cmp::Ordering::Equal,
-            }
+        steps.sort_by(|a, b| match (&a.step_type, &b.step_type) {
+            (MigrationStepType::PreMigration, _) => std::cmp::Ordering::Less,
+            (_, MigrationStepType::PreMigration) => std::cmp::Ordering::Greater,
+            (MigrationStepType::PostMigration, _) => std::cmp::Ordering::Greater,
+            (_, MigrationStepType::PostMigration) => std::cmp::Ordering::Less,
+            (MigrationStepType::Validation, _) => std::cmp::Ordering::Greater,
+            (_, MigrationStepType::Validation) => std::cmp::Ordering::Less,
+            _ => std::cmp::Ordering::Equal,
         });
 
         Ok(())

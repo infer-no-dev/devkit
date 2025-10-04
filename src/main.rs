@@ -33,13 +33,19 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Initialize basic tracing for immediate startup logging
-    tracing_subscriber::fmt().with_max_level(tracing::Level::INFO).init();
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .init();
 
     // Create CLI runner which handles configuration and command execution
-    let mut cli_runner = CliRunner::new(&cli).map_err(|e| anyhow::anyhow!("Failed to create CLI runner: {}", e))?;
+    let mut cli_runner =
+        CliRunner::new(&cli).map_err(|e| anyhow::anyhow!("Failed to create CLI runner: {}", e))?;
 
     // Run the command through the CLI runner
-    cli_runner.run(cli.command).await.map_err(|e| anyhow::anyhow!("Command execution failed: {}", e))?;
+    cli_runner
+        .run(cli.command)
+        .await
+        .map_err(|e| anyhow::anyhow!("Command execution failed: {}", e))?;
 
     Ok(())
 }

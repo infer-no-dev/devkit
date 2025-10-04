@@ -86,13 +86,17 @@ impl InputHandler {
 
     /// Handle text input keys
     fn handle_text_input(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
-        eprintln!("DEBUG: Handling text input: {:?}", key_event);
+        eprintln!(
+            "DEBUG: Handling text input: {:?}, current context: {:?}",
+            key_event, self.current_context
+        );
+
         // Reset completion on most key presses
         match key_event.code {
-            KeyCode::Tab => {}, // Don't reset on tab
+            KeyCode::Tab => {} // Don't reset on tab
             _ => self.reset_completion(),
         }
-        
+
         match key_event.code {
             KeyCode::Char(c) => {
                 self.insert_char(c);
@@ -147,9 +151,7 @@ impl InputHandler {
                 self.clear_input();
                 Ok(InputResult::Action(Action::SwitchToNormalMode))
             }
-            KeyCode::Tab => {
-                self.handle_tab_completion()
-            }
+            KeyCode::Tab => self.handle_tab_completion(),
             _ => Ok(InputResult::None),
         }
     }
@@ -377,14 +379,16 @@ impl InputHandler {
     /// Generate completion candidates based on current input
     fn generate_completion_candidates(&mut self) {
         self.completion_candidates.clear();
-        
+
         let input = self.get_current_input();
         let parts: Vec<&str> = input.split_whitespace().collect();
-        
+
         if input.starts_with('/') {
             // Command completion
             self.generate_command_completions(&input[1..]);
-        } else if parts.len() >= 2 && (parts[0] == "/cd" || parts[0] == "/ls" || parts[0] == "/load") {
+        } else if parts.len() >= 2
+            && (parts[0] == "/cd" || parts[0] == "/ls" || parts[0] == "/load")
+        {
             // File/directory completion
             let partial_path = parts.last().map_or("", |&p| p);
             self.generate_path_completions(partial_path);
@@ -402,11 +406,25 @@ impl InputHandler {
     /// Generate command completions
     fn generate_command_completions(&mut self, partial: &str) {
         let commands = [
-            "help", "status", "agents", "clear", "save", "load", "ls", "list", 
-            "cd", "pwd", "history", "artifacts", "tasks", "config", "theme", 
-            "quit", "exit"
+            "help",
+            "status",
+            "agents",
+            "clear",
+            "save",
+            "load",
+            "ls",
+            "list",
+            "cd",
+            "pwd",
+            "history",
+            "artifacts",
+            "tasks",
+            "config",
+            "theme",
+            "quit",
+            "exit",
         ];
-        
+
         for cmd in &commands {
             if cmd.starts_with(partial) {
                 self.completion_candidates.push(format!("/{}", cmd));
@@ -419,7 +437,10 @@ impl InputHandler {
         let (dir_path, file_prefix) = if partial_path.contains('/') {
             let path = std::path::Path::new(partial_path);
             if let Some(parent) = path.parent() {
-                (parent.to_path_buf(), path.file_name().and_then(|n| n.to_str()).unwrap_or(""))
+                (
+                    parent.to_path_buf(),
+                    path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+                )
             } else {
                 (PathBuf::from("."), partial_path)
             }
@@ -437,7 +458,7 @@ impl InputHandler {
                         } else {
                             format!("{}/{}", dir_path.display(), name)
                         };
-                        
+
                         // Add trailing slash for directories
                         if entry.file_type().map_or(false, |ft| ft.is_dir()) {
                             self.completion_candidates.push(format!("{}/", full_path));
@@ -448,7 +469,7 @@ impl InputHandler {
                 }
             }
         }
-        
+
         // Sort completions
         self.completion_candidates.sort();
     }
@@ -466,8 +487,11 @@ impl InputHandler {
     /// Generate config key completions
     fn generate_config_key_completions(&mut self, partial: &str) {
         let config_keys = [
-            "auto-save", "default-language", "show-confidence", 
-            "verbose", "max-history"
+            "auto-save",
+            "default-language",
+            "show-confidence",
+            "verbose",
+            "max-history",
         ];
         for key in &config_keys {
             if key.starts_with(partial) {
@@ -487,17 +511,21 @@ impl InputHandler {
 
     /// Apply the current completion candidate
     fn apply_completion(&mut self) {
-        if let (Some(index), Some(candidate)) = (self.completion_index, self.completion_candidates.get(self.completion_index.unwrap_or(0))) {
+        if let (Some(index), Some(candidate)) = (
+            self.completion_index,
+            self.completion_candidates
+                .get(self.completion_index.unwrap_or(0)),
+        ) {
             let input = self.get_current_input();
             let parts: Vec<&str> = input.split_whitespace().collect();
-            
+
             if input.starts_with('/') && parts.len() == 1 {
                 // Replace command
                 self.input_buffer = candidate.clone();
                 self.cursor_position = self.input_buffer.len();
             } else if parts.len() >= 2 {
                 // Replace last part (file path, theme, config key, etc.)
-                let prefix = parts[..parts.len()-1].join(" ");
+                let prefix = parts[..parts.len() - 1].join(" ");
                 self.input_buffer = format!("{} {}", prefix, candidate);
                 self.cursor_position = self.input_buffer.len();
             }

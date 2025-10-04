@@ -107,7 +107,7 @@ impl InteractiveManager {
     ) -> Arc<Self> {
         let mut session_manager = SessionManager::new();
         let session_id = session_manager.create_session(session.project_path.clone());
-        
+
         Arc::new(Self {
             session: Arc::new(RwLock::new(session)),
             agent_system,
@@ -223,7 +223,9 @@ impl InteractiveManager {
             }
             "load" => {
                 let filename = parts.get(1).ok_or("Usage: /load <filename>")?.to_string();
-                match crate::interactive::InteractiveSession::load_from_file(std::path::PathBuf::from(&filename)) {
+                match crate::interactive::InteractiveSession::load_from_file(
+                    std::path::PathBuf::from(&filename),
+                ) {
                     Ok(loaded_session) => {
                         *self.session.write().await = loaded_session;
                         Ok(format!("Session loaded from {}", filename))
@@ -245,12 +247,10 @@ impl InteractiveManager {
                     Ok("Usage: /cd <directory>".to_string())
                 }
             }
-            "pwd" => {
-                match std::env::current_dir() {
-                    Ok(path) => Ok(format!("Current directory: {}", path.display())),
-                    Err(e) => Ok(format!("Failed to get current directory: {}", e)),
-                }
-            }
+            "pwd" => match std::env::current_dir() {
+                Ok(path) => Ok(format!("Current directory: {}", path.display())),
+                Err(e) => Ok(format!("Failed to get current directory: {}", e)),
+            },
             "history" => Ok(self.show_history().await),
             "artifacts" => Ok(self.show_artifacts().await),
             "tasks" => Ok(self.show_active_tasks().await),
@@ -263,91 +263,89 @@ impl InteractiveManager {
             }
             "theme" => {
                 if let Some(theme_name) = parts.get(1) {
-                    let _ = self.ui_sender.send(UIEvent::SwitchTheme(theme_name.to_string()));
+                    let _ = self
+                        .ui_sender
+                        .send(UIEvent::SwitchTheme(theme_name.to_string()));
                     Ok(format!("Switched to {} theme", theme_name))
                 } else {
                     Ok("Available themes: dark, light, blue, green".to_string())
                 }
             }
             "sessions" => Ok(self.list_sessions().await),
-            "session" => {
-                match parts.get(1).map(|&s| s) {
-                    Some("new") => {
-                        let project_path = parts.get(2).map(|&p| std::path::PathBuf::from(p));
-                        Ok(self.create_new_session(project_path).await)
-                    }
-                    Some("switch") => {
-                        if let Some(&session_id) = parts.get(2) {
-                            Ok(self.switch_session(session_id).await)
-                        } else {
-                            Ok("Usage: /session switch <session_id>".to_string())
-                        }
-                    }
-                    Some("delete") => {
-                        if let Some(&session_id) = parts.get(2) {
-                            Ok(self.delete_session(session_id).await)
-                        } else {
-                            Ok("Usage: /session delete <session_id>".to_string())
-                        }
-                    }
-                    Some("clone") => {
-                        if let Some(&session_id) = parts.get(2) {
-                            Ok(self.clone_session(session_id).await)
-                        } else {
-                            Ok("Usage: /session clone <session_id>".to_string())
-                        }
-                    }
-                    _ => Ok("Usage: /session <new|switch|delete|clone> [args]".to_string())
+            "session" => match parts.get(1).map(|&s| s) {
+                Some("new") => {
+                    let project_path = parts.get(2).map(|&p| std::path::PathBuf::from(p));
+                    Ok(self.create_new_session(project_path).await)
                 }
-            }
-            "bookmark" => {
-                match parts.get(1).map(|&s| s) {
-                    Some("create") => {
-                        if let (Some(&name), Some(&description)) = (parts.get(2), parts.get(3)) {
-                            Ok(self.create_bookmark(name, description).await)
-                        } else {
-                            Ok("Usage: /bookmark create <name> <description>".to_string())
-                        }
+                Some("switch") => {
+                    if let Some(&session_id) = parts.get(2) {
+                        Ok(self.switch_session(session_id).await)
+                    } else {
+                        Ok("Usage: /session switch <session_id>".to_string())
                     }
-                    Some("list") => Ok(self.list_bookmarks().await),
-                    Some("goto") => {
-                        if let Some(&bookmark_id) = parts.get(2) {
-                            Ok(self.goto_bookmark(bookmark_id).await)
-                        } else {
-                            Ok("Usage: /bookmark goto <bookmark_id>".to_string())
-                        }
-                    }
-                    Some("delete") => {
-                        if let Some(&bookmark_id) = parts.get(2) {
-                            Ok(self.delete_bookmark(bookmark_id).await)
-                        } else {
-                            Ok("Usage: /bookmark delete <bookmark_id>".to_string())
-                        }
-                    }
-                    _ => Ok("Usage: /bookmark <create|list|goto|delete> [args]".to_string())
                 }
-            }
-            "layout" => {
-                match parts.get(1).map(|&s| s) {
-                    Some("single") => {
-                        let _ = self.ui_sender.send(UIEvent::SetLayout("single".to_string()));
-                        Ok("Switched to single panel layout".to_string())
+                Some("delete") => {
+                    if let Some(&session_id) = parts.get(2) {
+                        Ok(self.delete_session(session_id).await)
+                    } else {
+                        Ok("Usage: /session delete <session_id>".to_string())
                     }
-                    Some("split") => {
-                        let _ = self.ui_sender.send(UIEvent::SetLayout("split".to_string()));
-                        Ok("Switched to split panel layout".to_string())
-                    }
-                    Some("three") => {
-                        let _ = self.ui_sender.send(UIEvent::SetLayout("three".to_string()));
-                        Ok("Switched to three panel layout".to_string())
-                    }
-                    Some("quad") => {
-                        let _ = self.ui_sender.send(UIEvent::SetLayout("quad".to_string()));
-                        Ok("Switched to quad panel layout".to_string())
-                    }
-                    _ => Ok("Available layouts: single, split, three, quad".to_string())
                 }
-            }
+                Some("clone") => {
+                    if let Some(&session_id) = parts.get(2) {
+                        Ok(self.clone_session(session_id).await)
+                    } else {
+                        Ok("Usage: /session clone <session_id>".to_string())
+                    }
+                }
+                _ => Ok("Usage: /session <new|switch|delete|clone> [args]".to_string()),
+            },
+            "bookmark" => match parts.get(1).map(|&s| s) {
+                Some("create") => {
+                    if let (Some(&name), Some(&description)) = (parts.get(2), parts.get(3)) {
+                        Ok(self.create_bookmark(name, description).await)
+                    } else {
+                        Ok("Usage: /bookmark create <name> <description>".to_string())
+                    }
+                }
+                Some("list") => Ok(self.list_bookmarks().await),
+                Some("goto") => {
+                    if let Some(&bookmark_id) = parts.get(2) {
+                        Ok(self.goto_bookmark(bookmark_id).await)
+                    } else {
+                        Ok("Usage: /bookmark goto <bookmark_id>".to_string())
+                    }
+                }
+                Some("delete") => {
+                    if let Some(&bookmark_id) = parts.get(2) {
+                        Ok(self.delete_bookmark(bookmark_id).await)
+                    } else {
+                        Ok("Usage: /bookmark delete <bookmark_id>".to_string())
+                    }
+                }
+                _ => Ok("Usage: /bookmark <create|list|goto|delete> [args]".to_string()),
+            },
+            "layout" => match parts.get(1).map(|&s| s) {
+                Some("single") => {
+                    let _ = self
+                        .ui_sender
+                        .send(UIEvent::SetLayout("single".to_string()));
+                    Ok("Switched to single panel layout".to_string())
+                }
+                Some("split") => {
+                    let _ = self.ui_sender.send(UIEvent::SetLayout("split".to_string()));
+                    Ok("Switched to split panel layout".to_string())
+                }
+                Some("three") => {
+                    let _ = self.ui_sender.send(UIEvent::SetLayout("three".to_string()));
+                    Ok("Switched to three panel layout".to_string())
+                }
+                Some("quad") => {
+                    let _ = self.ui_sender.send(UIEvent::SetLayout("quad".to_string()));
+                    Ok("Switched to quad panel layout".to_string())
+                }
+                _ => Ok("Available layouts: single, split, three, quad".to_string()),
+            },
             "quit" | "exit" => {
                 let _ = self.ui_sender.send(UIEvent::Quit);
                 Ok("Goodbye!".to_string())
@@ -515,7 +513,9 @@ impl InteractiveManager {
     }
 
     /// List files in the current directory
-    async fn list_current_directory(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn list_current_directory(
+        &self,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         match std::fs::read_dir(".") {
             Ok(entries) => {
                 let mut output = String::from("📁 Current Directory Contents:\n");
@@ -531,11 +531,15 @@ impl InteractiveManager {
                             .as_ref()
                             .map(|m| format!(" ({}B)", m.len()))
                             .unwrap_or_default();
-                        
+
                         output.push_str(&format!(
                             "  {}{} {}{}\n",
                             file_type,
-                            if i < 9 { format!(" {}", i + 1) } else { format!("{}", i + 1) },
+                            if i < 9 {
+                                format!(" {}", i + 1)
+                            } else {
+                                format!("{}", i + 1)
+                            },
                             entry.file_name().to_string_lossy(),
                             size
                         ));
@@ -548,7 +552,10 @@ impl InteractiveManager {
     }
 
     /// List files in a specific directory
-    async fn list_directory(&self, path: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn list_directory(
+        &self,
+        path: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         match std::fs::read_dir(path) {
             Ok(entries) => {
                 let mut output = String::from(&format!("📁 Contents of {}:\n", path));
@@ -560,7 +567,11 @@ impl InteractiveManager {
                         } else {
                             "📄"
                         };
-                        output.push_str(&format!("  {} {}\n", file_type, entry.file_name().to_string_lossy()));
+                        output.push_str(&format!(
+                            "  {} {}\n",
+                            file_type,
+                            entry.file_name().to_string_lossy()
+                        ));
                     }
                 }
                 Ok(output)
@@ -570,14 +581,15 @@ impl InteractiveManager {
     }
 
     /// Change current directory
-    async fn change_directory(&self, path: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn change_directory(
+        &self,
+        path: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         match std::env::set_current_dir(path) {
-            Ok(_) => {
-                match std::env::current_dir() {
-                    Ok(new_path) => Ok(format!("Changed directory to: {}", new_path.display())),
-                    Err(_) => Ok("Directory changed successfully".to_string()),
-                }
-            }
+            Ok(_) => match std::env::current_dir() {
+                Ok(new_path) => Ok(format!("Changed directory to: {}", new_path.display())),
+                Err(_) => Ok("Directory changed successfully".to_string()),
+            },
             Err(e) => Ok(format!("Failed to change directory to '{}': {}", path, e)),
         }
     }
@@ -591,14 +603,14 @@ impl InteractiveManager {
 
         let mut output = String::from("📝 Conversation History:\n\n");
         let recent_entries = session.get_recent_context(10);
-        
+
         for (i, entry) in recent_entries.iter().enumerate() {
             let role_icon = match entry.role {
                 ConversationRole::User => "👤",
                 ConversationRole::Assistant => "🤖",
                 ConversationRole::System => "⚙️",
             };
-            
+
             let type_badge = match entry.entry_type {
                 EntryType::Generate => "[GEN]",
                 EntryType::Debug => "[DEBUG]",
@@ -608,20 +620,27 @@ impl InteractiveManager {
                 EntryType::AddTests => "[TEST]",
                 _ => "",
             };
-            
+
             output.push_str(&format!(
                 "{}. {} {} {}\n   {}\n\n",
                 i + 1,
                 role_icon,
                 type_badge,
-                entry.timestamp.duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default().as_secs(),
+                entry
+                    .timestamp
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
                 entry.content.chars().take(100).collect::<String>()
                     + if entry.content.len() > 100 { "..." } else { "" }
             ));
         }
-        
-        output.push_str(&format!("\nShowing {} of {} total entries", recent_entries.len(), session.history.len()));
+
+        output.push_str(&format!(
+            "\nShowing {} of {} total entries",
+            recent_entries.len(),
+            session.history.len()
+        ));
         output
     }
 
@@ -642,11 +661,14 @@ impl InteractiveManager {
                 artifact.language,
                 artifact.confidence * 100.0,
                 artifact.code.lines().count(),
-                artifact.created_at.duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default().as_secs()
+                artifact
+                    .created_at
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
             ));
         }
-        
+
         output
     }
 
@@ -654,7 +676,7 @@ impl InteractiveManager {
     async fn show_active_tasks(&self) -> String {
         // Get active tasks from agent system
         let tasks_info = self.agent_system.get_active_tasks().await;
-        
+
         if tasks_info.is_empty() {
             return "⚡ No active tasks currently running.".to_string();
         }
@@ -669,10 +691,14 @@ impl InteractiveManager {
                 task_info.agent_id,
                 task_info.priority,
                 task_info.description.chars().take(80).collect::<String>()
-                    + if task_info.description.len() > 80 { "..." } else { "" }
+                    + if task_info.description.len() > 80 {
+                        "..."
+                    } else {
+                        ""
+                    }
             ));
         }
-        
+
         output
     }
 
@@ -689,7 +715,11 @@ impl InteractiveManager {
             Session ID: {}\n\
             Project Path: {:?}",
             session.config.auto_save,
-            session.config.default_language.as_deref().unwrap_or("Auto-detect"),
+            session
+                .config
+                .default_language
+                .as_deref()
+                .unwrap_or("Auto-detect"),
             session.config.show_confidence,
             session.config.verbose,
             session.config.max_history,
@@ -699,9 +729,13 @@ impl InteractiveManager {
     }
 
     /// Update configuration setting
-    async fn update_config(&self, key: &str, value: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn update_config(
+        &self,
+        key: &str,
+        value: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut session = self.session.write().await;
-        
+
         match key.to_lowercase().as_str() {
             "auto-save" | "auto_save" => {
                 session.config.auto_save = value.parse().unwrap_or(false);
@@ -735,62 +769,71 @@ impl InteractiveManager {
     }
 
     /// Session Management Methods
-    
+
     async fn list_sessions(&self) -> String {
         let session_manager = self.session_manager.read().await;
         let sessions = session_manager.list_sessions();
-        
+
         if sessions.is_empty() {
             return "📁 No sessions available.".to_string();
         }
-        
+
         let mut output = String::from("📁 Available Sessions:\n\n");
         let current_session = self.session.read().await;
         let current_session_id = &current_session.session_id;
-        
+
         for session in sessions {
-            let marker = if session.id == *current_session_id { "► " } else { "  " };
+            let marker = if session.id == *current_session_id {
+                "► "
+            } else {
+                "  "
+            };
             output.push_str(&format!(
                 "{}{} - {} ({})",
                 marker,
-                session.id,  // Use id instead of name since SessionInfo doesn't have a name field
-                session.project_path.as_ref()
+                session.id, // Use id instead of name since SessionInfo doesn't have a name field
+                session
+                    .project_path
+                    .as_ref()
                     .map(|p| p.display().to_string())
                     .unwrap_or_else(|| "No project".to_string()),
-                "<timestamp>"  // Format time differently since SystemTime doesn't have format method
+                "<timestamp>" // Format time differently since SystemTime doesn't have format method
             ));
             if session.id == *current_session_id {
                 output.push_str(" ✨ Current");
             }
             output.push('\n');
         }
-        
+
         output
     }
-    
+
     async fn create_new_session(&self, project_path: Option<std::path::PathBuf>) -> String {
         let mut session_manager = self.session_manager.write().await;
         let session_id = session_manager.create_session(project_path.clone());
-        
+
         format!(
             "✨ Created new session: {} with project path: {:?}",
             session_id, project_path
         )
     }
-    
+
     async fn switch_session(&self, session_id: &str) -> String {
         let session_manager = self.session_manager.read().await;
-        
+
         if let Some(session_info) = session_manager.get_session(session_id) {
             // Create new session from the stored info
             let new_session = InteractiveSession::new(session_info.project_path.clone());
-            
+
             // Replace current session
             *self.session.write().await = new_session;
-            
-            format!("🔄 Switched to session: {} ({})", 
-                session_id,  // Use the session_id parameter since that's what we're switching to
-                session_info.project_path.as_ref()
+
+            format!(
+                "🔄 Switched to session: {} ({})",
+                session_id, // Use the session_id parameter since that's what we're switching to
+                session_info
+                    .project_path
+                    .as_ref()
                     .map(|p| p.display().to_string())
                     .unwrap_or_else(|| "No project".to_string())
             )
@@ -798,61 +841,67 @@ impl InteractiveManager {
             format!("❌ Session not found: {}", session_id)
         }
     }
-    
+
     async fn delete_session(&self, session_id: &str) -> String {
         let mut session_manager = self.session_manager.write().await;
         let current_session_id = self.session.read().await.session_id.clone();
-        
+
         if session_id == current_session_id {
             return "❌ Cannot delete the current active session.".to_string();
         }
-        
+
         match session_manager.delete_session(session_id) {
             Ok(()) => format!("🗑️  Deleted session: {}", session_id),
             Err(e) => format!("❌ Failed to delete session: {}", e),
         }
     }
-    
+
     async fn clone_session(&self, session_id: &str) -> String {
         let mut session_manager = self.session_manager.write().await;
-        
+
         match session_manager.clone_session(session_id) {
             Ok(new_session_id) => {
-                format!("📋 Cloned session {} to new session: {}", session_id, new_session_id)
+                format!(
+                    "📋 Cloned session {} to new session: {}",
+                    session_id, new_session_id
+                )
             }
             Err(e) => {
                 format!("❌ Failed to clone session {}: {}", session_id, e)
             }
         }
     }
-    
+
     async fn create_bookmark(&self, name: &str, description: &str) -> String {
         let mut session_manager = self.session_manager.write().await;
         let current_session_id = self.session.read().await.session_id.clone();
-        
+
         match session_manager.create_bookmark(
             name.to_string(),
             description.to_string(),
             current_session_id,
-            Vec::new(),  // Empty tags
+            Vec::new(), // Empty tags
         ) {
             Ok(bookmark_id) => {
-                format!("🔖 Created bookmark '{}': {} (ID: {})", name, description, bookmark_id)
+                format!(
+                    "🔖 Created bookmark '{}': {} (ID: {})",
+                    name, description, bookmark_id
+                )
             }
             Err(e) => {
                 format!("❌ Failed to create bookmark: {}", e)
             }
         }
     }
-    
+
     async fn list_bookmarks(&self) -> String {
         let session_manager = self.session_manager.read().await;
         let bookmarks = session_manager.list_bookmarks();
-        
+
         if bookmarks.is_empty() {
             return "🔖 No bookmarks created yet.".to_string();
         }
-        
+
         let mut output = String::from("🔖 Bookmarks:\n\n");
         for (i, (bookmark_id, bookmark)) in bookmarks.iter().enumerate() {
             output.push_str(&format!(
@@ -864,13 +913,13 @@ impl InteractiveManager {
                 bookmark_id
             ));
         }
-        
+
         output
     }
-    
+
     async fn goto_bookmark(&self, bookmark_id: &str) -> String {
         let session_manager = self.session_manager.read().await;
-        
+
         if let Some(bookmark) = session_manager.get_bookmark(bookmark_id) {
             let session_id = bookmark.session_id.clone();
             drop(session_manager); // Release the read lock
@@ -879,10 +928,10 @@ impl InteractiveManager {
             format!("❌ Bookmark not found: {}", bookmark_id)
         }
     }
-    
+
     async fn delete_bookmark(&self, bookmark_id: &str) -> String {
         let mut session_manager = self.session_manager.write().await;
-        
+
         match session_manager.delete_bookmark(bookmark_id) {
             Ok(()) => format!("🗑️  Deleted bookmark: {}", bookmark_id),
             Err(e) => format!("❌ Failed to delete bookmark: {}", e),

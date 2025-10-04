@@ -6,9 +6,7 @@
 //! 3. Submit various code generation tasks
 //! 4. Process results and display generated code
 
-use devkit_env::agents::{
-    agent_types::CodeGenerationAgent, AgentSystem, AgentTask, TaskPriority,
-};
+use devkit_env::agents::{agent_types::CodeGenerationAgent, AgentSystem, AgentTask, TaskPriority};
 use devkit_env::ai::AIManager;
 use devkit_env::config::{AIModelConfig, OllamaConfig};
 use serde_json::json;

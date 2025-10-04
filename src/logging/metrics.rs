@@ -171,9 +171,9 @@ impl LogMetrics {
         let processing_count = if self.total_entries > 0 {
             self.total_entries
         } else {
-            1  // At least one processing time has been recorded
+            1 // At least one processing time has been recorded
         };
-        
+
         self.avg_processing_time_us =
             self.total_processing_time_us as f64 / processing_count as f64;
     }

@@ -1,11 +1,10 @@
 //! Comprehensive tests for BlueprintDiffAnalyzer
 
 use crate::blueprint::evolution::{
-    BlueprintDiffAnalyzer, BlueprintDiff, BlueprintChange, BlueprintVersion,
-    ChangeType, ChangeCategory, ImpactLevel, RiskLevel,
-    DiffWeightConfig, DiffSummary
+    BlueprintChange, BlueprintDiff, BlueprintDiffAnalyzer, BlueprintVersion, ChangeCategory,
+    ChangeType, DiffSummary, DiffWeightConfig, ImpactLevel, RiskLevel,
 };
-use crate::blueprint::tests::{TestUtils, TestChange, TestAssertions};
+use crate::blueprint::tests::{TestAssertions, TestChange, TestUtils};
 use anyhow::Result;
 
 #[cfg(test)]
@@ -30,7 +29,8 @@ mod diff_analyzer_tests {
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.0")?;
-            let diff = analyzer.analyze_diff(&blueprint, &blueprint_copy, from_version, to_version)?;
+            let diff =
+                analyzer.analyze_diff(&blueprint, &blueprint_copy, from_version, to_version)?;
 
             assert_eq!(diff.changes.len(), 0);
             assert_eq!(diff.summary.total_changes, 0);
@@ -45,9 +45,10 @@ mod diff_analyzer_tests {
         fn test_version_only_change() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_test_blueprint("test-app", "1.0.0");
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::UpdateVersion("1.0.1".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![TestChange::UpdateVersion("1.0.1".to_string())],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.1")?;
@@ -65,9 +66,12 @@ mod diff_analyzer_tests {
         fn test_description_change() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_test_blueprint("test-app", "1.0.0");
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::UpdateDescription("Updated description".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![TestChange::UpdateDescription(
+                    "Updated description".to_string(),
+                )],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.0")?;
@@ -77,7 +81,10 @@ mod diff_analyzer_tests {
             assert_eq!(diff.changes[0].change_type, ChangeType::Modified);
             assert_eq!(diff.changes[0].path, "metadata.description");
             // Description field gets categorized as Configuration by default in implementation
-            assert_eq!(diff.changes[0].change_category, ChangeCategory::Configuration);
+            assert_eq!(
+                diff.changes[0].change_category,
+                ChangeCategory::Configuration
+            );
 
             Ok(())
         }
@@ -86,9 +93,10 @@ mod diff_analyzer_tests {
         fn test_architecture_change() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_test_blueprint("test-app", "1.0.0");
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::UpdateArchitecture("monolith".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![TestChange::UpdateArchitecture("monolith".to_string())],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.0")?;
@@ -97,7 +105,10 @@ mod diff_analyzer_tests {
             assert_eq!(diff.changes.len(), 1);
             assert_eq!(diff.changes[0].change_type, ChangeType::Modified);
             assert_eq!(diff.changes[0].path, "metadata.architecture_paradigm");
-            assert_eq!(diff.changes[0].change_category, ChangeCategory::Architecture);
+            assert_eq!(
+                diff.changes[0].change_category,
+                ChangeCategory::Architecture
+            );
             // Architecture category gets Critical impact level according to implementation
             assert_eq!(diff.changes[0].impact_level, ImpactLevel::Critical);
 
@@ -112,9 +123,10 @@ mod diff_analyzer_tests {
         fn test_add_module() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_test_blueprint("test-app", "1.0.0");
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::AddModule("auth".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![TestChange::AddModule("auth".to_string())],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.0")?;
@@ -133,9 +145,10 @@ mod diff_analyzer_tests {
         fn test_remove_module() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_blueprint_with_modules("test-app", "1.0.0", 2);
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::RemoveModule("module_1".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![TestChange::RemoveModule("module_1".to_string())],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.0")?;
@@ -143,7 +156,7 @@ mod diff_analyzer_tests {
 
             assert_eq!(diff.changes.len(), 1);
             assert_eq!(diff.changes[0].change_type, ChangeType::Removed);
-            // When removing module_1 from an array of 2 modules, it becomes modules[1] 
+            // When removing module_1 from an array of 2 modules, it becomes modules[1]
             assert_eq!(diff.changes[0].path, "modules[1]");
             assert_eq!(diff.changes[0].change_category, ChangeCategory::Module);
             assert_eq!(diff.changes[0].impact_level, ImpactLevel::Medium);
@@ -155,10 +168,13 @@ mod diff_analyzer_tests {
         fn test_multiple_module_changes() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_blueprint_with_modules("test-app", "1.0.0", 2);
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::AddModule("new_module".to_string()),
-                TestChange::RemoveModule("module_0".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![
+                    TestChange::AddModule("new_module".to_string()),
+                    TestChange::RemoveModule("module_0".to_string()),
+                ],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.0")?;
@@ -168,12 +184,21 @@ mod diff_analyzer_tests {
             // results in more complex changes due to index shifts
             // Let's just verify we have some changes detected
             assert!(diff.changes.len() >= 2);
-            
+
             // Verify we have at least one addition and modification
-            let has_addition = diff.changes.iter().any(|c| c.change_type == ChangeType::Added);
-            let has_modification = diff.changes.iter().any(|c| c.change_type == ChangeType::Modified);
-            
-            assert!(has_addition || has_modification, "Should have at least one addition or modification");
+            let has_addition = diff
+                .changes
+                .iter()
+                .any(|c| c.change_type == ChangeType::Added);
+            let has_modification = diff
+                .changes
+                .iter()
+                .any(|c| c.change_type == ChangeType::Modified);
+
+            assert!(
+                has_addition || has_modification,
+                "Should have at least one addition or modification"
+            );
 
             Ok(())
         }
@@ -186,10 +211,13 @@ mod diff_analyzer_tests {
         fn test_breaking_change_detection() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_blueprint_with_modules("test-app", "1.0.0", 3);
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::RemoveModule("module_1".to_string()),
-                TestChange::UpdateArchitecture("event-driven".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![
+                    TestChange::RemoveModule("module_1".to_string()),
+                    TestChange::UpdateArchitecture("event-driven".to_string()),
+                ],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("2.0.0")?;
@@ -198,8 +226,11 @@ mod diff_analyzer_tests {
             // Only Critical impact changes are counted as breaking changes
             // Architecture changes are Critical, which should create 1 breaking change
             assert_eq!(diff.summary.breaking_changes, 1);
-            assert!(diff.impact_analysis.risk_level == RiskLevel::High || diff.impact_analysis.risk_level == RiskLevel::Critical);
-            
+            assert!(
+                diff.impact_analysis.risk_level == RiskLevel::High
+                    || diff.impact_analysis.risk_level == RiskLevel::Critical
+            );
+
             // Compatibility score is based on interface and dependency impacts, not all breaking changes
             // Since we have no interface changes or major dependency changes, compatibility remains 1.0
             // This is actually correct behavior - architecture changes don't affect API compatibility
@@ -212,10 +243,13 @@ mod diff_analyzer_tests {
         fn test_low_impact_changes() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_test_blueprint("test-app", "1.0.0");
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::UpdateDescription("Better description".to_string()),
-                TestChange::UpdateVersion("1.0.1".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![
+                    TestChange::UpdateDescription("Better description".to_string()),
+                    TestChange::UpdateVersion("1.0.1".to_string()),
+                ],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.0.1")?;
@@ -234,10 +268,13 @@ mod diff_analyzer_tests {
         fn test_feature_changes() -> Result<()> {
             let analyzer = BlueprintDiffAnalyzer::new();
             let blueprint1 = TestUtils::create_test_blueprint("test-app", "1.0.0");
-            let blueprint2 = TestUtils::create_modified_blueprint(&blueprint1, vec![
-                TestChange::AddModule("notification_service".to_string()),
-                TestChange::UpdateVersion("1.1.0".to_string())
-            ]);
+            let blueprint2 = TestUtils::create_modified_blueprint(
+                &blueprint1,
+                vec![
+                    TestChange::AddModule("notification_service".to_string()),
+                    TestChange::UpdateVersion("1.1.0".to_string()),
+                ],
+            );
 
             let from_version = BlueprintVersion::from_str("1.0.0")?;
             let to_version = BlueprintVersion::from_str("1.1.0")?;

@@ -4,11 +4,11 @@
 //! enabling cross-language analysis, generation, and replication.
 
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use async_trait::async_trait;
 
 pub mod analyzers;
 
@@ -188,8 +188,8 @@ pub struct TestConfig {
 /// Documentation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentationConfig {
-    pub doc_tool: String,     // e.g., "rustdoc", "sphinx", "jsdoc"
-    pub doc_format: String,   // e.g., "html", "markdown"
+    pub doc_tool: String,   // e.g., "rustdoc", "sphinx", "jsdoc"
+    pub doc_format: String, // e.g., "html", "markdown"
     pub doc_directory: String,
     pub auto_generate: bool,
 }
@@ -249,13 +249,13 @@ pub struct MultiLanguageAnalyzer {
 pub trait LanguageAnalyzer: Send + Sync {
     /// Analyze a project in this language
     async fn analyze(&self, project_path: &Path) -> Result<LanguageModule>;
-    
+
     /// Extract dependencies
     async fn extract_dependencies(&self, project_path: &Path) -> Result<Vec<Dependency>>;
-    
+
     /// Analyze build configuration
     async fn analyze_build_config(&self, project_path: &Path) -> Result<BuildConfig>;
-    
+
     /// Extract API interfaces
     async fn extract_interfaces(&self, project_path: &Path) -> Result<Vec<String>>;
 }
@@ -264,13 +264,25 @@ impl MultiLanguageAnalyzer {
     /// Create a new multi-language analyzer
     pub fn new() -> Self {
         let mut analyzers = HashMap::new();
-        
+
         // Register concrete analyzers
-        analyzers.insert(Language::Rust, Arc::new(analyzers::RustAnalyzer::new()) as Arc<dyn LanguageAnalyzer>);
-        analyzers.insert(Language::Python, Arc::new(analyzers::PythonAnalyzer::new()) as Arc<dyn LanguageAnalyzer>);
-        analyzers.insert(Language::JavaScript, Arc::new(analyzers::JavaScriptAnalyzer::new()) as Arc<dyn LanguageAnalyzer>);
-        analyzers.insert(Language::TypeScript, Arc::new(analyzers::JavaScriptAnalyzer::new()) as Arc<dyn LanguageAnalyzer>);
-        
+        analyzers.insert(
+            Language::Rust,
+            Arc::new(analyzers::RustAnalyzer::new()) as Arc<dyn LanguageAnalyzer>,
+        );
+        analyzers.insert(
+            Language::Python,
+            Arc::new(analyzers::PythonAnalyzer::new()) as Arc<dyn LanguageAnalyzer>,
+        );
+        analyzers.insert(
+            Language::JavaScript,
+            Arc::new(analyzers::JavaScriptAnalyzer::new()) as Arc<dyn LanguageAnalyzer>,
+        );
+        analyzers.insert(
+            Language::TypeScript,
+            Arc::new(analyzers::JavaScriptAnalyzer::new()) as Arc<dyn LanguageAnalyzer>,
+        );
+
         Self { analyzers }
     }
 
@@ -288,7 +300,7 @@ impl MultiLanguageAnalyzer {
         if project_path.join("Cargo.toml").exists() {
             languages.push(Language::Rust);
         }
-        
+
         if project_path.join("package.json").exists() {
             // Determine if JavaScript or TypeScript
             if project_path.join("tsconfig.json").exists() {
@@ -297,13 +309,14 @@ impl MultiLanguageAnalyzer {
                 languages.push(Language::JavaScript);
             }
         }
-        
-        if project_path.join("requirements.txt").exists() || 
-           project_path.join("setup.py").exists() || 
-           project_path.join("pyproject.toml").exists() {
+
+        if project_path.join("requirements.txt").exists()
+            || project_path.join("setup.py").exists()
+            || project_path.join("pyproject.toml").exists()
+        {
             languages.push(Language::Python);
         }
-        
+
         if project_path.join("go.mod").exists() {
             languages.push(Language::Go);
         }
@@ -332,7 +345,8 @@ impl MultiLanguageAnalyzer {
         sorted_languages.sort_by(|a, b| b.1.cmp(&a.1));
 
         for (lang, count) in sorted_languages {
-            if count >= 1 { // Lower threshold for file-based detection
+            if count >= 1 {
+                // Lower threshold for file-based detection
                 languages.push(lang);
             }
         }
@@ -343,9 +357,11 @@ impl MultiLanguageAnalyzer {
     /// Analyze a multi-language project
     pub async fn analyze_project(&self, project_path: &Path) -> Result<MultiLanguageBlueprint> {
         let languages = self.detect_languages(project_path).await?;
-        
+
         if languages.is_empty() {
-            return Err(anyhow::anyhow!("No supported languages detected in project"));
+            return Err(anyhow::anyhow!(
+                "No supported languages detected in project"
+            ));
         }
 
         let primary_language = languages[0].clone();
@@ -365,7 +381,9 @@ impl MultiLanguageAnalyzer {
         let interfaces = self.detect_interfaces(&languages, project_path).await?;
 
         // Analyze build orchestration
-        let build_orchestration = self.analyze_build_orchestration(&languages, project_path).await?;
+        let build_orchestration = self
+            .analyze_build_orchestration(&languages, project_path)
+            .await?;
 
         // Generate deployment strategy
         let deployment_strategy = self.generate_deployment_strategy(&languages).await?;
@@ -381,7 +399,11 @@ impl MultiLanguageAnalyzer {
     }
 
     /// Detect cross-language interfaces
-    async fn detect_interfaces(&self, languages: &[Language], project_path: &Path) -> Result<Vec<InterfaceBinding>> {
+    async fn detect_interfaces(
+        &self,
+        languages: &[Language],
+        project_path: &Path,
+    ) -> Result<Vec<InterfaceBinding>> {
         let mut interfaces = Vec::new();
 
         // Look for common interface patterns
@@ -389,7 +411,10 @@ impl MultiLanguageAnalyzer {
             for target_lang in languages {
                 if source_lang != target_lang {
                     // Check for FFI bindings
-                    if self.has_ffi_bindings(source_lang, target_lang, project_path).await? {
+                    if self
+                        .has_ffi_bindings(source_lang, target_lang, project_path)
+                        .await?
+                    {
                         interfaces.push(InterfaceBinding {
                             source_language: source_lang.clone(),
                             target_language: target_lang.clone(),
@@ -400,7 +425,10 @@ impl MultiLanguageAnalyzer {
                     }
 
                     // Check for API interfaces
-                    if self.has_api_interface(source_lang, target_lang, project_path).await? {
+                    if self
+                        .has_api_interface(source_lang, target_lang, project_path)
+                        .await?
+                    {
                         interfaces.push(InterfaceBinding {
                             source_language: source_lang.clone(),
                             target_language: target_lang.clone(),
@@ -417,19 +445,33 @@ impl MultiLanguageAnalyzer {
     }
 
     /// Check for FFI bindings between languages
-    async fn has_ffi_bindings(&self, _source: &Language, _target: &Language, _path: &Path) -> Result<bool> {
+    async fn has_ffi_bindings(
+        &self,
+        _source: &Language,
+        _target: &Language,
+        _path: &Path,
+    ) -> Result<bool> {
         // TODO: Implement FFI detection logic
         Ok(false)
     }
 
     /// Check for API interfaces
-    async fn has_api_interface(&self, _source: &Language, _target: &Language, _path: &Path) -> Result<bool> {
+    async fn has_api_interface(
+        &self,
+        _source: &Language,
+        _target: &Language,
+        _path: &Path,
+    ) -> Result<bool> {
         // TODO: Implement API detection logic
         Ok(false)
     }
 
     /// Analyze build orchestration
-    async fn analyze_build_orchestration(&self, languages: &[Language], project_path: &Path) -> Result<BuildOrchestration> {
+    async fn analyze_build_orchestration(
+        &self,
+        languages: &[Language],
+        project_path: &Path,
+    ) -> Result<BuildOrchestration> {
         // Check for existing orchestration tools
         let orchestration_tool = if project_path.join("Makefile").exists() {
             "make".to_string()
@@ -464,12 +506,15 @@ impl MultiLanguageAnalyzer {
             Language::JavaScript | Language::Python => 3,
             _ => 4,
         });
-        
+
         Ok(ordered)
     }
 
     /// Generate deployment strategy
-    async fn generate_deployment_strategy(&self, languages: &[Language]) -> Result<DeploymentStrategy> {
+    async fn generate_deployment_strategy(
+        &self,
+        languages: &[Language],
+    ) -> Result<DeploymentStrategy> {
         // Select appropriate base images for each language
         let mut base_images = HashMap::new();
         for lang in languages {
@@ -533,7 +578,7 @@ mod tests {
         assert_eq!(Language::Rust.package_manager(), "cargo");
         assert_eq!(Language::Python.package_manager(), "pip");
         assert_eq!(Language::JavaScript.build_system(), "webpack");
-        
+
         assert!(Language::Rust.extensions().contains(&"rs"));
         assert!(Language::Python.extensions().contains(&"py"));
     }

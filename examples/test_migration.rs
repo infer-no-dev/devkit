@@ -1,10 +1,14 @@
-use devkit::blueprint::{SystemBlueprint, SystemMetadata, ArchitecturalDecisions, ModuleBlueprint, 
-    DesignPatterns, ImplementationDetails, ConfigurationStrategy, 
-    TestingStrategy, PerformanceOptimizations, SecurityPatterns, DeploymentStrategy};
-use devkit::blueprint::evolution::{BlueprintVersion, BlueprintDiffAnalyzer, MigrationEngine, MigrationConfig, MigrationContext};
 use anyhow::Result;
-use std::path::PathBuf;
+use devkit::blueprint::evolution::{
+    BlueprintDiffAnalyzer, BlueprintVersion, MigrationConfig, MigrationContext, MigrationEngine,
+};
+use devkit::blueprint::{
+    ArchitecturalDecisions, ConfigurationStrategy, DeploymentStrategy, DesignPatterns,
+    ImplementationDetails, ModuleBlueprint, PerformanceOptimizations, SecurityPatterns,
+    SystemBlueprint, SystemMetadata, TestingStrategy,
+};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,7 +19,7 @@ async fn main() -> Result<()> {
     // Create test blueprints
     let original_blueprint = create_original_blueprint();
     let updated_blueprint = create_updated_blueprint();
-    
+
     // Create working directories
     let temp_dir = std::env::temp_dir().join("blueprint_migration_test");
     tokio::fs::create_dir_all(&temp_dir).await?;
@@ -34,7 +38,7 @@ async fn main() -> Result<()> {
     };
 
     let mut migration_engine = MigrationEngine::new(config);
-    
+
     // Create migration context
     let context = MigrationContext {
         working_dir: temp_dir.clone(),
@@ -47,7 +51,7 @@ async fn main() -> Result<()> {
     };
 
     println!("Step 1: Analyzing blueprint differences...");
-    
+
     // Analyze differences between blueprints
     let diff_analyzer = BlueprintDiffAnalyzer::new();
     let diff = diff_analyzer.analyze_diff(
@@ -59,37 +63,42 @@ async fn main() -> Result<()> {
 
     println!("Found {} changes:", diff.summary.total_changes);
     for (i, change) in diff.changes.iter().take(5).enumerate() {
-        println!("  {}. {} - {} ({:?})", 
-            i + 1, 
-            change.change_type, 
+        println!(
+            "  {}. {} - {} ({:?})",
+            i + 1,
+            change.change_type,
             change.path,
             change.impact_level
         );
     }
-    
+
     if diff.changes.len() > 5 {
         println!("  ... and {} more changes", diff.changes.len() - 5);
     }
     println!();
 
     println!("Step 2: Generating migration plan...");
-    
+
     // Generate migration plan from diff
-    let migration_plan = migration_engine.generate_migration_plan(&diff, &context).await?;
-    
+    let migration_plan = migration_engine
+        .generate_migration_plan(&diff, &context)
+        .await?;
+
     println!("Generated {} migration steps:", migration_plan.len());
     for (i, step) in migration_plan.iter().enumerate() {
-        println!("  {}. {} - {} (Est: {:?})", 
-            i + 1, 
+        println!(
+            "  {}. {} - {} (Est: {:?})",
+            i + 1,
             step.step_id,
             step.description,
-            step.estimated_duration.unwrap_or(std::time::Duration::from_secs(0))
+            step.estimated_duration
+                .unwrap_or(std::time::Duration::from_secs(0))
         );
-        
+
         if !step.dependencies.is_empty() {
             println!("     Dependencies: {:?}", step.dependencies);
         }
-        
+
         if !step.validation_checks.is_empty() {
             println!("     Validation checks: {}", step.validation_checks.len());
         }
@@ -97,41 +106,54 @@ async fn main() -> Result<()> {
     println!();
 
     println!("Step 3: Executing migration...");
-    
+
     // Execute the migration
-    let migration_result = migration_engine.execute_migration(migration_plan, &context).await?;
-    
+    let migration_result = migration_engine
+        .execute_migration(migration_plan, &context)
+        .await?;
+
     println!("Migration Result:");
     println!("  Status: {:?}", migration_result.status);
     println!("  Migration ID: {}", migration_result.migration_id);
     println!("  Execution Time: {:?}", migration_result.execution_time);
-    println!("  Steps Executed: {}", migration_result.executed_steps.len());
-    println!("  Rollback Available: {}", migration_result.rollback_available);
-    
+    println!(
+        "  Steps Executed: {}",
+        migration_result.executed_steps.len()
+    );
+    println!(
+        "  Rollback Available: {}",
+        migration_result.rollback_available
+    );
+
     if !migration_result.warnings.is_empty() {
         println!("  Warnings:");
         for warning in &migration_result.warnings {
             println!("    - {}", warning);
         }
     }
-    
+
     if !migration_result.artifacts.is_empty() {
         println!("  Artifacts Created:");
         for artifact in &migration_result.artifacts {
-            println!("    - {:?}: {}", artifact.artifact_type, artifact.path.display());
+            println!(
+                "    - {:?}: {}",
+                artifact.artifact_type,
+                artifact.path.display()
+            );
         }
     }
     println!();
 
     println!("Step 4: Migration step details...");
-    
+
     for (i, step) in migration_result.executed_steps.iter().enumerate() {
-        println!("  Step {}: {} ({:?})", 
-            i + 1, 
-            step.description, 
+        println!(
+            "  Step {}: {} ({:?})",
+            i + 1,
+            step.description,
             step.step_type
         );
-        
+
         if let Some(result) = &step.execution_result {
             println!("    Success: {}", result.success);
             if !result.output.is_empty() {
@@ -141,12 +163,13 @@ async fn main() -> Result<()> {
                 println!("    Error: {}", error);
             }
             println!("    Duration: {:?}", result.execution_time);
-            
+
             if !result.validation_results.is_empty() {
                 println!("    Validation Results:");
                 for validation in &result.validation_results {
-                    println!("      - {}: {} ({})", 
-                        validation.check_name, 
+                    println!(
+                        "      - {}: {} ({})",
+                        validation.check_name,
                         if validation.passed { "PASS" } else { "FAIL" },
                         validation.severity
                     );
@@ -158,7 +181,7 @@ async fn main() -> Result<()> {
 
     // Show created files
     println!("Step 5: Inspecting created files...");
-    
+
     let backup_dir = temp_dir.join(".blueprint-backups");
     if backup_dir.exists() {
         println!("Backup files created:");
@@ -170,9 +193,13 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // Check if migration scripts were created
-    let scripts = ["migration_architecture.sh", "migration_module.sh", "migration_config.sh"];
+    let scripts = [
+        "migration_architecture.sh",
+        "migration_module.sh",
+        "migration_config.sh",
+    ];
     println!("Migration scripts:");
     for script in &scripts {
         let script_path = temp_dir.join(script);
@@ -196,7 +223,7 @@ async fn main() -> Result<()> {
 
     println!("Migration engine test completed successfully!");
     println!("Temporary files are in: {}", temp_dir.display());
-    
+
     Ok(())
 }
 
@@ -212,17 +239,15 @@ fn create_original_blueprint() -> SystemBlueprint {
             generator_version: "1.0.0".to_string(),
         },
         architecture: ArchitecturalDecisions::default(),
-        modules: vec![
-            ModuleBlueprint {
-                name: "core".to_string(),
-                purpose: "Core functionality".to_string(),
-                dependencies: vec![],
-                public_interface: vec![],
-                internal_structure: Default::default(),
-                testing_strategy: Default::default(),
-                performance_characteristics: Default::default(),
-            }
-        ],
+        modules: vec![ModuleBlueprint {
+            name: "core".to_string(),
+            purpose: "Core functionality".to_string(),
+            dependencies: vec![],
+            public_interface: vec![],
+            internal_structure: Default::default(),
+            testing_strategy: Default::default(),
+            performance_characteristics: Default::default(),
+        }],
         patterns: DesignPatterns::default(),
         implementation: ImplementationDetails::default(),
         configuration: ConfigurationStrategy::default(),
@@ -264,7 +289,7 @@ fn create_updated_blueprint() -> SystemBlueprint {
                 internal_structure: Default::default(),
                 testing_strategy: Default::default(),
                 performance_characteristics: Default::default(),
-            }
+            },
         ],
         patterns: DesignPatterns::default(),
         implementation: ImplementationDetails::default(),

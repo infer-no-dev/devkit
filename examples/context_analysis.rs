@@ -374,9 +374,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Analyze symbols and return statistics by type
-fn analyze_symbols(
-    context: &devkit_env::context::CodebaseContext,
-) -> Vec<(SymbolType, usize)> {
+fn analyze_symbols(context: &devkit_env::context::CodebaseContext) -> Vec<(SymbolType, usize)> {
     use std::collections::HashMap;
 
     let mut symbol_counts: HashMap<SymbolType, usize> = HashMap::new();

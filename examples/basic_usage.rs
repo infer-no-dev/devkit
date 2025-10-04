@@ -1,9 +1,9 @@
 use devkit::{
-    ai::AIManager,
     agents::{AgentSystem, AgentTask, TaskPriority},
+    ai::AIManager,
     codegen::{CodeGenerator, GenerationRequest},
     config::ConfigManager,
-    context::{ContextManager, AnalysisConfig},
+    context::{AnalysisConfig, ContextManager},
     error::DevKitError,
     logging::LogLevel,
 };
@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 1. Setting up configuration...");
     let config_manager = ConfigManager::new(None)?;
     let config = config_manager.config().clone();
-    
+
     println!("✅ Configuration loaded");
     println!("   📝 Log Level: {:?}", config.general.log_level);
     println!("   🏠 Environment: {}", config.general.environment);
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(manager) => {
             println!("✅ AI Manager initialized successfully");
             manager
-        },
+        }
         Err(e) => {
             println!("⚠️  AI Manager initialization failed: {}", e);
             println!("   This is expected if no AI providers are configured");
@@ -59,14 +59,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔍 6. Analyzing codebase context...");
     let current_dir = std::env::current_dir()?;
     let analysis_config = AnalysisConfig::default();
-    
-    match context_manager.analyze_codebase(current_dir.clone(), analysis_config).await {
+
+    match context_manager
+        .analyze_codebase(current_dir.clone(), analysis_config)
+        .await
+    {
         Ok(context) => {
             println!("✅ Context analysis complete:");
             println!("   📄 Files analyzed: {}", context.files.len());
-            println!("   🔗 Symbols indexed: {}", context.metadata.indexed_symbols);
+            println!(
+                "   🔗 Symbols indexed: {}",
+                context.metadata.indexed_symbols
+            );
             println!("   📊 Total lines: {}", context.metadata.total_lines);
-            
+
             // Show some sample files
             if !context.files.is_empty() {
                 println!("   📋 Sample files:");
@@ -87,12 +93,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 7. Demonstrate Code Generation
     println!("\n💻 7. Generating code...");
     let generation_request = GenerationRequest {
-        prompt: "Create a simple Rust function that calculates the factorial of a number".to_string(),
+        prompt: "Create a simple Rust function that calculates the factorial of a number"
+            .to_string(),
         context: None,
         file_path: None,
         constraints: Vec::new(),
     };
-    
+
     match code_generator.generate_code(&generation_request).await {
         Ok(result) => {
             println!("✅ Code generated successfully:");
@@ -115,12 +122,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 8. Demonstrate Agent System
     println!("\n👥 8. Using agent system...");
-    
+
     // Create a code generation task
     let mut task_metadata = HashMap::new();
     task_metadata.insert("language".to_string(), serde_json::json!("rust"));
     task_metadata.insert("complexity".to_string(), serde_json::json!("simple"));
-    
+
     let agent_task = AgentTask {
         id: "example_task_001".to_string(),
         task_type: "code_generation".to_string(),
@@ -140,8 +147,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✅ Agent task completed:");
             println!("   🎯 Task ID: {}", result.task_id);
             println!("   🤖 Agent: {}", result.agent_id);
-            println!("   ⏱️  Processing time: {}ms", result.processing_duration_ms);
-            println!("   📝 Output: {}", result.output.chars().take(100).collect::<String>());
+            println!(
+                "   ⏱️  Processing time: {}ms",
+                result.processing_duration_ms
+            );
+            println!(
+                "   📝 Output: {}",
+                result.output.chars().take(100).collect::<String>()
+            );
             if result.output.len() > 100 {
                 println!("      ... (truncated)");
             }
@@ -155,7 +168,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📊 9. System status:");
     let agent_statuses = agent_system.get_agent_statuses().await;
     println!("   🤖 Active agents: {}", agent_statuses.len());
-    
+
     for (agent_name, status) in agent_statuses.iter().take(5) {
         println!("      - {}: {:?}", agent_name, status);
     }
@@ -175,18 +188,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Fallback demonstration when AI is not available
 async fn demonstrate_without_ai() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔧 Running limited demo without AI providers...");
-    
+
     // Initialize minimal configuration
     let config_manager = ConfigManager::new(None)?;
     let config = config_manager.config();
-    
+
     // Context analysis still works without AI
     println!("\n📁 Demonstrating context analysis...");
     let context_manager = ContextManager::new()?;
     let current_dir = std::env::current_dir()?;
     let analysis_config = AnalysisConfig::default();
-    
-    match context_manager.analyze_codebase(current_dir, analysis_config).await {
+
+    match context_manager
+        .analyze_codebase(current_dir, analysis_config)
+        .await
+    {
         Ok(context) => {
             println!("✅ Context analysis complete:");
             println!("   📄 Files found: {}", context.files.len());

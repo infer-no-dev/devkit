@@ -259,11 +259,13 @@ impl HelpSystem {
     /// Populate getting started guide
     fn populate_getting_started_guide(&mut self) {
         self.getting_started_guide = vec![
-            "Install the agentic development environment and ensure prerequisites are met".to_string(),
+            "Install the agentic development environment and ensure prerequisites are met"
+                .to_string(),
             "Initialize a new project: `devkit init my-project --language rust`".to_string(),
             "Navigate to your project and analyze the codebase: `devkit analyze .`".to_string(),
             "Start the interactive mode for guided development: `devkit interactive`".to_string(),
-            "Generate code with natural language: `devkit generate 'create a REST API handler'`".to_string(),
+            "Generate code with natural language: `devkit generate 'create a REST API handler'`"
+                .to_string(),
             "Configure your preferences: `devkit config show` and `devkit config set`".to_string(),
             "Explore advanced features like custom agents and templates".to_string(),
         ];
@@ -272,65 +274,76 @@ impl HelpSystem {
     /// Populate command-specific help content
     fn populate_command_help(&mut self) {
         // Init command
-        self.command_help.insert("init".to_string(), HelpContent {
-            description: "Initialize a new agentic development project".to_string(),
-            long_description: Some(
-                "Creates a new project directory with proper structure, configuration files, \
+        self.command_help.insert(
+            "init".to_string(),
+            HelpContent {
+                description: "Initialize a new agentic development project".to_string(),
+                long_description: Some(
+                    "Creates a new project directory with proper structure, configuration files, \
                  and language-specific templates. Optionally initializes git repository and \
-                 sets up development environment.".to_string()
-            ),
-            examples: vec![
-                HelpExample {
-                    description: "Create a new Rust project".to_string(),
-                    command: "devkit init my-rust-app --language rust".to_string(),
-                    expected_output: Some("✅ Project 'my-rust-app' created successfully".to_string()),
-                },
-                HelpExample {
-                    description: "Create Python project with specific template".to_string(),
-                    command: "devkit init ml-project --language python --template machine-learning".to_string(),
-                    expected_output: None,
-                },
-                HelpExample {
-                    description: "Create project without git initialization".to_string(),
-                    command: "devkit init simple-project --no-git".to_string(),
-                    expected_output: None,
-                },
-            ],
-            common_options: vec![
-                CommonOption {
-                    flag: "--language, -l".to_string(),
-                    description: "Programming language for the project".to_string(),
-                    example: Some("--language rust".to_string()),
-                },
-                CommonOption {
-                    flag: "--template, -t".to_string(),
-                    description: "Project template to use".to_string(),
-                    example: Some("--template web-service".to_string()),
-                },
-                CommonOption {
-                    flag: "--force".to_string(),
-                    description: "Overwrite existing directory".to_string(),
-                    example: None,
-                },
-            ],
-            related_commands: vec![
-                "template list".to_string(),
-                "config show".to_string(),
-                "status".to_string(),
-            ],
-            troubleshooting: vec![
-                TroubleshootingTip {
-                    problem: "Directory already exists error".to_string(),
-                    solution: "Use --force flag to overwrite or choose a different name".to_string(),
-                    additional_info: None,
-                },
-                TroubleshootingTip {
-                    problem: "Git initialization fails".to_string(),
-                    solution: "Install git or use --no-git flag".to_string(),
-                    additional_info: Some("Check 'git --version' to verify installation".to_string()),
-                },
-            ],
-        });
+                 sets up development environment."
+                        .to_string(),
+                ),
+                examples: vec![
+                    HelpExample {
+                        description: "Create a new Rust project".to_string(),
+                        command: "devkit init my-rust-app --language rust".to_string(),
+                        expected_output: Some(
+                            "✅ Project 'my-rust-app' created successfully".to_string(),
+                        ),
+                    },
+                    HelpExample {
+                        description: "Create Python project with specific template".to_string(),
+                        command:
+                            "devkit init ml-project --language python --template machine-learning"
+                                .to_string(),
+                        expected_output: None,
+                    },
+                    HelpExample {
+                        description: "Create project without git initialization".to_string(),
+                        command: "devkit init simple-project --no-git".to_string(),
+                        expected_output: None,
+                    },
+                ],
+                common_options: vec![
+                    CommonOption {
+                        flag: "--language, -l".to_string(),
+                        description: "Programming language for the project".to_string(),
+                        example: Some("--language rust".to_string()),
+                    },
+                    CommonOption {
+                        flag: "--template, -t".to_string(),
+                        description: "Project template to use".to_string(),
+                        example: Some("--template web-service".to_string()),
+                    },
+                    CommonOption {
+                        flag: "--force".to_string(),
+                        description: "Overwrite existing directory".to_string(),
+                        example: None,
+                    },
+                ],
+                related_commands: vec![
+                    "template list".to_string(),
+                    "config show".to_string(),
+                    "status".to_string(),
+                ],
+                troubleshooting: vec![
+                    TroubleshootingTip {
+                        problem: "Directory already exists error".to_string(),
+                        solution: "Use --force flag to overwrite or choose a different name"
+                            .to_string(),
+                        additional_info: None,
+                    },
+                    TroubleshootingTip {
+                        problem: "Git initialization fails".to_string(),
+                        solution: "Install git or use --no-git flag".to_string(),
+                        additional_info: Some(
+                            "Check 'git --version' to verify installation".to_string(),
+                        ),
+                    },
+                ],
+            },
+        );
 
         // Generate command
         self.command_help.insert("generate".to_string(), HelpContent {

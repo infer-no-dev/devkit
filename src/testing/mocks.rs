@@ -1,9 +1,7 @@
 //! Mock objects and test doubles for testing the agentic development environment.
 
-use crate::agents::{
-    Agent, AgentError, AgentResult, AgentStatus, AgentTask, TaskPriority,
-};
 use crate::agents::task::AgentArtifact;
+use crate::agents::{Agent, AgentError, AgentResult, AgentStatus, AgentTask, TaskPriority};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

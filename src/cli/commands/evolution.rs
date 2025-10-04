@@ -4,14 +4,14 @@
 //! diff analysis, migration, and rollback operations.
 
 use crate::blueprint::evolution::{
-    BlueprintVersion, BlueprintDiffAnalyzer, MigrationEngine, MigrationConfig, 
-    MigrationContext, BlueprintEvolutionTracker
+    BlueprintDiffAnalyzer, BlueprintEvolutionTracker, BlueprintVersion, MigrationConfig,
+    MigrationContext, MigrationEngine,
 };
 use crate::blueprint::SystemBlueprint;
-use anyhow::{Result, Context};
-use clap::{Subcommand, Args};
-use std::path::{Path, PathBuf};
+use anyhow::{Context, Result};
+use clap::{Args, Subcommand};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 /// Blueprint evolution commands
 #[derive(Debug, Subcommand)]
@@ -182,17 +182,36 @@ async fn handle_version(args: VersionArgs) -> Result<()> {
     if args.detailed {
         println!();
         println!("Detailed Information:");
-        println!("  Architecture: {}", blueprint.metadata.architecture_paradigm);
-        println!("  Primary Language: {}", blueprint.metadata.primary_language);
-        println!("  Created: {}", blueprint.metadata.creation_timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
-        println!("  Generator Version: {}", blueprint.metadata.generator_version);
+        println!(
+            "  Architecture: {}",
+            blueprint.metadata.architecture_paradigm
+        );
+        println!(
+            "  Primary Language: {}",
+            blueprint.metadata.primary_language
+        );
+        println!(
+            "  Created: {}",
+            blueprint
+                .metadata
+                .creation_timestamp
+                .format("%Y-%m-%d %H:%M:%S UTC")
+        );
+        println!(
+            "  Generator Version: {}",
+            blueprint.metadata.generator_version
+        );
         println!("  Modules: {}", blueprint.modules.len());
 
         // Check if evolution tracking is initialized
-        let evolution_dir = args.blueprint.parent().unwrap_or(Path::new(".")).join(".blueprint-evolution");
+        let evolution_dir = args
+            .blueprint
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(".blueprint-evolution");
         if evolution_dir.exists() {
             println!("  Evolution Tracking: Enabled");
-            
+
             let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
             if let Ok(()) = tracker.load().await {
                 if let Some(current_version) = tracker.get_current_version() {
@@ -213,8 +232,12 @@ async fn handle_diff(args: DiffArgs) -> Result<()> {
     println!("===============================");
     println!();
 
-    let current_blueprint = load_blueprint(&args.blueprint)
-        .with_context(|| format!("Failed to load current blueprint from {}", args.blueprint.display()))?;
+    let current_blueprint = load_blueprint(&args.blueprint).with_context(|| {
+        format!(
+            "Failed to load current blueprint from {}",
+            args.blueprint.display()
+        )
+    })?;
 
     // Determine from and to versions
     let from_version = if let Some(from) = &args.from {
@@ -274,7 +297,11 @@ async fn handle_migrate(args: MigrateArgs) -> Result<()> {
     println!();
 
     // Setup migration engine
-    let working_dir = args.blueprint.parent().unwrap_or(Path::new(".")).to_path_buf();
+    let working_dir = args
+        .blueprint
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
     let config = MigrationConfig {
         working_directory: working_dir.clone(),
         backup_directory: working_dir.join(".blueprint-backups"),
@@ -291,8 +318,10 @@ async fn handle_migrate(args: MigrateArgs) -> Result<()> {
     // Create target blueprint (for demo, we'll create a slightly modified version)
     let mut target_blueprint = current_blueprint.clone();
     target_blueprint.metadata.version = args.target_version.clone();
-    target_blueprint.metadata.description = format!("{} (migrated to {})", 
-        target_blueprint.metadata.description, args.target_version);
+    target_blueprint.metadata.description = format!(
+        "{} (migrated to {})",
+        target_blueprint.metadata.description, args.target_version
+    );
 
     // Create migration context
     let context = MigrationContext {
@@ -307,7 +336,12 @@ async fn handle_migrate(args: MigrateArgs) -> Result<()> {
 
     // Analyze differences
     let analyzer = BlueprintDiffAnalyzer::new();
-    let diff = analyzer.analyze_diff(&current_blueprint, &target_blueprint, current_version, target_version)?;
+    let diff = analyzer.analyze_diff(
+        &current_blueprint,
+        &target_blueprint,
+        current_version,
+        target_version,
+    )?;
 
     if diff.changes.is_empty() {
         println!("✅ No changes detected - blueprint is already at target version");
@@ -316,23 +350,32 @@ async fn handle_migrate(args: MigrateArgs) -> Result<()> {
 
     println!("Changes detected: {}", diff.changes.len());
     println!("Risk level: {:?}", diff.impact_analysis.risk_level);
-    println!("Impact score: {:.2}", diff.impact_analysis.overall_impact_score);
+    println!(
+        "Impact score: {:.2}",
+        diff.impact_analysis.overall_impact_score
+    );
     println!();
 
     // Check if migration should proceed
-    if !args.force && diff.impact_analysis.risk_level == crate::blueprint::evolution::RiskLevel::Critical {
+    if !args.force
+        && diff.impact_analysis.risk_level == crate::blueprint::evolution::RiskLevel::Critical
+    {
         println!("⚠️  Critical risk migration detected!");
         println!("Use --force to proceed or analyze the changes with 'devkit blueprint diff'");
         return Ok(());
     }
 
     // Generate migration plan
-    let migration_plan = migration_engine.generate_migration_plan(&diff, &context).await
+    let migration_plan = migration_engine
+        .generate_migration_plan(&diff, &context)
+        .await
         .context("Failed to generate migration plan")?;
 
     println!("Migration steps: {}", migration_plan.len());
     for (i, step) in migration_plan.iter().enumerate() {
-        let duration = step.estimated_duration.unwrap_or(std::time::Duration::from_secs(0));
+        let duration = step
+            .estimated_duration
+            .unwrap_or(std::time::Duration::from_secs(0));
         println!("  {}. {} (Est: {:?})", i + 1, step.description, duration);
     }
     println!();
@@ -343,7 +386,9 @@ async fn handle_migrate(args: MigrateArgs) -> Result<()> {
     }
 
     println!("Executing migration...");
-    let result = migration_engine.execute_migration(migration_plan, &context).await
+    let result = migration_engine
+        .execute_migration(migration_plan, &context)
+        .await
         .context("Migration execution failed")?;
 
     match result.status {
@@ -409,17 +454,27 @@ async fn handle_rollback(args: RollbackArgs) -> Result<()> {
     };
 
     println!("Rollback Plan:");
-    println!("  From: {} → To: {}", current_blueprint.metadata.version, target_version);
+    println!(
+        "  From: {} → To: {}",
+        current_blueprint.metadata.version, target_version
+    );
     println!("  Dry Run: {}", args.dry_run);
     println!();
 
     if args.dry_run {
-        println!("✅ Dry run completed - would rollback to version {}", target_version);
+        println!(
+            "✅ Dry run completed - would rollback to version {}",
+            target_version
+        );
         return Ok(());
     }
 
     // Check for backup files
-    let backup_dir = args.blueprint.parent().unwrap_or(Path::new(".")).join(".blueprint-backups");
+    let backup_dir = args
+        .blueprint
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(".blueprint-backups");
     if backup_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&backup_dir) {
             let backups: Vec<_> = entries.filter_map(|e| e.ok()).collect();
@@ -442,8 +497,12 @@ async fn handle_history(args: HistoryArgs) -> Result<()> {
     println!("=============================");
     println!();
 
-    let evolution_dir = args.blueprint.parent().unwrap_or(Path::new(".")).join(".blueprint-evolution");
-    
+    let evolution_dir = args
+        .blueprint
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(".blueprint-evolution");
+
     if !evolution_dir.exists() {
         println!("❌ Evolution tracking not initialized");
         println!("Run 'devkit blueprint init' to initialize evolution tracking");
@@ -451,13 +510,16 @@ async fn handle_history(args: HistoryArgs) -> Result<()> {
     }
 
     let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
-    tracker.load().await.context("Failed to load evolution history")?;
+    tracker
+        .load()
+        .await
+        .context("Failed to load evolution history")?;
 
     let history = tracker.get_history();
     match history {
         Some(entries) => {
             let display_entries = entries.iter().rev().take(args.limit);
-            
+
             match args.output_format.as_str() {
                 "json" => {
                     let json = serde_json::to_string_pretty(&entries)?;
@@ -485,14 +547,20 @@ async fn handle_init(args: InitArgs) -> Result<()> {
     println!();
 
     let evolution_dir = args.directory.join(".blueprint-evolution");
-    
+
     if evolution_dir.exists() {
-        println!("❌ Evolution tracking already initialized in {}", args.directory.display());
+        println!(
+            "❌ Evolution tracking already initialized in {}",
+            args.directory.display()
+        );
         return Ok(());
     }
 
     let mut tracker = BlueprintEvolutionTracker::new(evolution_dir.clone());
-    tracker.init().await.context("Failed to initialize evolution tracking")?;
+    tracker
+        .init()
+        .await
+        .context("Failed to initialize evolution tracking")?;
 
     println!("✅ Evolution tracking initialized successfully!");
     println!("  Directory: {}", evolution_dir.display());
@@ -512,7 +580,7 @@ async fn handle_branch(args: BranchArgs) -> Result<()> {
     println!();
 
     let evolution_dir = Path::new(".").join(".blueprint-evolution");
-    
+
     if !evolution_dir.exists() {
         println!("❌ Evolution tracking not initialized");
         println!("Run 'devkit blueprint init' to initialize evolution tracking");
@@ -520,7 +588,10 @@ async fn handle_branch(args: BranchArgs) -> Result<()> {
     }
 
     let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
-    tracker.load().await.context("Failed to load evolution history")?;
+    tracker
+        .load()
+        .await
+        .context("Failed to load evolution history")?;
 
     if args.list {
         let branches = tracker.list_branches();
@@ -532,13 +603,16 @@ async fn handle_branch(args: BranchArgs) -> Result<()> {
     }
 
     if args.create {
-        tracker.create_branch(args.branch_name.clone()).await
+        tracker
+            .create_branch(args.branch_name.clone())
+            .await
             .with_context(|| format!("Failed to create branch '{}'", args.branch_name))?;
         println!("✅ Created branch '{}'", args.branch_name);
     }
 
     if args.switch {
-        tracker.checkout_branch(args.branch_name.clone())
+        tracker
+            .checkout_branch(args.branch_name.clone())
             .with_context(|| format!("Failed to switch to branch '{}'", args.branch_name))?;
         println!("✅ Switched to branch '{}'", args.branch_name);
     }
@@ -560,16 +634,20 @@ async fn handle_status(args: StatusArgs) -> Result<()> {
     println!("  Modules: {}", blueprint.modules.len());
     println!();
 
-    let evolution_dir = args.blueprint.parent().unwrap_or(Path::new(".")).join(".blueprint-evolution");
-    
+    let evolution_dir = args
+        .blueprint
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(".blueprint-evolution");
+
     if evolution_dir.exists() {
         let mut tracker = BlueprintEvolutionTracker::new(evolution_dir);
         if let Ok(()) = tracker.load().await {
             println!("Evolution Tracking:");
-            
+
             if let Some(current_version) = tracker.get_current_version() {
                 println!("  Tracked Version: {}", current_version);
-                
+
                 let blueprint_version = BlueprintVersion::from_str(&blueprint.metadata.version)?;
                 if &blueprint_version != current_version {
                     println!("  Status: ⚠️  Blueprint version differs from tracked version");
@@ -577,9 +655,9 @@ async fn handle_status(args: StatusArgs) -> Result<()> {
                     println!("  Status: ✅ Blueprint version matches tracked version");
                 }
             }
-            
+
             println!("  Branches: {:?}", tracker.list_branches());
-            
+
             if let Some(history) = tracker.get_history() {
                 println!("  History Entries: {}", history.len());
             }
@@ -589,7 +667,11 @@ async fn handle_status(args: StatusArgs) -> Result<()> {
     }
 
     // Check for migration artifacts
-    let backup_dir = args.blueprint.parent().unwrap_or(Path::new(".")).join(".blueprint-backups");
+    let backup_dir = args
+        .blueprint
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(".blueprint-backups");
     if backup_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&backup_dir) {
             let backup_count = entries.filter_map(|e| e.ok()).count();
@@ -597,7 +679,11 @@ async fn handle_status(args: StatusArgs) -> Result<()> {
         }
     }
 
-    let script_dir = args.blueprint.parent().unwrap_or(Path::new(".")).join(".blueprint-migrations");
+    let script_dir = args
+        .blueprint
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(".blueprint-migrations");
     if script_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&script_dir) {
             let script_count = entries.filter_map(|e| e.ok()).count();
@@ -631,7 +717,7 @@ fn load_blueprint(path: &Path) -> Result<SystemBlueprint> {
 fn print_diff_summary(diff: &crate::blueprint::evolution::diff::BlueprintDiff) {
     println!("Comparison: {} → {}", diff.from_version, diff.to_version);
     println!();
-    
+
     println!("Summary:");
     println!("  Total Changes: {}", diff.summary.total_changes);
     println!("  Breaking Changes: {}", diff.summary.breaking_changes);
@@ -641,15 +727,26 @@ fn print_diff_summary(diff: &crate::blueprint::evolution::diff::BlueprintDiff) {
 
     println!("Impact Analysis:");
     println!("  Risk Level: {:?}", diff.impact_analysis.risk_level);
-    println!("  Impact Score: {:.2}", diff.impact_analysis.overall_impact_score);
-    println!("  Compatibility: {:.2}", diff.impact_analysis.compatibility_score);
+    println!(
+        "  Impact Score: {:.2}",
+        diff.impact_analysis.overall_impact_score
+    );
+    println!(
+        "  Compatibility: {:.2}",
+        diff.impact_analysis.compatibility_score
+    );
     println!();
 
     if !diff.changes.is_empty() {
         println!("Top Changes:");
         for (i, change) in diff.changes.iter().take(5).enumerate() {
-            println!("  {}. {} - {} ({:?})", 
-                i + 1, change.change_type, change.path, change.impact_level);
+            println!(
+                "  {}. {} - {} ({:?})",
+                i + 1,
+                change.change_type,
+                change.path,
+                change.impact_level
+            );
         }
         if diff.changes.len() > 5 {
             println!("  ... and {} more changes", diff.changes.len() - 5);
@@ -659,11 +756,11 @@ fn print_diff_summary(diff: &crate::blueprint::evolution::diff::BlueprintDiff) {
 
 fn print_detailed_diff(diff: &crate::blueprint::evolution::diff::BlueprintDiff) {
     print_diff_summary(diff);
-    
+
     println!();
     println!("Detailed Changes:");
     println!("================");
-    
+
     for (i, change) in diff.changes.iter().enumerate() {
         println!("{}. {} at '{}'", i + 1, change.change_type, change.path);
         println!("   Category: {:?}", change.change_category);
@@ -681,10 +778,16 @@ fn print_detailed_diff(diff: &crate::blueprint::evolution::diff::BlueprintDiff) 
     }
 }
 
-fn print_history_table<'a>(entries: impl Iterator<Item = &'a crate::blueprint::evolution::EvolutionEntry>, detailed: bool) {
-    println!("{:<12} {:<20} {:<15} {:<10} {}", "Version", "Date", "Author", "Changes", "Description");
+fn print_history_table<'a>(
+    entries: impl Iterator<Item = &'a crate::blueprint::evolution::EvolutionEntry>,
+    detailed: bool,
+) {
+    println!(
+        "{:<12} {:<20} {:<15} {:<10} {}",
+        "Version", "Date", "Author", "Changes", "Description"
+    );
     println!("{}", "-".repeat(80));
-    
+
     for entry in entries {
         let date = entry.metadata.created_at.format("%Y-%m-%d %H:%M");
         let changes = entry.changes.len();
@@ -693,10 +796,12 @@ fn print_history_table<'a>(entries: impl Iterator<Item = &'a crate::blueprint::e
         } else {
             entry.metadata.commit_message.clone()
         };
-        
-        println!("{:<12} {:<20} {:<15} {:<10} {}", 
-            entry.metadata.version, date, entry.metadata.created_by, changes, description);
-        
+
+        println!(
+            "{:<12} {:<20} {:<15} {:<10} {}",
+            entry.metadata.version, date, entry.metadata.created_by, changes, description
+        );
+
         if detailed {
             if !entry.changes.is_empty() {
                 println!("    Changes:");
@@ -712,20 +817,26 @@ fn print_history_table<'a>(entries: impl Iterator<Item = &'a crate::blueprint::e
     }
 }
 
-fn print_history_graph<'a>(entries: impl Iterator<Item = &'a crate::blueprint::evolution::EvolutionEntry>, detailed: bool) {
+fn print_history_graph<'a>(
+    entries: impl Iterator<Item = &'a crate::blueprint::evolution::EvolutionEntry>,
+    detailed: bool,
+) {
     println!("Evolution Graph:");
     println!();
-    
+
     for (i, entry) in entries.enumerate() {
         let connector = if i == 0 { "●" } else { "│" };
         let date = entry.metadata.created_at.format("%m/%d");
-        
-        println!("{} {} ({}) - {}", connector, entry.metadata.version, date, entry.metadata.commit_message);
-        
+
+        println!(
+            "{} {} ({}) - {}",
+            connector, entry.metadata.version, date, entry.metadata.commit_message
+        );
+
         if detailed && !entry.changes.is_empty() {
             println!("│   {} changes", entry.changes.len());
         }
-        
+
         if i > 0 {
             println!("│");
         }

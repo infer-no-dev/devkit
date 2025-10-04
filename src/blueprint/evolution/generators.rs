@@ -3,8 +3,8 @@
 //! Provides specific implementations of script generators for different
 //! categories of blueprint changes.
 
-use super::*;
 use super::migration::*;
+use super::*;
 use anyhow::Result;
 use std::path::PathBuf;
 
@@ -22,7 +22,7 @@ impl ScriptGenerator for ArchitectureGenerator {
 
         // Write script to file
         std::fs::write(&script_path, script_content)?;
-        
+
         // Make script executable
         #[cfg(unix)]
         {
@@ -38,16 +38,18 @@ impl ScriptGenerator for ArchitectureGenerator {
             description: format!("Architecture change: {}", change.description),
             script_path: Some(script_path),
             dependencies: vec!["pre_migration".to_string()],
-            rollback_script: Some(self.generate_rollback_script(change, context)?.script_path.unwrap()),
-            validation_checks: vec![
-                ValidationCheck {
-                    name: "architecture_validation".to_string(),
-                    description: "Validate architecture change".to_string(),
-                    check_type: ValidationType::ConfigurationValid,
-                    expected_result: "Architecture updated successfully".to_string(),
-                    failure_action: FailureAction::Rollback,
-                }
-            ],
+            rollback_script: Some(
+                self.generate_rollback_script(change, context)?
+                    .script_path
+                    .unwrap(),
+            ),
+            validation_checks: vec![ValidationCheck {
+                name: "architecture_validation".to_string(),
+                description: "Validate architecture change".to_string(),
+                check_type: ValidationType::ConfigurationValid,
+                expected_result: "Architecture updated successfully".to_string(),
+                failure_action: FailureAction::Rollback,
+            }],
             estimated_duration: Some(std::time::Duration::from_secs(180)),
             execution_result: None,
         })
@@ -89,24 +91,32 @@ impl ScriptGenerator for ArchitectureGenerator {
 }
 
 impl ArchitectureGenerator {
-    fn generate_architecture_script(&self, change: &BlueprintChange, context: &MigrationContext) -> Result<String> {
+    fn generate_architecture_script(
+        &self,
+        change: &BlueprintChange,
+        context: &MigrationContext,
+    ) -> Result<String> {
         let mut script = String::new();
         script.push_str("#!/bin/bash\n");
         script.push_str("# Architecture Migration Script\n");
         script.push_str("set -e\n\n");
 
-        script.push_str(&format!("echo \"Migrating architecture change: {}\"\n", change.path));
+        script.push_str(&format!(
+            "echo \"Migrating architecture change: {}\"\n",
+            change.path
+        ));
         script.push_str(&format!("echo \"Change type: {:?}\"\n", change.change_type));
-        
+
         match change.change_type {
             ChangeType::Modified => {
                 if let (Some(old_val), Some(new_val)) = (&change.old_value, &change.new_value) {
-                    script.push_str(&format!("echo \"Updating {} from {} to {}\"\n", 
+                    script.push_str(&format!(
+                        "echo \"Updating {} from {} to {}\"\n",
                         change.path,
                         self.format_value(old_val),
                         self.format_value(new_val)
                     ));
-                    
+
                     // Generate specific migration logic based on the change
                     if change.path.contains("architecture_paradigm") {
                         script.push_str(&self.generate_paradigm_migration(old_val, new_val)?);
@@ -115,14 +125,18 @@ impl ArchitectureGenerator {
             }
             ChangeType::Added => {
                 if let Some(new_val) = &change.new_value {
-                    script.push_str(&format!("echo \"Adding new architecture component: {}\"\n", 
-                        self.format_value(new_val)));
+                    script.push_str(&format!(
+                        "echo \"Adding new architecture component: {}\"\n",
+                        self.format_value(new_val)
+                    ));
                 }
             }
             ChangeType::Removed => {
                 if let Some(old_val) = &change.old_value {
-                    script.push_str(&format!("echo \"Removing architecture component: {}\"\n", 
-                        self.format_value(old_val)));
+                    script.push_str(&format!(
+                        "echo \"Removing architecture component: {}\"\n",
+                        self.format_value(old_val)
+                    ));
                 }
             }
             _ => {}
@@ -138,25 +152,34 @@ impl ArchitectureGenerator {
         script.push_str("# Architecture Rollback Script\n");
         script.push_str("set -e\n\n");
 
-        script.push_str(&format!("echo \"Rolling back architecture change: {}\"\n", change.path));
-        
+        script.push_str(&format!(
+            "echo \"Rolling back architecture change: {}\"\n",
+            change.path
+        ));
+
         // Generate rollback logic (reverse of migration)
         match change.change_type {
             ChangeType::Modified => {
                 if let (Some(old_val), Some(_new_val)) = (&change.old_value, &change.new_value) {
-                    script.push_str(&format!("echo \"Restoring {} to {}\"\n", 
+                    script.push_str(&format!(
+                        "echo \"Restoring {} to {}\"\n",
                         change.path,
                         self.format_value(old_val)
                     ));
                 }
             }
             ChangeType::Added => {
-                script.push_str(&format!("echo \"Removing added component: {}\"\n", change.path));
+                script.push_str(&format!(
+                    "echo \"Removing added component: {}\"\n",
+                    change.path
+                ));
             }
             ChangeType::Removed => {
                 if let Some(old_val) = &change.old_value {
-                    script.push_str(&format!("echo \"Restoring removed component: {}\"\n", 
-                        self.format_value(old_val)));
+                    script.push_str(&format!(
+                        "echo \"Restoring removed component: {}\"\n",
+                        self.format_value(old_val)
+                    ));
                 }
             }
             _ => {}
@@ -166,15 +189,25 @@ impl ArchitectureGenerator {
         Ok(script)
     }
 
-    fn generate_paradigm_migration(&self, old_val: &serde_json::Value, new_val: &serde_json::Value) -> Result<String> {
+    fn generate_paradigm_migration(
+        &self,
+        old_val: &serde_json::Value,
+        new_val: &serde_json::Value,
+    ) -> Result<String> {
         let mut script = String::new();
-        
+
         let old_paradigm = old_val.as_str().unwrap_or("unknown");
         let new_paradigm = new_val.as_str().unwrap_or("unknown");
 
-        script.push_str(&format!("echo \"Migrating from {} to {}\"\n", old_paradigm, new_paradigm));
+        script.push_str(&format!(
+            "echo \"Migrating from {} to {}\"\n",
+            old_paradigm, new_paradigm
+        ));
 
-        match (old_paradigm.to_lowercase().as_str(), new_paradigm.to_lowercase().as_str()) {
+        match (
+            old_paradigm.to_lowercase().as_str(),
+            new_paradigm.to_lowercase().as_str(),
+        ) {
             ("monolithic", "microservices") => {
                 script.push_str("echo \"Converting monolithic to microservices architecture\"\n");
                 script.push_str("# Split services\n");
@@ -188,7 +221,10 @@ impl ArchitectureGenerator {
                 script.push_str("# Consolidate databases\n");
             }
             _ => {
-                script.push_str(&format!("echo \"Generic paradigm migration: {} -> {}\"\n", old_paradigm, new_paradigm));
+                script.push_str(&format!(
+                    "echo \"Generic paradigm migration: {} -> {}\"\n",
+                    old_paradigm, new_paradigm
+                ));
             }
         }
 
@@ -232,16 +268,18 @@ impl ScriptGenerator for ModuleGenerator {
             description: format!("Module change: {}", change.description),
             script_path: Some(script_path),
             dependencies: vec!["pre_migration".to_string()],
-            rollback_script: Some(self.generate_rollback_script(change, context)?.script_path.unwrap()),
-            validation_checks: vec![
-                ValidationCheck {
-                    name: "module_validation".to_string(),
-                    description: "Validate module changes".to_string(),
-                    check_type: ValidationType::CompilationSuccess,
-                    expected_result: "Module compiled successfully".to_string(),
-                    failure_action: FailureAction::Rollback,
-                }
-            ],
+            rollback_script: Some(
+                self.generate_rollback_script(change, context)?
+                    .script_path
+                    .unwrap(),
+            ),
+            validation_checks: vec![ValidationCheck {
+                name: "module_validation".to_string(),
+                description: "Validate module changes".to_string(),
+                check_type: ValidationType::CompilationSuccess,
+                expected_result: "Module compiled successfully".to_string(),
+                failure_action: FailureAction::Rollback,
+            }],
             estimated_duration: Some(std::time::Duration::from_secs(120)),
             execution_result: None,
         })
@@ -283,13 +321,20 @@ impl ScriptGenerator for ModuleGenerator {
 }
 
 impl ModuleGenerator {
-    fn generate_module_script(&self, change: &BlueprintChange, _context: &MigrationContext) -> Result<String> {
+    fn generate_module_script(
+        &self,
+        change: &BlueprintChange,
+        _context: &MigrationContext,
+    ) -> Result<String> {
         let mut script = String::new();
         script.push_str("#!/bin/bash\n");
         script.push_str("# Module Migration Script\n");
         script.push_str("set -e\n\n");
 
-        script.push_str(&format!("echo \"Processing module change: {}\"\n", change.path));
+        script.push_str(&format!(
+            "echo \"Processing module change: {}\"\n",
+            change.path
+        ));
 
         match change.change_type {
             ChangeType::Added => {
@@ -323,7 +368,10 @@ impl ModuleGenerator {
         script.push_str("# Module Rollback Script\n");
         script.push_str("set -e\n\n");
 
-        script.push_str(&format!("echo \"Rolling back module change: {}\"\n", change.path));
+        script.push_str(&format!(
+            "echo \"Rolling back module change: {}\"\n",
+            change.path
+        ));
 
         match change.change_type {
             ChangeType::Added => {
@@ -376,16 +424,18 @@ impl ScriptGenerator for ConfigurationGenerator {
             description: format!("Configuration change: {}", change.description),
             script_path: Some(script_path),
             dependencies: vec!["pre_migration".to_string()],
-            rollback_script: Some(self.generate_rollback_script(change, context)?.script_path.unwrap()),
-            validation_checks: vec![
-                ValidationCheck {
-                    name: "config_validation".to_string(),
-                    description: "Validate configuration changes".to_string(),
-                    check_type: ValidationType::ConfigurationValid,
-                    expected_result: "Configuration is valid".to_string(),
-                    failure_action: FailureAction::Warn,
-                }
-            ],
+            rollback_script: Some(
+                self.generate_rollback_script(change, context)?
+                    .script_path
+                    .unwrap(),
+            ),
+            validation_checks: vec![ValidationCheck {
+                name: "config_validation".to_string(),
+                description: "Validate configuration changes".to_string(),
+                check_type: ValidationType::ConfigurationValid,
+                expected_result: "Configuration is valid".to_string(),
+                failure_action: FailureAction::Warn,
+            }],
             estimated_duration: Some(std::time::Duration::from_secs(60)),
             execution_result: None,
         })
@@ -433,7 +483,10 @@ impl ConfigurationGenerator {
         script.push_str("# Configuration Migration Script\n");
         script.push_str("set -e\n\n");
 
-        script.push_str(&format!("echo \"Processing configuration change: {}\"\n", change.path));
+        script.push_str(&format!(
+            "echo \"Processing configuration change: {}\"\n",
+            change.path
+        ));
 
         // Generate config-specific migration logic
         if change.path.contains("metadata") {
@@ -456,7 +509,10 @@ impl ConfigurationGenerator {
         script.push_str("# Configuration Rollback Script\n");
         script.push_str("set -e\n\n");
 
-        script.push_str(&format!("echo \"Rolling back configuration change: {}\"\n", change.path));
+        script.push_str(&format!(
+            "echo \"Rolling back configuration change: {}\"\n",
+            change.path
+        ));
         script.push_str("echo \"Restoring previous configuration\"\n");
         script.push_str("# Restore from backup\n");
         script.push_str("# Validate restored configuration\n");
@@ -468,9 +524,15 @@ impl ConfigurationGenerator {
 
 /// Register all default generators
 pub fn register_default_generators(engine: &mut MigrationEngine) {
-    engine.register_generator(ChangeCategory::Architecture, Box::new(ArchitectureGenerator));
+    engine.register_generator(
+        ChangeCategory::Architecture,
+        Box::new(ArchitectureGenerator),
+    );
     engine.register_generator(ChangeCategory::Module, Box::new(ModuleGenerator));
-    engine.register_generator(ChangeCategory::Configuration, Box::new(ConfigurationGenerator));
+    engine.register_generator(
+        ChangeCategory::Configuration,
+        Box::new(ConfigurationGenerator),
+    );
 }
 
 #[cfg(test)]
