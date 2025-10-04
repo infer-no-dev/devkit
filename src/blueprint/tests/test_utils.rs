@@ -1,11 +1,10 @@
 //! Test utilities for blueprint evolution testing
 
-use crate::blueprint::{SystemBlueprint, SystemMetadata, ModuleBlueprint};
 use crate::blueprint::evolution::{
-    BlueprintVersion, BlueprintEvolutionTracker, BlueprintDiffAnalyzer, 
-    MigrationEngine, EvolutionEntry, BlueprintChange, ChangeType, ChangeCategory, 
-    ImpactLevel
+    BlueprintChange, BlueprintDiffAnalyzer, BlueprintEvolutionTracker, BlueprintVersion,
+    ChangeCategory, ChangeType, EvolutionEntry, ImpactLevel, MigrationEngine,
 };
+use crate::blueprint::{ModuleBlueprint, SystemBlueprint, SystemMetadata};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -47,9 +46,13 @@ impl TestUtils {
     }
 
     /// Create a test blueprint with modules
-    pub fn create_blueprint_with_modules(name: &str, version: &str, module_count: usize) -> SystemBlueprint {
+    pub fn create_blueprint_with_modules(
+        name: &str,
+        version: &str,
+        module_count: usize,
+    ) -> SystemBlueprint {
         let mut blueprint = Self::create_test_blueprint(name, version);
-        
+
         for i in 0..module_count {
             let module_name = format!("module_{}", i);
             blueprint.modules.push(ModuleBlueprint {
@@ -62,14 +65,17 @@ impl TestUtils {
                 performance_characteristics: Default::default(),
             });
         }
-        
+
         blueprint
     }
 
     /// Create a modified version of a blueprint
-    pub fn create_modified_blueprint(original: &SystemBlueprint, changes: Vec<TestChange>) -> SystemBlueprint {
+    pub fn create_modified_blueprint(
+        original: &SystemBlueprint,
+        changes: Vec<TestChange>,
+    ) -> SystemBlueprint {
         let mut modified = original.clone();
-        
+
         for change in changes {
             match change {
                 TestChange::UpdateVersion(version) => {
@@ -97,12 +103,15 @@ impl TestUtils {
                 }
             }
         }
-        
+
         modified
     }
 
     /// Save blueprint to temporary file
-    pub fn save_blueprint_to_temp(blueprint: &SystemBlueprint, temp_dir: &TempDir) -> Result<PathBuf> {
+    pub fn save_blueprint_to_temp(
+        blueprint: &SystemBlueprint,
+        temp_dir: &TempDir,
+    ) -> Result<PathBuf> {
         let file_path = temp_dir.path().join("blueprint.json");
         let json = serde_json::to_string_pretty(blueprint)?;
         std::fs::write(&file_path, json)?;
@@ -120,7 +129,7 @@ impl TestUtils {
     pub fn create_test_entry(
         version: BlueprintVersion,
         blueprint: SystemBlueprint,
-        changes: Vec<BlueprintChange>
+        changes: Vec<BlueprintChange>,
     ) -> EvolutionEntry {
         EvolutionEntry {
             id: Uuid::new_v4().to_string(),
@@ -146,7 +155,7 @@ impl TestUtils {
         category: ChangeCategory,
         path: &str,
         description: &str,
-        impact: ImpactLevel
+        impact: ImpactLevel,
     ) -> BlueprintChange {
         BlueprintChange {
             change_type,
@@ -170,20 +179,30 @@ impl TestUtils {
 
     /// Assert blueprints are structurally similar
     pub fn assert_blueprints_similar(b1: &SystemBlueprint, b2: &SystemBlueprint) {
-        assert_eq!(b1.metadata.name, b2.metadata.name, "Blueprint names should match");
-        assert_eq!(b1.modules.len(), b2.modules.len(), "Module count should match");
-        assert_eq!(b1.metadata.architecture_paradigm, b2.metadata.architecture_paradigm, "Architecture should match");
+        assert_eq!(
+            b1.metadata.name, b2.metadata.name,
+            "Blueprint names should match"
+        );
+        assert_eq!(
+            b1.modules.len(),
+            b2.modules.len(),
+            "Module count should match"
+        );
+        assert_eq!(
+            b1.metadata.architecture_paradigm, b2.metadata.architecture_paradigm,
+            "Architecture should match"
+        );
     }
 
     /// Create a large blueprint for performance testing
     pub fn create_large_blueprint(module_count: usize, deps_per_module: usize) -> SystemBlueprint {
         let mut blueprint = Self::create_test_blueprint("large-system", "1.0.0");
-        
+
         // Create modules with dependencies
         for i in 0..module_count {
             let module_name = format!("module_{:04}", i);
             let mut dependencies = vec![];
-            
+
             // Add dependencies to previous modules
             for j in 0..(deps_per_module.min(i)) {
                 dependencies.push(crate::blueprint::ModuleDependency {
@@ -193,7 +212,7 @@ impl TestUtils {
                     coupling_strength: "loose".to_string(),
                 });
             }
-            
+
             blueprint.modules.push(ModuleBlueprint {
                 name: module_name,
                 purpose: format!("Large system module {}", i),
@@ -204,7 +223,7 @@ impl TestUtils {
                 performance_characteristics: Default::default(),
             });
         }
-        
+
         blueprint
     }
 
@@ -223,13 +242,16 @@ impl TestUtils {
         Fut: std::future::Future<Output = Result<T>> + Send,
         T: Send + 'static,
     {
-        let handles: Vec<_> = tasks.into_iter()
+        let handles: Vec<_> = tasks
+            .into_iter()
             .map(|task| tokio::spawn(async move { task().await }))
             .collect();
 
         let mut results = vec![];
         for handle in handles {
-            let result = handle.await.unwrap_or_else(|e| Err(anyhow::anyhow!("Task panicked: {}", e)));
+            let result = handle
+                .await
+                .unwrap_or_else(|e| Err(anyhow::anyhow!("Task panicked: {}", e)));
             results.push(result);
         }
         results
@@ -320,10 +342,13 @@ mod tests {
     #[test]
     fn test_modify_blueprint() {
         let original = TestUtils::create_test_blueprint("test-app", "1.0.0");
-        let modified = TestUtils::create_modified_blueprint(&original, vec![
-            TestChange::UpdateVersion("2.0.0".to_string()),
-            TestChange::AddModule("new_module".to_string()),
-        ]);
+        let modified = TestUtils::create_modified_blueprint(
+            &original,
+            vec![
+                TestChange::UpdateVersion("2.0.0".to_string()),
+                TestChange::AddModule("new_module".to_string()),
+            ],
+        );
 
         assert_eq!(modified.metadata.version, "2.0.0");
         assert_eq!(modified.modules.len(), 1);

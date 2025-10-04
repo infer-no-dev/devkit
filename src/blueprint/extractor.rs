@@ -1,16 +1,16 @@
 //! Blueprint Extractor
-//! 
+//!
 //! This module provides the capability to analyze existing codebases and extract
 //! comprehensive system blueprints that capture architectural decisions, patterns,
 //! and implementation strategies.
 
 use super::*;
 use crate::context::CodebaseContext;
-use anyhow::{Result, Context as AnyhowContext};
+use anyhow::{Context as AnyhowContext, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tree_sitter::{Language, Parser, Query, QueryCursor, Node};
+use tree_sitter::{Language, Node, Parser, Query, QueryCursor};
 
 /// Blueprint extractor that analyzes codebases
 pub struct BlueprintExtractor {
@@ -140,7 +140,8 @@ impl BlueprintExtractor {
     pub fn new(codebase_path: PathBuf) -> Result<Self> {
         let mut parser = Parser::new();
         let rust_language = tree_sitter_rust::language();
-        parser.set_language(rust_language)
+        parser
+            .set_language(rust_language)
             .context("Failed to set Rust language for parser")?;
 
         Ok(Self {
@@ -153,11 +154,14 @@ impl BlueprintExtractor {
 
     /// Extract a complete system blueprint from the codebase
     pub async fn extract_blueprint(&mut self) -> Result<SystemBlueprint> {
-        println!("Starting blueprint extraction from: {:?}", self.codebase_path);
+        println!(
+            "Starting blueprint extraction from: {:?}",
+            self.codebase_path
+        );
 
         // Start with basic metadata
         let metadata = self.extract_metadata().await?;
-        
+
         // Analyze all source files
         let files = self.discover_source_files().await?;
         self.analyze_files(&files).await?;
@@ -186,7 +190,10 @@ impl BlueprintExtractor {
             deployment,
         };
 
-        println!("Blueprint extraction completed with {} modules", blueprint.modules.len());
+        println!(
+            "Blueprint extraction completed with {} modules",
+            blueprint.modules.len()
+        );
         Ok(blueprint)
     }
 
@@ -228,18 +235,23 @@ impl BlueprintExtractor {
     /// Discover all source files in the codebase
     async fn discover_source_files(&self) -> Result<Vec<PathBuf>> {
         let mut files = Vec::new();
-        self.discover_files_recursive(&self.codebase_path, &mut files).await?;
+        self.discover_files_recursive(&self.codebase_path, &mut files)
+            .await?;
         Ok(files)
     }
 
     /// Recursively discover files
-    fn discover_files_recursive<'a>(&'a self, dir: &'a Path, files: &'a mut Vec<PathBuf>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + 'a>> {
+    fn discover_files_recursive<'a>(
+        &'a self,
+        dir: &'a Path,
+        files: &'a mut Vec<PathBuf>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + 'a>> {
         Box::pin(async move {
             let mut entries = fs::read_dir(dir).await?;
-            
+
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
-                
+
                 if path.is_dir() {
                     // Skip common directories we don't want to analyze
                     let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -253,7 +265,7 @@ impl BlueprintExtractor {
                     }
                 }
             }
-            
+
             Ok(())
         })
     }
@@ -298,8 +310,10 @@ impl BlueprintExtractor {
                     } else {
                         FileType::RustSource
                     }
-                },
-                "toml" if file_path.file_name() == Some(std::ffi::OsStr::new("Cargo.toml")) => FileType::CargoToml,
+                }
+                "toml" if file_path.file_name() == Some(std::ffi::OsStr::new("Cargo.toml")) => {
+                    FileType::CargoToml
+                }
                 "toml" | "json" | "yaml" | "yml" => FileType::ConfigFile,
                 "md" => FileType::Documentation,
                 _ => FileType::Other,
@@ -311,7 +325,9 @@ impl BlueprintExtractor {
 
     /// Analyze Rust source file using tree-sitter
     fn analyze_rust_file(&mut self, content: &str) -> Result<FileAnalysis> {
-        let tree = self.parser.parse(content, None)
+        let tree = self
+            .parser
+            .parse(content, None)
             .context("Failed to parse Rust file")?;
 
         let root_node = tree.root_node();
@@ -334,9 +350,17 @@ impl BlueprintExtractor {
         let mut performance_hints = Vec::new();
 
         // Walk the syntax tree
-        self.walk_node(root_node, content, &mut module_info, &mut dependencies, 
-                      &mut exports, &mut patterns, &mut async_usage, 
-                      &mut error_handling_patterns, &mut performance_hints);
+        self.walk_node(
+            root_node,
+            content,
+            &mut module_info,
+            &mut dependencies,
+            &mut exports,
+            &mut patterns,
+            &mut async_usage,
+            &mut error_handling_patterns,
+            &mut performance_hints,
+        );
 
         Ok(FileAnalysis {
             file_type: FileType::RustSource,
@@ -351,13 +375,20 @@ impl BlueprintExtractor {
     }
 
     /// Walk tree-sitter node recursively
-    fn walk_node(&self, node: Node, source: &str, module_info: &mut ModuleInfo,
-                 dependencies: &mut Vec<String>, exports: &mut Vec<String>,
-                 patterns: &mut Vec<String>, async_usage: &mut bool,
-                 error_handling: &mut Vec<String>, performance_hints: &mut Vec<String>) {
-        
+    fn walk_node(
+        &self,
+        node: Node,
+        source: &str,
+        module_info: &mut ModuleInfo,
+        dependencies: &mut Vec<String>,
+        exports: &mut Vec<String>,
+        patterns: &mut Vec<String>,
+        async_usage: &mut bool,
+        error_handling: &mut Vec<String>,
+        performance_hints: &mut Vec<String>,
+    ) {
         let node_type = node.kind();
-        
+
         match node_type {
             "use_declaration" => {
                 if let Ok(use_text) = node.utf8_text(source.as_bytes()) {
@@ -368,22 +399,22 @@ impl BlueprintExtractor {
                         is_public: use_text.starts_with("pub use"),
                     });
                 }
-            },
+            }
             "struct_item" => {
                 if let Some(struct_info) = self.extract_struct_info(node, source) {
                     module_info.structs.push(struct_info);
                 }
-            },
+            }
             "enum_item" => {
                 if let Some(enum_info) = self.extract_enum_info(node, source) {
                     module_info.enums.push(enum_info);
                 }
-            },
+            }
             "trait_item" => {
                 if let Some(trait_info) = self.extract_trait_info(node, source) {
                     module_info.traits.push(trait_info);
                 }
-            },
+            }
             "function_item" => {
                 if let Some(function_info) = self.extract_function_info(node, source) {
                     if function_info.is_async {
@@ -391,21 +422,21 @@ impl BlueprintExtractor {
                     }
                     module_info.functions.push(function_info);
                 }
-            },
+            }
             "const_item" => {
                 if let Some(const_info) = self.extract_const_info(node, source) {
                     module_info.constants.push(const_info);
                 }
-            },
+            }
             "match_expression" => {
                 patterns.push("Pattern Matching".to_string());
-            },
+            }
             "result_type" => {
                 error_handling.push("Result Type".to_string());
-            },
+            }
             "option_type" => {
                 error_handling.push("Option Type".to_string());
-            },
+            }
             "macro_invocation" => {
                 if let Ok(macro_text) = node.utf8_text(source.as_bytes()) {
                     if macro_text.contains("lazy_static") || macro_text.contains("once_cell") {
@@ -415,15 +446,24 @@ impl BlueprintExtractor {
                         patterns.push("Shared State Management".to_string());
                     }
                 }
-            },
+            }
             _ => {}
         }
 
         // Recursively process child nodes
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            self.walk_node(child, source, module_info, dependencies, exports, 
-                          patterns, async_usage, error_handling, performance_hints);
+            self.walk_node(
+                child,
+                source,
+                module_info,
+                dependencies,
+                exports,
+                patterns,
+                async_usage,
+                error_handling,
+                performance_hints,
+            );
         }
     }
 
@@ -443,25 +483,25 @@ impl BlueprintExtractor {
                     if let Ok(vis) = child.utf8_text(source.as_bytes()) {
                         visibility = vis.to_string();
                     }
-                },
+                }
                 "type_identifier" => {
                     if let Ok(id) = child.utf8_text(source.as_bytes()) {
                         name = id.to_string();
                     }
-                },
+                }
                 "type_parameters" => {
                     is_generic = true;
-                },
+                }
                 "field_declaration_list" => {
                     fields = self.extract_field_list(child, source);
-                },
+                }
                 "attribute_item" => {
                     if let Ok(attr) = child.utf8_text(source.as_bytes()) {
                         if attr.contains("derive") {
                             derives.push(attr.to_string());
                         }
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -479,7 +519,7 @@ impl BlueprintExtractor {
     fn extract_field_list(&self, node: Node, source: &str) -> Vec<FieldInfo> {
         let mut fields = Vec::new();
         let mut cursor = node.walk();
-        
+
         for child in node.children(&mut cursor) {
             if child.kind() == "field_declaration" {
                 if let Some(field_info) = self.extract_field_info(child, source) {
@@ -487,7 +527,7 @@ impl BlueprintExtractor {
                 }
             }
         }
-        
+
         fields
     }
 
@@ -504,12 +544,12 @@ impl BlueprintExtractor {
                     if let Ok(vis) = child.utf8_text(source.as_bytes()) {
                         visibility = vis.to_string();
                     }
-                },
+                }
                 "field_identifier" => {
                     if let Ok(id) = child.utf8_text(source.as_bytes()) {
                         name = id.to_string();
                     }
-                },
+                }
                 _ => {
                     // Try to extract type information
                     if let Ok(type_text) = child.utf8_text(source.as_bytes()) {
@@ -542,12 +582,12 @@ impl BlueprintExtractor {
                     if let Ok(vis) = child.utf8_text(source.as_bytes()) {
                         visibility = vis.to_string();
                     }
-                },
+                }
                 "type_identifier" => {
                     if let Ok(id) = child.utf8_text(source.as_bytes()) {
                         name = id.to_string();
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -574,12 +614,12 @@ impl BlueprintExtractor {
                     if let Ok(vis) = child.utf8_text(source.as_bytes()) {
                         visibility = vis.to_string();
                     }
-                },
+                }
                 "type_identifier" => {
                     if let Ok(id) = child.utf8_text(source.as_bytes()) {
                         name = id.to_string();
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -608,12 +648,12 @@ impl BlueprintExtractor {
                     if let Ok(vis) = child.utf8_text(source.as_bytes()) {
                         visibility = vis.to_string();
                     }
-                },
+                }
                 "identifier" => {
                     if let Ok(id) = child.utf8_text(source.as_bytes()) {
                         name = id.to_string();
                     }
-                },
+                }
                 _ => {
                     if let Ok(text) = child.utf8_text(source.as_bytes()) {
                         if text.contains("async") {
@@ -647,12 +687,12 @@ impl BlueprintExtractor {
                     if let Ok(vis) = child.utf8_text(source.as_bytes()) {
                         visibility = vis.to_string();
                     }
-                },
+                }
                 "identifier" => {
                     if let Ok(id) = child.utf8_text(source.as_bytes()) {
                         name = id.to_string();
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -667,7 +707,7 @@ impl BlueprintExtractor {
     /// Analyze Cargo.toml file
     fn analyze_cargo_file(&self, content: &str) -> Result<FileAnalysis> {
         let mut dependencies = Vec::new();
-        
+
         if let Ok(parsed) = toml::from_str::<toml::Value>(content) {
             if let Some(deps) = parsed.get("dependencies") {
                 if let Some(deps_table) = deps.as_table() {
@@ -708,20 +748,40 @@ impl BlueprintExtractor {
         if async_found {
             key_decisions.push(ArchitecturalDecision {
                 decision: "Async/await concurrency model".to_string(),
-                reasoning: "Enables high-performance concurrent operations without blocking threads".to_string(),
-                alternatives_considered: vec!["Thread-based concurrency".to_string(), "Green threads".to_string()],
-                implementation_impact: "Requires tokio runtime and async-compatible libraries".to_string(),
-                performance_impact: Some("Significantly better resource utilization for I/O-bound operations".to_string()),
+                reasoning:
+                    "Enables high-performance concurrent operations without blocking threads"
+                        .to_string(),
+                alternatives_considered: vec![
+                    "Thread-based concurrency".to_string(),
+                    "Green threads".to_string(),
+                ],
+                implementation_impact: "Requires tokio runtime and async-compatible libraries"
+                    .to_string(),
+                performance_impact: Some(
+                    "Significantly better resource utilization for I/O-bound operations"
+                        .to_string(),
+                ),
             });
         }
 
         Ok(ArchitecturalDecisions {
             system_type: "Multi-agent concurrent system".to_string(),
             concurrency_model: ConcurrencyModel {
-                primary_pattern: if async_found { "async_tasks".to_string() } else { "synchronous".to_string() },
-                synchronization_primitives: vec!["Arc".to_string(), "Mutex".to_string(), "RwLock".to_string()],
+                primary_pattern: if async_found {
+                    "async_tasks".to_string()
+                } else {
+                    "synchronous".to_string()
+                },
+                synchronization_primitives: vec![
+                    "Arc".to_string(),
+                    "Mutex".to_string(),
+                    "RwLock".to_string(),
+                ],
                 shared_state_strategy: "Arc-wrapped thread-safe primitives".to_string(),
-                deadlock_prevention: vec!["Lock ordering".to_string(), "Timeout-based locks".to_string()],
+                deadlock_prevention: vec![
+                    "Lock ordering".to_string(),
+                    "Timeout-based locks".to_string(),
+                ],
                 performance_characteristics: "High throughput for I/O-bound operations".to_string(),
             },
             data_flow: DataFlowPattern {
@@ -741,16 +801,17 @@ impl BlueprintExtractor {
                 },
             },
             error_handling: ErrorHandlingStrategy {
-                error_types: vec![
-                    ErrorType {
-                        name: "AgentError".to_string(),
-                        category: "recoverable".to_string(),
-                        handling_strategy: "Retry with backoff".to_string(),
-                        context_preservation: true,
-                    }
-                ],
+                error_types: vec![ErrorType {
+                    name: "AgentError".to_string(),
+                    category: "recoverable".to_string(),
+                    handling_strategy: "Retry with backoff".to_string(),
+                    context_preservation: true,
+                }],
                 propagation_strategy: "Result type with context".to_string(),
-                recovery_mechanisms: vec!["Graceful degradation".to_string(), "Retry logic".to_string()],
+                recovery_mechanisms: vec![
+                    "Graceful degradation".to_string(),
+                    "Retry logic".to_string(),
+                ],
                 logging_strategy: "Structured logging with tracing".to_string(),
                 user_facing_errors: "Simplified error messages".to_string(),
             },
@@ -779,7 +840,7 @@ impl BlueprintExtractor {
                     .to_string();
 
                 let mut public_interface = Vec::new();
-                
+
                 // Extract public interfaces
                 for struct_info in &module_info.structs {
                     if struct_info.visibility.contains("pub") {
@@ -800,9 +861,11 @@ impl BlueprintExtractor {
                             name: function_info.name.clone(),
                             interface_type: "function".to_string(),
                             visibility: function_info.visibility.clone(),
-                            signature: format!("{}fn {}", 
+                            signature: format!(
+                                "{}fn {}",
                                 if function_info.is_async { "async " } else { "" },
-                                function_info.name),
+                                function_info.name
+                            ),
                             documentation: "Auto-extracted function".to_string(),
                             usage_examples: Vec::new(),
                         });
@@ -812,7 +875,9 @@ impl BlueprintExtractor {
                 modules.push(ModuleBlueprint {
                     name: module_name,
                     purpose: "Auto-extracted module purpose".to_string(),
-                    dependencies: analysis.dependencies.iter()
+                    dependencies: analysis
+                        .dependencies
+                        .iter()
                         .map(|dep| ModuleDependency {
                             module: dep.clone(),
                             dependency_type: "required".to_string(),
@@ -822,23 +887,31 @@ impl BlueprintExtractor {
                         .collect(),
                     public_interface,
                     internal_structure: ModuleStructure {
-                        primary_types: module_info.structs.iter()
+                        primary_types: module_info
+                            .structs
+                            .iter()
                             .map(|s| TypeDefinition {
                                 name: s.name.clone(),
                                 type_kind: "struct".to_string(),
                                 purpose: "Data structure".to_string(),
-                                fields_or_variants: s.fields.iter()
+                                fields_or_variants: s
+                                    .fields
+                                    .iter()
                                     .map(|f| format!("{}: {}", f.name, f.field_type))
                                     .collect(),
                                 implementations: Vec::new(),
                             })
                             .collect(),
-                        functions: module_info.functions.iter()
+                        functions: module_info
+                            .functions
+                            .iter()
                             .map(|f| FunctionDefinition {
                                 name: f.name.clone(),
                                 visibility: f.visibility.clone(),
                                 is_async: f.is_async,
-                                parameters: f.parameters.iter()
+                                parameters: f
+                                    .parameters
+                                    .iter()
                                     .map(|p| Parameter {
                                         name: p.name.clone(),
                                         param_type: p.param_type.clone(),
@@ -851,7 +924,9 @@ impl BlueprintExtractor {
                                 complexity: "medium".to_string(), // Default
                             })
                             .collect(),
-                        constants: module_info.constants.iter()
+                        constants: module_info
+                            .constants
+                            .iter()
                             .map(|c| ConstantDefinition {
                                 name: c.name.clone(),
                                 value_type: c.const_type.clone(),
@@ -893,20 +968,31 @@ impl BlueprintExtractor {
                         behavioral_patterns.push(PatternUsage {
                             pattern_name: "Strategy Pattern (via match)".to_string(),
                             usage_context: "Decision making and branching logic".to_string(),
-                            implementation_details: "Rust match expressions with exhaustive patterns".to_string(),
-                            benefits_realized: vec!["Type safety".to_string(), "Exhaustiveness checking".to_string()],
+                            implementation_details:
+                                "Rust match expressions with exhaustive patterns".to_string(),
+                            benefits_realized: vec![
+                                "Type safety".to_string(),
+                                "Exhaustiveness checking".to_string(),
+                            ],
                             trade_offs: vec!["Can be verbose for simple cases".to_string()],
                         });
-                    },
+                    }
                     "Shared State Management" => {
                         architectural_patterns.push(PatternUsage {
                             pattern_name: "Shared State Pattern".to_string(),
                             usage_context: "Multi-threaded data access".to_string(),
-                            implementation_details: "Arc<Mutex<T>> for thread-safe shared state".to_string(),
-                            benefits_realized: vec!["Thread safety".to_string(), "Memory efficiency".to_string()],
-                            trade_offs: vec!["Lock contention".to_string(), "Complexity".to_string()],
+                            implementation_details: "Arc<Mutex<T>> for thread-safe shared state"
+                                .to_string(),
+                            benefits_realized: vec![
+                                "Thread safety".to_string(),
+                                "Memory efficiency".to_string(),
+                            ],
+                            trade_offs: vec![
+                                "Lock contention".to_string(),
+                                "Complexity".to_string(),
+                            ],
                         });
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -917,13 +1003,11 @@ impl BlueprintExtractor {
             structural_patterns: Vec::new(),
             behavioral_patterns,
             architectural_patterns,
-            anti_patterns_avoided: vec![
-                AntiPatternAvoidance {
-                    anti_pattern_name: "God Object".to_string(),
-                    why_avoided: "Violates single responsibility principle".to_string(),
-                    alternative_approach: "Modular design with focused responsibilities".to_string(),
-                }
-            ],
+            anti_patterns_avoided: vec![AntiPatternAvoidance {
+                anti_pattern_name: "God Object".to_string(),
+                why_avoided: "Violates single responsibility principle".to_string(),
+                alternative_approach: "Modular design with focused responsibilities".to_string(),
+            }],
         })
     }
 
@@ -948,14 +1032,15 @@ impl BlueprintExtractor {
         }
 
         Ok(ImplementationDetails {
-            language_specific_features: vec![
-                LanguageFeatureUsage {
-                    feature: "Ownership and borrowing".to_string(),
-                    usage_pattern: "Zero-copy data access where possible".to_string(),
-                    justification: "Memory safety without garbage collection".to_string(),
-                    alternatives: vec!["Reference counting".to_string(), "Garbage collection".to_string()],
-                }
-            ],
+            language_specific_features: vec![LanguageFeatureUsage {
+                feature: "Ownership and borrowing".to_string(),
+                usage_pattern: "Zero-copy data access where possible".to_string(),
+                justification: "Memory safety without garbage collection".to_string(),
+                alternatives: vec![
+                    "Reference counting".to_string(),
+                    "Garbage collection".to_string(),
+                ],
+            }],
             third_party_dependencies,
             custom_implementations: Vec::new(),
             optimization_techniques: Vec::new(),
@@ -966,7 +1051,11 @@ impl BlueprintExtractor {
     /// Extract configuration strategy
     async fn extract_configuration_strategy(&self) -> Result<ConfigurationStrategy> {
         Ok(ConfigurationStrategy {
-            hierarchy: vec!["Project config".to_string(), "User config".to_string(), "Environment".to_string()],
+            hierarchy: vec![
+                "Project config".to_string(),
+                "User config".to_string(),
+                "Environment".to_string(),
+            ],
             formats_supported: vec!["TOML".to_string(), "JSON".to_string()],
             validation_approach: "Schema validation".to_string(),
             hot_reload_capability: false,
@@ -1079,7 +1168,8 @@ mod tests {
         // Create a simple Cargo.toml
         let cargo_toml = temp_path.join("Cargo.toml");
         let mut file = File::create(&cargo_toml).await.unwrap();
-        file.write_all(br#"
+        file.write_all(
+            br#"
 [package]
 name = "test-project"
 version = "0.1.0"
@@ -1088,14 +1178,18 @@ description = "A test project"
 [dependencies]
 tokio = "1.0"
 serde = "1.0"
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         // Create a simple Rust source file
         let src_dir = temp_path.join("src");
         tokio::fs::create_dir(&src_dir).await.unwrap();
         let main_rs = src_dir.join("main.rs");
         let mut file = File::create(&main_rs).await.unwrap();
-        file.write_all(br#"
+        file.write_all(
+            br#"
 use tokio;
 use serde::{Serialize, Deserialize};
 
@@ -1112,7 +1206,10 @@ pub async fn test_function() -> Result<(), Box<dyn std::error::Error>> {
 fn main() {
     println!("Hello, world!");
 }
-"#).await.unwrap();
+"#,
+        )
+        .await
+        .unwrap();
 
         let mut extractor = BlueprintExtractor::new(temp_path).unwrap();
         let blueprint = extractor.extract_blueprint().await.unwrap();

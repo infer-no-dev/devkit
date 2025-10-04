@@ -1,10 +1,8 @@
 //! Shell completion utilities
 
 use crate::cli::commands::shell::{
-    generate_bash_completion,
-    generate_zsh_completion, 
-    generate_fish_completion,
-    generate_powershell_completion
+    generate_bash_completion, generate_fish_completion, generate_powershell_completion,
+    generate_zsh_completion,
 };
 
 /// Generate shell completion scripts
@@ -14,7 +12,10 @@ pub fn generate_completions(shell: &str) -> Result<String, String> {
         "zsh" => Ok(generate_zsh_completion()),
         "fish" => Ok(generate_fish_completion()),
         "powershell" => Ok(generate_powershell_completion()),
-        _ => Err(format!("Unsupported shell: {}. Supported: bash, zsh, fish, powershell", shell))
+        _ => Err(format!(
+            "Unsupported shell: {}. Supported: bash, zsh, fish, powershell",
+            shell
+        )),
     }
 }
 

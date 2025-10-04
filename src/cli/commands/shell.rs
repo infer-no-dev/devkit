@@ -1,23 +1,17 @@
 use crate::cli::{CliRunner, ShellCommands};
+use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::env;
 
 pub async fn run(
     runner: &mut CliRunner,
     command: ShellCommands,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match command {
-        ShellCommands::Completion { shell, output } => {
-            generate_completion(&shell, output).await
-        },
-        ShellCommands::Install { shell } => {
-            install_shell_integration(shell).await
-        },
-        ShellCommands::Status => {
-            show_shell_status(runner).await
-        }
+        ShellCommands::Completion { shell, output } => generate_completion(&shell, output).await,
+        ShellCommands::Install { shell } => install_shell_integration(shell).await,
+        ShellCommands::Status => show_shell_status(runner).await,
     }
 }
 
@@ -56,11 +50,11 @@ async fn install_shell_integration(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let detected_shell = match shell {
         Some(s) => s,
-        None => detect_current_shell()?
+        None => detect_current_shell()?,
     };
 
     println!("🔧 Installing shell integration for: {}", detected_shell);
-    
+
     match detected_shell.to_lowercase().as_str() {
         "bash" => install_bash_integration().await?,
         "zsh" => install_zsh_integration().await?,
@@ -72,59 +66,53 @@ async fn install_shell_integration(
     }
 
     println!("✅ Shell integration installed successfully!");
-    println!("📝 Restart your terminal or run 'source ~/.{}rc' to activate", detected_shell);
-    
+    println!(
+        "📝 Restart your terminal or run 'source ~/.{}rc' to activate",
+        detected_shell
+    );
+
     Ok(())
 }
 
 /// Show shell integration status
-async fn show_shell_status(
-    _runner: &CliRunner,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn show_shell_status(_runner: &CliRunner) -> Result<(), Box<dyn std::error::Error>> {
     println!("🐚 Shell Integration Status");
     println!("═══════════════════════════");
-    
+
     let current_shell = detect_current_shell().unwrap_or_else(|_| "unknown".to_string());
     println!("📱 Current shell: {}", current_shell);
-    
+
     let binary_path = env::current_exe()?;
     println!("📍 Binary location: {}", binary_path.display());
-    
+
     // Check if binary is in PATH
     let in_path = env::var("PATH")
-        .map(|path| {
-            path.split(':')
-                .any(|dir| binary_path.starts_with(dir))
-        })
+        .map(|path| path.split(':').any(|dir| binary_path.starts_with(dir)))
         .unwrap_or(false);
-    
+
     if in_path {
         println!("✅ Binary is in PATH");
     } else {
         println!("⚠️ Binary is not in PATH");
     }
-    
+
     // Check for existing shell integration
     check_shell_integration_status(&current_shell);
-    
+
     println!();
     println!("💡 To install shell integration, run:");
     println!("   devkit shell install");
-    
+
     Ok(())
 }
 
 /// Detect the current shell
 fn detect_current_shell() -> Result<String, Box<dyn std::error::Error>> {
     if let Ok(shell_env) = env::var("SHELL") {
-        let shell_name = shell_env
-            .split('/')
-            .last()
-            .unwrap_or("unknown")
-            .to_string();
+        let shell_name = shell_env.split('/').last().unwrap_or("unknown").to_string();
         return Ok(shell_name);
     }
-    
+
     // Fallback detection methods
     if env::var("ZSH_VERSION").is_ok() {
         return Ok("zsh".to_string());
@@ -135,7 +123,7 @@ fn detect_current_shell() -> Result<String, Box<dyn std::error::Error>> {
     if env::var("FISH_VERSION").is_ok() {
         return Ok("fish".to_string());
     }
-    
+
     Err("Could not detect current shell".into())
 }
 
@@ -143,14 +131,14 @@ fn detect_current_shell() -> Result<String, Box<dyn std::error::Error>> {
 fn check_shell_integration_status(shell: &str) {
     let config_file = get_shell_config_file(shell);
     let completion_file = get_completion_file_path(shell);
-    
+
     match config_file {
         Some(config_path) => {
             if config_path.exists() {
                 let has_devkit_alias = fs::read_to_string(&config_path)
                     .map(|content| content.contains("devkit") || content.contains("ade"))
                     .unwrap_or(false);
-                
+
                 if has_devkit_alias {
                     println!("✅ Shell aliases found in {}", config_path.display());
                 } else {
@@ -159,12 +147,12 @@ fn check_shell_integration_status(shell: &str) {
             } else {
                 println!("⚠️ Shell config file not found: {}", config_path.display());
             }
-        },
+        }
         None => {
             println!("⚠️ Unknown shell config file location");
         }
     }
-    
+
     match completion_file {
         Some(comp_path) => {
             if comp_path.exists() {
@@ -172,7 +160,7 @@ fn check_shell_integration_status(shell: &str) {
             } else {
                 println!("⚠️ Completion script not found: {}", comp_path.display());
             }
-        },
+        }
         None => {
             println!("⚠️ Unknown completion file location");
         }
@@ -182,7 +170,7 @@ fn check_shell_integration_status(shell: &str) {
 /// Get shell config file path
 fn get_shell_config_file(shell: &str) -> Option<PathBuf> {
     let home = env::var("HOME").ok()?;
-    
+
     match shell {
         "bash" => Some(PathBuf::from(home).join(".bashrc")),
         "zsh" => Some(PathBuf::from(home).join(".zshrc")),
@@ -194,7 +182,7 @@ fn get_shell_config_file(shell: &str) -> Option<PathBuf> {
 /// Get completion file path
 fn get_completion_file_path(shell: &str) -> Option<PathBuf> {
     let home = env::var("HOME").ok()?;
-    
+
     match shell {
         "bash" => Some(PathBuf::from(home).join(".local/share/bash-completion/completions/devkit")),
         "zsh" => Some(PathBuf::from(home).join(".local/share/zsh/site-functions/_devkit")),
@@ -208,18 +196,21 @@ async fn install_bash_integration() -> Result<(), Box<dyn std::error::Error>> {
     let home = env::var("HOME")?;
     let bashrc_path = PathBuf::from(&home).join(".bashrc");
     let completion_dir = PathBuf::from(&home).join(".local/share/bash-completion/completions");
-    
+
     // Create completion directory
     fs::create_dir_all(&completion_dir)?;
-    
+
     // Install completion script
     let completion_path = completion_dir.join("devkit");
     fs::write(&completion_path, generate_bash_completion())?;
-    println!("📝 Installed Bash completion to: {}", completion_path.display());
-    
+    println!(
+        "📝 Installed Bash completion to: {}",
+        completion_path.display()
+    );
+
     // Install aliases
     install_shell_aliases(&bashrc_path, "bash").await?;
-    
+
     Ok(())
 }
 
@@ -228,18 +219,21 @@ async fn install_zsh_integration() -> Result<(), Box<dyn std::error::Error>> {
     let home = env::var("HOME")?;
     let zshrc_path = PathBuf::from(&home).join(".zshrc");
     let completion_dir = PathBuf::from(&home).join(".local/share/zsh/site-functions");
-    
+
     // Create completion directory
     fs::create_dir_all(&completion_dir)?;
-    
+
     // Install completion script
     let completion_path = completion_dir.join("_devkit");
     fs::write(&completion_path, generate_zsh_completion())?;
-    println!("📝 Installed Zsh completion to: {}", completion_path.display());
-    
+    println!(
+        "📝 Installed Zsh completion to: {}",
+        completion_path.display()
+    );
+
     // Install aliases
     install_shell_aliases(&zshrc_path, "zsh").await?;
-    
+
     Ok(())
 }
 
@@ -248,19 +242,22 @@ async fn install_fish_integration() -> Result<(), Box<dyn std::error::Error>> {
     let home = env::var("HOME")?;
     let fish_config_path = PathBuf::from(&home).join(".config/fish/config.fish");
     let completion_dir = PathBuf::from(&home).join(".config/fish/completions");
-    
+
     // Create directories
     fs::create_dir_all(fish_config_path.parent().unwrap())?;
     fs::create_dir_all(&completion_dir)?;
-    
+
     // Install completion script
     let completion_path = completion_dir.join("devkit.fish");
     fs::write(&completion_path, generate_fish_completion())?;
-    println!("📝 Installed Fish completion to: {}", completion_path.display());
-    
+    println!(
+        "📝 Installed Fish completion to: {}",
+        completion_path.display()
+    );
+
     // Install aliases
     install_shell_aliases(&fish_config_path, "fish").await?;
-    
+
     Ok(())
 }
 
@@ -270,39 +267,42 @@ async fn install_shell_aliases(
     shell: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let binary_path = env::current_exe()?;
-    
+
     // Check if aliases are already installed
     let existing_content = if config_path.exists() {
         fs::read_to_string(config_path)?
     } else {
         String::new()
     };
-    
+
     if existing_content.contains("# devkit shell integration") {
-        println!("📝 Shell aliases already installed in: {}", config_path.display());
+        println!(
+            "📝 Shell aliases already installed in: {}",
+            config_path.display()
+        );
         return Ok(());
     }
-    
+
     let aliases = generate_shell_aliases(&binary_path, shell);
-    
+
     // Append aliases to config file
     let mut file = fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(config_path)?;
-    
+
     writeln!(file, "\n# devkit shell integration")?;
     writeln!(file, "{}", aliases)?;
-    
+
     println!("📝 Installed shell aliases to: {}", config_path.display());
-    
+
     Ok(())
 }
 
 /// Generate shell aliases
 fn generate_shell_aliases(binary_path: &PathBuf, shell: &str) -> String {
     let binary_str = binary_path.to_string_lossy();
-    
+
     match shell {
         "fish" => format!(
             "alias devkit '{}'

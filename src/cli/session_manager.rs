@@ -55,15 +55,15 @@ impl SessionManager {
     pub fn create_session(&mut self, project_path: Option<PathBuf>) -> String {
         let session_id = Uuid::new_v4().to_string();
         let session = InteractiveSession::new(project_path);
-        
+
         // Remove oldest session if at limit
         if self.sessions.len() >= self.max_sessions {
             self.cleanup_old_sessions();
         }
-        
+
         self.sessions.insert(session_id.clone(), session);
         self.set_active_session(&session_id);
-        
+
         session_id
     }
 
@@ -72,7 +72,7 @@ impl SessionManager {
         if !self.sessions.contains_key(session_id) {
             return Err(format!("Session '{}' not found", session_id));
         }
-        
+
         self.set_active_session(session_id);
         Ok(())
     }
@@ -80,11 +80,11 @@ impl SessionManager {
     /// Set the active session and update history
     fn set_active_session(&mut self, session_id: &str) {
         self.active_session_id = Some(session_id.to_string());
-        
+
         // Update session history
         self.session_history.retain(|id| id != session_id);
         self.session_history.push_front(session_id.to_string());
-        
+
         // Keep history size limited
         if self.session_history.len() > self.max_history {
             self.session_history.truncate(self.max_history);
@@ -121,7 +121,8 @@ impl SessionManager {
 
     /// List all sessions
     pub fn list_sessions(&self) -> Vec<SessionInfo> {
-        let mut sessions: Vec<SessionInfo> = self.sessions
+        let mut sessions: Vec<SessionInfo> = self
+            .sessions
             .iter()
             .map(|(id, session)| SessionInfo {
                 id: id.clone(),
@@ -152,25 +153,27 @@ impl SessionManager {
 
         self.sessions.remove(session_id);
         self.session_history.retain(|id| id != session_id);
-        
+
         // Remove associated bookmarks
-        let bookmark_ids: Vec<String> = self.bookmarks
+        let bookmark_ids: Vec<String> = self
+            .bookmarks
             .iter()
             .filter(|(_, bookmark)| bookmark.session_id == session_id)
             .map(|(id, _)| id.clone())
             .collect();
-            
+
         for bookmark_id in bookmark_ids {
             self.bookmarks.remove(&bookmark_id);
         }
-        
+
         Ok(())
     }
 
     /// Save a session to file
     pub fn save_session(&self, session_id: &str, file_path: PathBuf) -> Result<(), String> {
         if let Some(session) = self.sessions.get(session_id) {
-            session.save_to_file(file_path)
+            session
+                .save_to_file(file_path)
                 .map_err(|e| format!("Failed to save session: {}", e))
         } else {
             Err(format!("Session '{}' not found", session_id))
@@ -181,22 +184,28 @@ impl SessionManager {
     pub fn load_session(&mut self, file_path: PathBuf) -> Result<String, String> {
         let session = InteractiveSession::load_from_file(file_path)
             .map_err(|e| format!("Failed to load session: {}", e))?;
-        
+
         let session_id = session.session_id.clone();
-        
+
         // Remove existing session with same ID if it exists
         if self.sessions.contains_key(&session_id) {
             self.sessions.remove(&session_id);
         }
-        
+
         self.sessions.insert(session_id.clone(), session);
         self.set_active_session(&session_id);
-        
+
         Ok(session_id)
     }
 
     /// Create a bookmark for quick access
-    pub fn create_bookmark(&mut self, name: String, description: String, session_id: String, tags: Vec<String>) -> Result<String, String> {
+    pub fn create_bookmark(
+        &mut self,
+        name: String,
+        description: String,
+        session_id: String,
+        tags: Vec<String>,
+    ) -> Result<String, String> {
         if !self.sessions.contains_key(&session_id) {
             return Err(format!("Session '{}' not found", session_id));
         }
@@ -220,7 +229,7 @@ impl SessionManager {
         bookmarks.sort_by(|a, b| b.1.created_at.cmp(&a.1.created_at));
         bookmarks
     }
-    
+
     /// Get a bookmark by ID
     pub fn get_bookmark(&self, bookmark_id: &str) -> Option<&SessionBookmark> {
         self.bookmarks.get(bookmark_id)
@@ -257,19 +266,20 @@ impl SessionManager {
         }
 
         // Find sessions to remove (oldest, not active, not in recent history)
-        let mut candidates: Vec<String> = self.sessions
+        let mut candidates: Vec<String> = self
+            .sessions
             .keys()
             .filter(|id| {
                 // Don't remove active session
                 if Some(*id) == self.active_session_id.as_ref() {
                     return false;
                 }
-                
+
                 // Don't remove recently accessed sessions
                 if self.session_history.contains(id) {
                     return false;
                 }
-                
+
                 true
             })
             .cloned()
@@ -277,8 +287,16 @@ impl SessionManager {
 
         // Sort by creation time, oldest first
         candidates.sort_by(|a, b| {
-            let a_time = self.sessions.get(a).map(|s| s.created_at).unwrap_or(std::time::SystemTime::now());
-            let b_time = self.sessions.get(b).map(|s| s.created_at).unwrap_or(std::time::SystemTime::now());
+            let a_time = self
+                .sessions
+                .get(a)
+                .map(|s| s.created_at)
+                .unwrap_or(std::time::SystemTime::now());
+            let b_time = self
+                .sessions
+                .get(b)
+                .map(|s| s.created_at)
+                .unwrap_or(std::time::SystemTime::now());
             a_time.cmp(&b_time)
         });
 
@@ -313,7 +331,7 @@ impl SessionManager {
             let mut new_session = session.clone();
             new_session.session_id = new_session_id.clone();
             new_session.created_at = std::time::SystemTime::now();
-            
+
             self.sessions.insert(new_session_id.clone(), new_session);
             Ok(new_session_id)
         } else {
@@ -322,7 +340,11 @@ impl SessionManager {
     }
 
     /// Rename a session (via bookmark)
-    pub fn rename_session_via_bookmark(&mut self, session_id: &str, new_name: String) -> Result<(), String> {
+    pub fn rename_session_via_bookmark(
+        &mut self,
+        session_id: &str,
+        new_name: String,
+    ) -> Result<(), String> {
         if !self.sessions.contains_key(session_id) {
             return Err(format!("Session '{}' not found", session_id));
         }

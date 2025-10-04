@@ -35,8 +35,7 @@ pub use error::{
     ContextualError, DevKitError, DevKitResult, ErrorContext, ErrorHandler, WithContext,
 };
 pub use logging::{
-    LogConfig, LogContext, LogEntry, LogFormat, LogLevel, LoggingError,
-    LoggingSystem,
+    LogConfig, LogContext, LogEntry, LogFormat, LogLevel, LoggingError, LoggingSystem,
 };
 pub use shell::{ShellConfig, ShellError};
 

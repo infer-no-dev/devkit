@@ -1,14 +1,14 @@
 //! Blueprint Generator
-//! 
+//!
 //! This module provides the capability to generate complete project structures
 //! and implementations from system blueprints, enabling true system self-replication.
 
 use super::*;
-use anyhow::{Result, Context as AnyhowContext};
+use anyhow::{Context as AnyhowContext, Result};
+use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use handlebars::{Handlebars, Context, Helper, HelperResult, Output, RenderContext, RenderError};
 
 /// Blueprint generator that creates projects from blueprints
 pub struct BlueprintGenerator<'a> {
@@ -31,7 +31,7 @@ impl<'a> BlueprintGenerator<'a> {
     /// Create a new blueprint generator
     pub fn new(output_path: PathBuf) -> Result<Self> {
         let mut handlebars = Handlebars::new();
-        
+
         // Register custom helpers
         handlebars.register_helper("camel_case", Box::new(camel_case_helper));
         handlebars.register_helper("snake_case", Box::new(snake_case_helper));
@@ -105,7 +105,8 @@ impl<'a> BlueprintGenerator<'a> {
 
         for dir in &directories {
             let path = self.output_path.join(dir);
-            fs::create_dir_all(&path).await
+            fs::create_dir_all(&path)
+                .await
                 .with_context(|| format!("Failed to create directory: {:?}", path))?;
         }
 
@@ -117,7 +118,10 @@ impl<'a> BlueprintGenerator<'a> {
         let context = GenerationContext {
             blueprint: blueprint.clone(),
             module_name: blueprint.metadata.name.clone(),
-            dependencies: blueprint.implementation.third_party_dependencies.iter()
+            dependencies: blueprint
+                .implementation
+                .third_party_dependencies
+                .iter()
                 .map(|dep| dep.crate_name.clone())
                 .collect(),
             features: vec!["default".to_string()],
@@ -125,11 +129,14 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["cargo_toml"];
-        let rendered = self.handlebars.render_template(template, &context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &context)
             .context("Failed to render Cargo.toml template")?;
 
         let cargo_path = self.output_path.join("Cargo.toml");
-        fs::write(&cargo_path, rendered).await
+        fs::write(&cargo_path, rendered)
+            .await
             .context("Failed to write Cargo.toml")?;
 
         Ok(())
@@ -146,11 +153,14 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["main_rs"];
-        let rendered = self.handlebars.render_template(template, &context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &context)
             .context("Failed to render main.rs template")?;
 
         let main_path = self.output_path.join("src/main.rs");
-        fs::write(&main_path, rendered).await
+        fs::write(&main_path, rendered)
+            .await
             .context("Failed to write main.rs")?;
 
         Ok(())
@@ -167,18 +177,25 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["lib_rs"];
-        let rendered = self.handlebars.render_template(template, &context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &context)
             .context("Failed to render lib.rs template")?;
 
         let lib_path = self.output_path.join("src/lib.rs");
-        fs::write(&lib_path, rendered).await
+        fs::write(&lib_path, rendered)
+            .await
             .context("Failed to write lib.rs")?;
 
         Ok(())
     }
 
     /// Generate a module from module blueprint
-    async fn generate_module(&mut self, module_blueprint: &ModuleBlueprint, system_blueprint: &SystemBlueprint) -> Result<()> {
+    async fn generate_module(
+        &mut self,
+        module_blueprint: &ModuleBlueprint,
+        system_blueprint: &SystemBlueprint,
+    ) -> Result<()> {
         let module_dir = match module_blueprint.name.as_str() {
             "main" => "src".to_string(),
             name => format!("src/{}", name),
@@ -198,16 +215,20 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["module_rs"];
-        let rendered = self.handlebars.render_template(template, &context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &context)
             .context("Failed to render module template")?;
 
-        fs::write(&module_path, rendered).await
+        fs::write(&module_path, rendered)
+            .await
             .with_context(|| format!("Failed to write module: {:?}", module_path))?;
 
         // Generate submodules for complex modules
         for interface in &module_blueprint.public_interface {
             if interface.interface_type == "module" {
-                self.generate_submodule(&module_blueprint, interface).await?;
+                self.generate_submodule(&module_blueprint, interface)
+                    .await?;
             }
         }
 
@@ -215,8 +236,13 @@ impl<'a> BlueprintGenerator<'a> {
     }
 
     /// Generate a submodule
-    async fn generate_submodule(&mut self, parent_module: &ModuleBlueprint, interface: &InterfaceDefinition) -> Result<()> {
-        let submodule_path = self.output_path
+    async fn generate_submodule(
+        &mut self,
+        parent_module: &ModuleBlueprint,
+        interface: &InterfaceDefinition,
+    ) -> Result<()> {
+        let submodule_path = self
+            .output_path
             .join("src")
             .join(&parent_module.name)
             .join(format!("{}.rs", interface.name));
@@ -228,10 +254,13 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["submodule_rs"];
-        let rendered = self.handlebars.render_template(template, &context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &context)
             .context("Failed to render submodule template")?;
 
-        fs::write(&submodule_path, rendered).await
+        fs::write(&submodule_path, rendered)
+            .await
             .with_context(|| format!("Failed to write submodule: {:?}", submodule_path))?;
 
         Ok(())
@@ -246,11 +275,14 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["config_toml"];
-        let rendered = self.handlebars.render_template(template, &config_context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &config_context)
             .context("Failed to render config template")?;
 
         let config_path = self.output_path.join(".agentic-config.toml");
-        fs::write(&config_path, rendered).await
+        fs::write(&config_path, rendered)
+            .await
             .context("Failed to write config file")?;
 
         Ok(())
@@ -268,10 +300,13 @@ impl<'a> BlueprintGenerator<'a> {
             };
 
             let template = &self.templates["test_rs"];
-            let rendered = self.handlebars.render_template(template, &test_context)
+            let rendered = self
+                .handlebars
+                .render_template(template, &test_context)
                 .context("Failed to render test template")?;
 
-            fs::write(&test_path, rendered).await
+            fs::write(&test_path, rendered)
+                .await
                 .with_context(|| format!("Failed to write test file: {:?}", test_path))?;
         }
 
@@ -287,11 +322,14 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["readme_md"];
-        let rendered = self.handlebars.render_template(template, &readme_context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &readme_context)
             .context("Failed to render README template")?;
 
         let readme_path = self.output_path.join("README.md");
-        fs::write(&readme_path, rendered).await
+        fs::write(&readme_path, rendered)
+            .await
             .context("Failed to write README.md")?;
 
         // Generate WARP.md (project-specific guidance)
@@ -301,11 +339,14 @@ impl<'a> BlueprintGenerator<'a> {
         };
 
         let template = &self.templates["warp_md"];
-        let rendered = self.handlebars.render_template(template, &warp_context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &warp_context)
             .context("Failed to render WARP.md template")?;
 
         let warp_path = self.output_path.join("WARP.md");
-        fs::write(&warp_path, rendered).await
+        fs::write(&warp_path, rendered)
+            .await
             .context("Failed to write WARP.md")?;
 
         Ok(())
@@ -317,15 +358,19 @@ impl<'a> BlueprintGenerator<'a> {
             testing_strategy: blueprint.testing.clone(),
             deployment_strategy: blueprint.deployment.clone(),
             matrix_rust_version: r"${{ matrix.rust-version }}".to_string(),
-            github_cache_key: r"${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}".to_string(),
+            github_cache_key: r"${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}"
+                .to_string(),
         };
 
         let template = &self.templates["ci_yml"];
-        let rendered = self.handlebars.render_template(template, &ci_context)
+        let rendered = self
+            .handlebars
+            .render_template(template, &ci_context)
             .context("Failed to render CI template")?;
 
         let ci_path = self.output_path.join(".github/workflows/ci.yml");
-        fs::write(&ci_path, rendered).await
+        fs::write(&ci_path, rendered)
+            .await
             .context("Failed to write CI file")?;
 
         Ok(())
@@ -334,17 +379,17 @@ impl<'a> BlueprintGenerator<'a> {
     /// Load default templates
     fn load_default_templates() -> HashMap<String, String> {
         use super::templates::TemplateManager;
-        
+
         let template_manager = TemplateManager::new();
         let mut templates = HashMap::new();
-        
+
         // Copy all templates from the template manager
         for template_name in template_manager.list_templates() {
             if let Some(template_content) = template_manager.get_template(template_name) {
                 templates.insert(template_name.clone(), template_content.clone());
             }
         }
-        
+
         templates
     }
 }
@@ -476,11 +521,7 @@ fn format_visibility_helper(
     out: &mut dyn Output,
 ) -> HelperResult {
     let param = h.param(0).and_then(|v| v.value().as_str()).unwrap_or("");
-    let formatted = if param.contains("pub") {
-        "pub "
-    } else {
-        ""
-    };
+    let formatted = if param.contains("pub") { "pub " } else { "" };
     out.write(formatted)?;
     Ok(())
 }
@@ -489,7 +530,10 @@ fn capitalize_first_letter(s: &str) -> String {
     let mut chars = s.chars();
     match chars.next() {
         None => String::new(),
-        Some(first) => first.to_uppercase().chain(chars.as_str().to_lowercase().chars()).collect(),
+        Some(first) => first
+            .to_uppercase()
+            .chain(chars.as_str().to_lowercase().chars())
+            .collect(),
     }
 }
 
@@ -517,7 +561,7 @@ mod tests {
                 assert!(output_path.join("Cargo.toml").exists());
                 assert!(output_path.join("src").exists());
                 assert!(output_path.join("src/main.rs").exists());
-            },
+            }
             Err(e) => {
                 // Templates don't exist in test environment, so we expect this to fail
                 // but the structure should still be created

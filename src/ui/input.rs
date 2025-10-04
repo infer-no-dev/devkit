@@ -74,7 +74,7 @@ impl InputHandler {
             .keybindings
             .get_action(&combination, &self.current_context)
         {
-            return Ok(InputResult::Action(action.clone()));
+            return self.handle_action(action.clone());
         }
 
         // Handle input-specific keys based on context
@@ -84,53 +84,12 @@ impl InputHandler {
         }
     }
 
-    /// Handle text input keys
-    fn handle_text_input(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
-        eprintln!("DEBUG: Handling text input: {:?}", key_event);
-        // Reset completion on most key presses
-        match key_event.code {
-            KeyCode::Tab => {}, // Don't reset on tab
-            _ => self.reset_completion(),
-        }
+    /// Handle actions from keybinding system
+    fn handle_action(&mut self, action: Action) -> Result<InputResult, String> {
+        use crate::ui::keybindings::Action;
         
-        match key_event.code {
-            KeyCode::Char(c) => {
-                self.insert_char(c);
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Backspace => {
-                self.delete_char_before_cursor();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Delete => {
-                self.delete_char_at_cursor();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Left => {
-                self.move_cursor_left();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Right => {
-                self.move_cursor_right();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Home => {
-                self.move_cursor_to_start();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::End => {
-                self.move_cursor_to_end();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Up => {
-                self.previous_history();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Down => {
-                self.next_history();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Enter => {
+        match action {
+            Action::ConfirmInput => {
                 let input = self.get_current_input();
                 if !input.is_empty() {
                     self.add_to_history(input.clone());
@@ -143,13 +102,68 @@ impl InputHandler {
                     _ => Ok(InputResult::None),
                 }
             }
-            KeyCode::Esc => {
+            Action::DeleteChar => {
+                self.delete_char_before_cursor();
+                Ok(InputResult::Consumed)
+            }
+            Action::DeleteWord => {
+                self.delete_word_before_cursor();
+                Ok(InputResult::Consumed)
+            }
+            Action::ClearInput => {
+                self.clear_input();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorLeft => {
+                self.move_cursor_left();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorRight => {
+                self.move_cursor_right();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorStart => {
+                self.move_cursor_to_start();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorEnd => {
+                self.move_cursor_to_end();
+                Ok(InputResult::Consumed)
+            }
+            Action::SwitchToNormalMode => {
                 self.clear_input();
                 Ok(InputResult::Action(Action::SwitchToNormalMode))
             }
-            KeyCode::Tab => {
-                self.handle_tab_completion()
+            _ => Ok(InputResult::Action(action))
+        }
+    }
+
+    /// Handle text input keys
+    fn handle_text_input(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
+        // Reset completion on most key presses
+        match key_event.code {
+            KeyCode::Tab => {} // Don't reset on tab
+            _ => self.reset_completion(),
+        }
+
+        match key_event.code {
+            KeyCode::Char(c) => {
+                self.insert_char(c);
+                Ok(InputResult::Consumed)
             }
+            KeyCode::Delete => {
+                self.delete_char_at_cursor();
+                Ok(InputResult::Consumed)
+            }
+            KeyCode::Up => {
+                self.previous_history();
+                Ok(InputResult::Consumed)
+            }
+            KeyCode::Down => {
+                self.next_history();
+                Ok(InputResult::Consumed)
+            }
+            KeyCode::Tab => self.handle_tab_completion(),
             _ => Ok(InputResult::None),
         }
     }
@@ -351,7 +365,6 @@ impl InputHandler {
 
     /// Set the current input context
     pub fn set_context(&mut self, context: KeyContext) {
-        eprintln!("DEBUG: Setting input context to {:?}", context);
         self.current_context = context;
         // Reset completion when switching contexts
         self.reset_completion();
@@ -377,14 +390,16 @@ impl InputHandler {
     /// Generate completion candidates based on current input
     fn generate_completion_candidates(&mut self) {
         self.completion_candidates.clear();
-        
+
         let input = self.get_current_input();
         let parts: Vec<&str> = input.split_whitespace().collect();
-        
+
         if input.starts_with('/') {
             // Command completion
             self.generate_command_completions(&input[1..]);
-        } else if parts.len() >= 2 && (parts[0] == "/cd" || parts[0] == "/ls" || parts[0] == "/load") {
+        } else if parts.len() >= 2
+            && (parts[0] == "/cd" || parts[0] == "/ls" || parts[0] == "/load")
+        {
             // File/directory completion
             let partial_path = parts.last().map_or("", |&p| p);
             self.generate_path_completions(partial_path);
@@ -402,11 +417,25 @@ impl InputHandler {
     /// Generate command completions
     fn generate_command_completions(&mut self, partial: &str) {
         let commands = [
-            "help", "status", "agents", "clear", "save", "load", "ls", "list", 
-            "cd", "pwd", "history", "artifacts", "tasks", "config", "theme", 
-            "quit", "exit"
+            "help",
+            "status",
+            "agents",
+            "clear",
+            "save",
+            "load",
+            "ls",
+            "list",
+            "cd",
+            "pwd",
+            "history",
+            "artifacts",
+            "tasks",
+            "config",
+            "theme",
+            "quit",
+            "exit",
         ];
-        
+
         for cmd in &commands {
             if cmd.starts_with(partial) {
                 self.completion_candidates.push(format!("/{}", cmd));
@@ -419,7 +448,10 @@ impl InputHandler {
         let (dir_path, file_prefix) = if partial_path.contains('/') {
             let path = std::path::Path::new(partial_path);
             if let Some(parent) = path.parent() {
-                (parent.to_path_buf(), path.file_name().and_then(|n| n.to_str()).unwrap_or(""))
+                (
+                    parent.to_path_buf(),
+                    path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+                )
             } else {
                 (PathBuf::from("."), partial_path)
             }
@@ -437,7 +469,7 @@ impl InputHandler {
                         } else {
                             format!("{}/{}", dir_path.display(), name)
                         };
-                        
+
                         // Add trailing slash for directories
                         if entry.file_type().map_or(false, |ft| ft.is_dir()) {
                             self.completion_candidates.push(format!("{}/", full_path));
@@ -448,7 +480,7 @@ impl InputHandler {
                 }
             }
         }
-        
+
         // Sort completions
         self.completion_candidates.sort();
     }
@@ -466,8 +498,11 @@ impl InputHandler {
     /// Generate config key completions
     fn generate_config_key_completions(&mut self, partial: &str) {
         let config_keys = [
-            "auto-save", "default-language", "show-confidence", 
-            "verbose", "max-history"
+            "auto-save",
+            "default-language",
+            "show-confidence",
+            "verbose",
+            "max-history",
         ];
         for key in &config_keys {
             if key.starts_with(partial) {
@@ -487,17 +522,21 @@ impl InputHandler {
 
     /// Apply the current completion candidate
     fn apply_completion(&mut self) {
-        if let (Some(index), Some(candidate)) = (self.completion_index, self.completion_candidates.get(self.completion_index.unwrap_or(0))) {
+        if let (Some(index), Some(candidate)) = (
+            self.completion_index,
+            self.completion_candidates
+                .get(self.completion_index.unwrap_or(0)),
+        ) {
             let input = self.get_current_input();
             let parts: Vec<&str> = input.split_whitespace().collect();
-            
+
             if input.starts_with('/') && parts.len() == 1 {
                 // Replace command
                 self.input_buffer = candidate.clone();
                 self.cursor_position = self.input_buffer.len();
             } else if parts.len() >= 2 {
                 // Replace last part (file path, theme, config key, etc.)
-                let prefix = parts[..parts.len()-1].join(" ");
+                let prefix = parts[..parts.len() - 1].join(" ");
                 self.input_buffer = format!("{} {}", prefix, candidate);
                 self.cursor_position = self.input_buffer.len();
             }

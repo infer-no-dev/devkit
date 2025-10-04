@@ -1,22 +1,22 @@
 //! System Blueprint Module
-//! 
+//!
 //! This module provides the capability to generate comprehensive system blueprints
 //! that capture not just the structure, but the architectural decisions, patterns,
 //! and implementation strategies that make the system work.
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use anyhow::Result;
 
-pub mod generator;
 pub mod extractor;
-pub mod templates;
-pub mod replicator;
+pub mod generator;
 pub mod languages;
+pub mod replicator;
+pub mod templates;
 
+pub mod evolution;
 #[cfg(test)]
 pub mod tests;
-pub mod evolution;
 
 /// Complete system blueprint containing all information needed for self-replication
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -631,9 +631,10 @@ impl SystemBlueprint {
             warnings.push("No modules defined".to_string());
         }
 
-        if self.patterns.creational_patterns.is_empty() && 
-           self.patterns.structural_patterns.is_empty() && 
-           self.patterns.behavioral_patterns.is_empty() {
+        if self.patterns.creational_patterns.is_empty()
+            && self.patterns.structural_patterns.is_empty()
+            && self.patterns.behavioral_patterns.is_empty()
+        {
             warnings.push("No design patterns documented".to_string());
         }
 

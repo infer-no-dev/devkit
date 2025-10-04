@@ -1,10 +1,10 @@
-use devkit::blueprint::{
-    SystemBlueprint, SystemMetadata, ArchitecturalDecisions, ModuleBlueprint, 
-    DesignPatterns, ImplementationDetails, ConfigurationStrategy, 
-    TestingStrategy, PerformanceOptimizations, SecurityPatterns, DeploymentStrategy
-};
-use devkit::blueprint::evolution::{BlueprintVersion, BlueprintDiffAnalyzer};
 use anyhow::Result;
+use devkit::blueprint::evolution::{BlueprintDiffAnalyzer, BlueprintVersion};
+use devkit::blueprint::{
+    ArchitecturalDecisions, ConfigurationStrategy, DeploymentStrategy, DesignPatterns,
+    ImplementationDetails, ModuleBlueprint, PerformanceOptimizations, SecurityPatterns,
+    SystemBlueprint, SystemMetadata, TestingStrategy,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
     let updated_blueprint = create_updated_blueprint();
 
     let analyzer = BlueprintDiffAnalyzer::new();
-    
+
     let from_version = BlueprintVersion::new(1, 0, 0);
     let to_version = BlueprintVersion::new(2, 0, 0);
 
@@ -32,7 +32,10 @@ async fn main() -> Result<()> {
     println!("===============================");
     println!();
 
-    println!("Version Change: {} → {}", diff.from_version, diff.to_version);
+    println!(
+        "Version Change: {} → {}",
+        diff.from_version, diff.to_version
+    );
     println!();
 
     println!("Summary:");
@@ -55,9 +58,15 @@ async fn main() -> Result<()> {
     println!();
 
     println!("Impact Analysis:");
-    println!("  Overall Impact Score: {:.2}", diff.impact_analysis.overall_impact_score);
+    println!(
+        "  Overall Impact Score: {:.2}",
+        diff.impact_analysis.overall_impact_score
+    );
     println!("  Risk Level: {:?}", diff.impact_analysis.risk_level);
-    println!("  Compatibility Score: {:.2}", diff.impact_analysis.compatibility_score);
+    println!(
+        "  Compatibility Score: {:.2}",
+        diff.impact_analysis.compatibility_score
+    );
     println!();
 
     if !diff.impact_analysis.affected_modules.is_empty() {
@@ -71,10 +80,9 @@ async fn main() -> Result<()> {
     if !diff.impact_analysis.dependency_impacts.is_empty() {
         println!("  Dependency Impacts:");
         for impact in &diff.impact_analysis.dependency_impacts {
-            println!("    - {} ({:?}): {}", 
-                impact.dependency_name, 
-                impact.impact_type, 
-                impact.risk_assessment
+            println!(
+                "    - {} ({:?}): {}",
+                impact.dependency_name, impact.impact_type, impact.risk_assessment
             );
         }
         println!();
@@ -83,9 +91,10 @@ async fn main() -> Result<()> {
     if !diff.impact_analysis.interface_impacts.is_empty() {
         println!("  Interface Impacts:");
         for impact in &diff.impact_analysis.interface_impacts {
-            println!("    - {} ({:?}, Breaking: {}): {}", 
-                impact.interface_name, 
-                impact.impact_type, 
+            println!(
+                "    - {} ({:?}, Breaking: {}): {}",
+                impact.interface_name,
+                impact.impact_type,
                 impact.breaking_change,
                 impact.description
             );
@@ -94,9 +103,18 @@ async fn main() -> Result<()> {
     }
 
     println!("Migration Complexity:");
-    println!("  Complexity Score: {:.2}", diff.migration_complexity.complexity_score);
-    println!("  Estimated Effort: {:?}", diff.migration_complexity.estimated_effort);
-    println!("  Rollback Difficulty: {:?}", diff.migration_complexity.rollback_difficulty);
+    println!(
+        "  Complexity Score: {:.2}",
+        diff.migration_complexity.complexity_score
+    );
+    println!(
+        "  Estimated Effort: {:?}",
+        diff.migration_complexity.estimated_effort
+    );
+    println!(
+        "  Rollback Difficulty: {:?}",
+        diff.migration_complexity.rollback_difficulty
+    );
     println!();
 
     if !diff.migration_complexity.required_skills.is_empty() {
@@ -144,17 +162,15 @@ fn create_original_blueprint() -> SystemBlueprint {
             generator_version: "1.0.0".to_string(),
         },
         architecture: ArchitecturalDecisions::default(),
-        modules: vec![
-            ModuleBlueprint {
-                name: "api".to_string(),
-                purpose: "Main API server".to_string(),
-                dependencies: vec![],
-                public_interface: vec![],
-                internal_structure: Default::default(),
-                testing_strategy: Default::default(),
-                performance_characteristics: Default::default(),
-            }
-        ],
+        modules: vec![ModuleBlueprint {
+            name: "api".to_string(),
+            purpose: "Main API server".to_string(),
+            dependencies: vec![],
+            public_interface: vec![],
+            internal_structure: Default::default(),
+            testing_strategy: Default::default(),
+            performance_characteristics: Default::default(),
+        }],
         patterns: DesignPatterns::default(),
         implementation: ImplementationDetails::default(),
         configuration: ConfigurationStrategy::default(),
@@ -196,7 +212,7 @@ fn create_updated_blueprint() -> SystemBlueprint {
                 internal_structure: Default::default(),
                 testing_strategy: Default::default(),
                 performance_characteristics: Default::default(),
-            }
+            },
         ],
         patterns: DesignPatterns::default(),
         implementation: ImplementationDetails::default(),

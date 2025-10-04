@@ -4,13 +4,13 @@
 //! dependencies, and build configuration for blueprint generation.
 
 use super::super::{
-    LanguageAnalyzer, LanguageModule, Language, Dependency, DependencySource,
-    BuildConfig, TestConfig, DocumentationConfig,
+    BuildConfig, Dependency, DependencySource, DocumentationConfig, Language, LanguageAnalyzer,
+    LanguageModule, TestConfig,
 };
-use anyhow::{Result, Context};
-use std::path::Path;
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::Path;
 
 pub struct JavaScriptAnalyzer;
 
@@ -46,7 +46,10 @@ impl JavaScriptAnalyzer {
         }
 
         // Parse devDependencies
-        if let Some(dev_deps) = package_json.get("devDependencies").and_then(|d| d.as_object()) {
+        if let Some(dev_deps) = package_json
+            .get("devDependencies")
+            .and_then(|d| d.as_object())
+        {
             for (name, version_spec) in dev_deps {
                 let version = version_spec.as_str().unwrap_or("*").to_string();
                 dependencies.push(Dependency {
@@ -60,7 +63,10 @@ impl JavaScriptAnalyzer {
         }
 
         // Parse peerDependencies
-        if let Some(peer_deps) = package_json.get("peerDependencies").and_then(|d| d.as_object()) {
+        if let Some(peer_deps) = package_json
+            .get("peerDependencies")
+            .and_then(|d| d.as_object())
+        {
             for (name, version_spec) in peer_deps {
                 let version = version_spec.as_str().unwrap_or("*").to_string();
                 dependencies.push(Dependency {
@@ -135,7 +141,10 @@ impl JavaScriptAnalyzer {
         if let Some(dependencies) = package_json.get("dependencies").and_then(|d| d.as_object()) {
             deps.extend(dependencies.keys());
         }
-        if let Some(dev_dependencies) = package_json.get("devDependencies").and_then(|d| d.as_object()) {
+        if let Some(dev_dependencies) = package_json
+            .get("devDependencies")
+            .and_then(|d| d.as_object())
+        {
             deps.extend(dev_dependencies.keys());
         }
 
@@ -178,7 +187,9 @@ impl JavaScriptAnalyzer {
         }
 
         // Check for TypeScript
-        if deps.iter().any(|dep| dep == &"typescript") || project_path.join("tsconfig.json").exists() {
+        if deps.iter().any(|dep| dep == &"typescript")
+            || project_path.join("tsconfig.json").exists()
+        {
             return Ok("typescript".to_string());
         }
 
@@ -237,10 +248,22 @@ impl JavaScriptAnalyzer {
 
         // Check common entry point files
         let common_entries = [
-            "index.js", "index.ts", "app.js", "app.ts",
-            "main.js", "main.ts", "server.js", "server.ts",
-            "src/index.js", "src/index.ts", "src/app.js", "src/app.ts",
-            "src/main.js", "src/main.ts", "src/server.js", "src/server.ts",
+            "index.js",
+            "index.ts",
+            "app.js",
+            "app.ts",
+            "main.js",
+            "main.ts",
+            "server.js",
+            "server.ts",
+            "src/index.js",
+            "src/index.ts",
+            "src/app.js",
+            "src/app.ts",
+            "src/main.js",
+            "src/main.ts",
+            "src/server.js",
+            "src/server.ts",
         ];
 
         for entry in &common_entries {
@@ -266,43 +289,49 @@ impl JavaScriptAnalyzer {
             // React ecosystem
             name if name.contains("react") => "React library".to_string(),
             "redux" | "@reduxjs/toolkit" | "recoil" | "zustand" => "State management".to_string(),
-            
+
             // Vue ecosystem
             name if name.contains("vue") => "Vue library".to_string(),
             "vuex" | "pinia" => "State management".to_string(),
-            
+
             // Angular ecosystem
             name if name.contains("@angular") => "Angular library".to_string(),
-            
+
             // Build tools
             "webpack" | "rollup" | "vite" | "parcel" => "Build tool".to_string(),
             name if name == "babel" || name.starts_with("@babel") => "Transpiler".to_string(),
-            
+
             // Testing
-            "jest" | "mocha" | "jasmine" | "vitest" | "cypress" | "playwright" => "Testing".to_string(),
-            
+            "jest" | "mocha" | "jasmine" | "vitest" | "cypress" | "playwright" => {
+                "Testing".to_string()
+            }
+
             // Linting/Formatting
             "eslint" | "prettier" | "stylelint" => "Code quality".to_string(),
-            
+
             // CSS frameworks
-            "tailwindcss" | "bootstrap" | "bulma" | "antd" | "@mui/material" => "CSS framework".to_string(),
-            
+            "tailwindcss" | "bootstrap" | "bulma" | "antd" | "@mui/material" => {
+                "CSS framework".to_string()
+            }
+
             // HTTP clients
             "axios" | "fetch" | "node-fetch" | "cross-fetch" => "HTTP client".to_string(),
-            
+
             // Server frameworks
             "express" | "fastify" | "koa" | "hapi" => "Server framework".to_string(),
-            
+
             // Database
             "mongoose" | "sequelize" | "typeorm" | "prisma" => "Database ORM".to_string(),
-            
+
             // Utilities
             "lodash" | "ramda" | "underscore" => "Utility library".to_string(),
             "moment" | "date-fns" | "dayjs" => "Date/time utility".to_string(),
-            
+
             // TypeScript
-            name if name == "typescript" || name.starts_with("@types/") => "TypeScript support".to_string(),
-            
+            name if name == "typescript" || name.starts_with("@types/") => {
+                "TypeScript support".to_string()
+            }
+
             _ => "Application dependency".to_string(),
         }
     }
@@ -310,7 +339,7 @@ impl JavaScriptAnalyzer {
     /// Detect test framework
     async fn detect_test_framework(&self, project_path: &Path) -> Result<String> {
         let deps = self.extract_dependencies(project_path).await?;
-        
+
         // Check dependencies for test frameworks
         for dep in &deps {
             match dep.name.as_str() {
@@ -325,18 +354,21 @@ impl JavaScriptAnalyzer {
         }
 
         // Check for config files
-        if project_path.join("jest.config.js").exists() || 
-           project_path.join("jest.config.json").exists() {
+        if project_path.join("jest.config.js").exists()
+            || project_path.join("jest.config.json").exists()
+        {
             return Ok("jest".to_string());
         }
 
-        if project_path.join("vitest.config.js").exists() || 
-           project_path.join("vitest.config.ts").exists() {
+        if project_path.join("vitest.config.js").exists()
+            || project_path.join("vitest.config.ts").exists()
+        {
             return Ok("vitest".to_string());
         }
 
-        if project_path.join("cypress.json").exists() || 
-           project_path.join("cypress.config.js").exists() {
+        if project_path.join("cypress.json").exists()
+            || project_path.join("cypress.config.js").exists()
+        {
             return Ok("cypress".to_string());
         }
 
@@ -351,18 +383,21 @@ impl JavaScriptAnalyzer {
     /// Detect build tool
     async fn detect_build_tool(&self, project_path: &Path) -> Result<String> {
         // Check for config files first
-        if project_path.join("webpack.config.js").exists() || 
-           project_path.join("webpack.config.ts").exists() {
+        if project_path.join("webpack.config.js").exists()
+            || project_path.join("webpack.config.ts").exists()
+        {
             return Ok("webpack".to_string());
         }
 
-        if project_path.join("rollup.config.js").exists() || 
-           project_path.join("rollup.config.ts").exists() {
+        if project_path.join("rollup.config.js").exists()
+            || project_path.join("rollup.config.ts").exists()
+        {
             return Ok("rollup".to_string());
         }
 
-        if project_path.join("vite.config.js").exists() || 
-           project_path.join("vite.config.ts").exists() {
+        if project_path.join("vite.config.js").exists()
+            || project_path.join("vite.config.ts").exists()
+        {
             return Ok("vite".to_string());
         }
 
@@ -429,8 +464,17 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
 
         let test_config = TestConfig {
             test_framework: test_framework.clone(),
-            test_directories: vec!["test/".to_string(), "tests/".to_string(), "__tests__/".to_string()],
-            coverage_tool: if test_framework == "jest" { "jest" } else { "nyc" }.to_string(),
+            test_directories: vec![
+                "test/".to_string(),
+                "tests/".to_string(),
+                "__tests__/".to_string(),
+            ],
+            coverage_tool: if test_framework == "jest" {
+                "jest"
+            } else {
+                "nyc"
+            }
+            .to_string(),
             test_commands: vec![format!("npm test"), "npm run test:unit".to_string()],
         };
 
@@ -463,17 +507,17 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
 
     async fn analyze_build_config(&self, project_path: &Path) -> Result<BuildConfig> {
         let build_tool = self.detect_build_tool(project_path).await?;
-        
+
         let build_file = match build_tool.as_str() {
             "webpack" => "webpack.config.js".to_string(),
-            "rollup" => "rollup.config.js".to_string(), 
+            "rollup" => "rollup.config.js".to_string(),
             "vite" => "vite.config.js".to_string(),
             "parcel" => "package.json".to_string(),
             _ => "package.json".to_string(),
         };
 
         let mut compile_flags = Vec::new();
-        
+
         // Add TypeScript compilation if applicable
         if self.is_typescript_project(project_path).await? {
             compile_flags.push("--typescript".to_string());
@@ -484,10 +528,7 @@ impl LanguageAnalyzer for JavaScriptAnalyzer {
             build_file,
             compile_flags,
             optimization_level: "production".to_string(),
-            target_platforms: vec![
-                "node".to_string(),
-                "browser".to_string(),
-            ],
+            target_platforms: vec!["node".to_string(), "browser".to_string()],
         })
     }
 

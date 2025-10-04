@@ -1,6 +1,9 @@
-use devkit::blueprint::{SystemBlueprint, SystemType, Module, ModuleType, Dependency, DependencyType, Interface, InterfaceProtocol};
-use devkit::blueprint::evolution::{BlueprintVersion, BlueprintDiffAnalyzer};
 use anyhow::Result;
+use devkit::blueprint::evolution::{BlueprintDiffAnalyzer, BlueprintVersion};
+use devkit::blueprint::{
+    Dependency, DependencyType, Interface, InterfaceProtocol, Module, ModuleType, SystemBlueprint,
+    SystemType,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -10,35 +13,31 @@ async fn main() -> Result<()> {
         version: "1.0.0".to_string(),
         system_type: SystemType::WebApi,
         description: "Original system description".to_string(),
-        modules: vec![
-            Module {
+        modules: vec![Module {
+            name: "api".to_string(),
+            module_type: ModuleType::Service,
+            entry_point: Some("main.rs".to_string()),
+            dependencies: vec![
+                Dependency {
+                    name: "serde".to_string(),
+                    version: "1.0".to_string(),
+                    dependency_type: DependencyType::Direct,
+                    purpose: Some("Serialization".to_string()),
+                },
+                Dependency {
+                    name: "tokio".to_string(),
+                    version: "1.0".to_string(),
+                    dependency_type: DependencyType::Direct,
+                    purpose: Some("Async runtime".to_string()),
+                },
+            ],
+            interfaces: vec![Interface {
                 name: "api".to_string(),
-                module_type: ModuleType::Service,
-                entry_point: Some("main.rs".to_string()),
-                dependencies: vec![
-                    Dependency {
-                        name: "serde".to_string(),
-                        version: "1.0".to_string(),
-                        dependency_type: DependencyType::Direct,
-                        purpose: Some("Serialization".to_string()),
-                    },
-                    Dependency {
-                        name: "tokio".to_string(),
-                        version: "1.0".to_string(),
-                        dependency_type: DependencyType::Direct,
-                        purpose: Some("Async runtime".to_string()),
-                    },
-                ],
-                interfaces: vec![
-                    Interface {
-                        name: "api".to_string(),
-                        protocol: InterfaceProtocol::Http,
-                        methods: vec!["GET /health".to_string(), "POST /users".to_string()],
-                        description: "REST API interface".to_string(),
-                    },
-                ],
-            },
-        ],
+                protocol: InterfaceProtocol::Http,
+                methods: vec!["GET /health".to_string(), "POST /users".to_string()],
+                description: "REST API interface".to_string(),
+            }],
+        }],
         dependencies: vec![],
         configuration: serde_json::json!({}),
         documentation: None,
@@ -77,40 +76,37 @@ async fn main() -> Result<()> {
                         purpose: Some("Structured logging".to_string()),
                     },
                 ],
-                interfaces: vec![
-                    Interface {
-                        name: "api".to_string(),
-                        protocol: InterfaceProtocol::Http,
-                        methods: vec![
-                            "GET /health".to_string(), 
-                            "POST /users".to_string(),
-                            "DELETE /users/{id}".to_string() // New endpoint
-                        ],
-                        description: "Enhanced REST API interface".to_string(),
-                    },
-                ],
+                interfaces: vec![Interface {
+                    name: "api".to_string(),
+                    protocol: InterfaceProtocol::Http,
+                    methods: vec![
+                        "GET /health".to_string(),
+                        "POST /users".to_string(),
+                        "DELETE /users/{id}".to_string(), // New endpoint
+                    ],
+                    description: "Enhanced REST API interface".to_string(),
+                }],
             },
             // New module added
             Module {
                 name: "auth".to_string(),
                 module_type: ModuleType::Service,
                 entry_point: Some("auth/main.rs".to_string()),
-                dependencies: vec![
-                    Dependency {
-                        name: "jsonwebtoken".to_string(),
-                        version: "8.0".to_string(),
-                        dependency_type: DependencyType::Direct,
-                        purpose: Some("JWT handling".to_string()),
-                    },
-                ],
-                interfaces: vec![
-                    Interface {
-                        name: "auth".to_string(),
-                        protocol: InterfaceProtocol::Http,
-                        methods: vec!["POST /auth/login".to_string(), "POST /auth/refresh".to_string()],
-                        description: "Authentication service interface".to_string(),
-                    },
-                ],
+                dependencies: vec![Dependency {
+                    name: "jsonwebtoken".to_string(),
+                    version: "8.0".to_string(),
+                    dependency_type: DependencyType::Direct,
+                    purpose: Some("JWT handling".to_string()),
+                }],
+                interfaces: vec![Interface {
+                    name: "auth".to_string(),
+                    protocol: InterfaceProtocol::Http,
+                    methods: vec![
+                        "POST /auth/login".to_string(),
+                        "POST /auth/refresh".to_string(),
+                    ],
+                    description: "Authentication service interface".to_string(),
+                }],
             },
         ],
         dependencies: vec![],
@@ -118,13 +114,16 @@ async fn main() -> Result<()> {
         documentation: Some("Updated documentation with microservices details".to_string()),
         metadata: {
             let mut map = std::collections::HashMap::new();
-            map.insert("migration_version".to_string(), serde_json::Value::String("2.0.0".to_string()));
+            map.insert(
+                "migration_version".to_string(),
+                serde_json::Value::String("2.0.0".to_string()),
+            );
             map
         },
     };
 
     let analyzer = BlueprintDiffAnalyzer::new();
-    
+
     let from_version = BlueprintVersion::new(1, 0, 0);
     let to_version = BlueprintVersion::new(2, 0, 0);
 
@@ -141,7 +140,10 @@ async fn main() -> Result<()> {
     println!("===============================");
     println!();
 
-    println!("Version Change: {} → {}", diff.from_version, diff.to_version);
+    println!(
+        "Version Change: {} → {}",
+        diff.from_version, diff.to_version
+    );
     println!();
 
     println!("Summary:");
@@ -164,9 +166,15 @@ async fn main() -> Result<()> {
     println!();
 
     println!("Impact Analysis:");
-    println!("  Overall Impact Score: {:.2}", diff.impact_analysis.overall_impact_score);
+    println!(
+        "  Overall Impact Score: {:.2}",
+        diff.impact_analysis.overall_impact_score
+    );
     println!("  Risk Level: {:?}", diff.impact_analysis.risk_level);
-    println!("  Compatibility Score: {:.2}", diff.impact_analysis.compatibility_score);
+    println!(
+        "  Compatibility Score: {:.2}",
+        diff.impact_analysis.compatibility_score
+    );
     println!();
 
     if !diff.impact_analysis.affected_modules.is_empty() {
@@ -180,10 +188,9 @@ async fn main() -> Result<()> {
     if !diff.impact_analysis.dependency_impacts.is_empty() {
         println!("  Dependency Impacts:");
         for impact in &diff.impact_analysis.dependency_impacts {
-            println!("    - {} ({:?}): {}", 
-                impact.dependency_name, 
-                impact.impact_type, 
-                impact.risk_assessment
+            println!(
+                "    - {} ({:?}): {}",
+                impact.dependency_name, impact.impact_type, impact.risk_assessment
             );
         }
         println!();
@@ -192,9 +199,10 @@ async fn main() -> Result<()> {
     if !diff.impact_analysis.interface_impacts.is_empty() {
         println!("  Interface Impacts:");
         for impact in &diff.impact_analysis.interface_impacts {
-            println!("    - {} ({:?}, Breaking: {}): {}", 
-                impact.interface_name, 
-                impact.impact_type, 
+            println!(
+                "    - {} ({:?}, Breaking: {}): {}",
+                impact.interface_name,
+                impact.impact_type,
                 impact.breaking_change,
                 impact.description
             );
@@ -203,9 +211,18 @@ async fn main() -> Result<()> {
     }
 
     println!("Migration Complexity:");
-    println!("  Complexity Score: {:.2}", diff.migration_complexity.complexity_score);
-    println!("  Estimated Effort: {:?}", diff.migration_complexity.estimated_effort);
-    println!("  Rollback Difficulty: {:?}", diff.migration_complexity.rollback_difficulty);
+    println!(
+        "  Complexity Score: {:.2}",
+        diff.migration_complexity.complexity_score
+    );
+    println!(
+        "  Estimated Effort: {:?}",
+        diff.migration_complexity.estimated_effort
+    );
+    println!(
+        "  Rollback Difficulty: {:?}",
+        diff.migration_complexity.rollback_difficulty
+    );
     println!();
 
     if !diff.migration_complexity.required_skills.is_empty() {
@@ -231,15 +248,21 @@ async fn main() -> Result<()> {
         println!("   Category: {:?}", change.change_category);
         println!("   Impact: {:?}", change.impact_level);
         println!("   Description: {}", change.description);
-        
+
         if let Some(old_val) = &change.old_value {
-            println!("   Old Value: {}", serde_json::to_string(old_val).unwrap_or_else(|_| "N/A".to_string()));
+            println!(
+                "   Old Value: {}",
+                serde_json::to_string(old_val).unwrap_or_else(|_| "N/A".to_string())
+            );
         }
-        
+
         if let Some(new_val) = &change.new_value {
-            println!("   New Value: {}", serde_json::to_string(new_val).unwrap_or_else(|_| "N/A".to_string()));
+            println!(
+                "   New Value: {}",
+                serde_json::to_string(new_val).unwrap_or_else(|_| "N/A".to_string())
+            );
         }
-        
+
         println!();
     }
 

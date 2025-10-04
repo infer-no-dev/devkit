@@ -340,20 +340,22 @@ async fn check_agent_status(
 /// Check if shell integration is actually installed
 fn check_shell_integration_installed(shell: &str) -> bool {
     use std::path::PathBuf;
-    
+
     let home = match std::env::var("HOME") {
         Ok(h) => h,
         Err(_) => return false,
     };
-    
+
     // Check for completion files
     let completion_file = match shell {
-        "bash" => Some(PathBuf::from(&home).join(".local/share/bash-completion/completions/devkit")),
+        "bash" => {
+            Some(PathBuf::from(&home).join(".local/share/bash-completion/completions/devkit"))
+        }
         "zsh" => Some(PathBuf::from(&home).join(".local/share/zsh/site-functions/_devkit")),
         "fish" => Some(PathBuf::from(&home).join(".config/fish/completions/devkit.fish")),
         _ => None,
     };
-    
+
     // Check for shell aliases in config files
     let config_file = match shell {
         "bash" => Some(PathBuf::from(&home).join(".bashrc")),
@@ -361,18 +363,18 @@ fn check_shell_integration_installed(shell: &str) -> bool {
         "fish" => Some(PathBuf::from(&home).join(".config/fish/config.fish")),
         _ => None,
     };
-    
+
     let completion_exists = completion_file
         .as_ref()
         .map(|p| p.exists())
         .unwrap_or(false);
-    
+
     let aliases_exist = config_file
         .as_ref()
         .and_then(|p| std::fs::read_to_string(p).ok())
         .map(|content| content.contains("devkit shell integration"))
         .unwrap_or(false);
-    
+
     completion_exists && aliases_exist
 }
 

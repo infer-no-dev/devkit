@@ -685,7 +685,13 @@ fn sanitize_crate_name(input: &str) -> String {
         .to_lowercase()
         .chars()
         .map(|c| match c {
-            'a'..='z' | '0'..='9' | '_' | '-' => if c == '-' { '_' } else { c },
+            'a'..='z' | '0'..='9' | '_' | '-' => {
+                if c == '-' {
+                    '_'
+                } else {
+                    c
+                }
+            }
             _ => '_',
         })
         .collect();

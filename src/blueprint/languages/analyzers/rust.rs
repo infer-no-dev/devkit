@@ -4,12 +4,12 @@
 //! and build configuration for blueprint generation.
 
 use super::super::{
-    LanguageAnalyzer, LanguageModule, Language, Dependency, DependencySource,
-    BuildConfig, TestConfig, DocumentationConfig,
+    BuildConfig, Dependency, DependencySource, DocumentationConfig, Language, LanguageAnalyzer,
+    LanguageModule, TestConfig,
 };
-use anyhow::{Result, Context};
-use std::path::Path;
+use anyhow::{Context, Result};
 use std::collections::HashMap;
+use std::path::Path;
 
 pub struct RustAnalyzer;
 
@@ -36,13 +36,12 @@ impl RustAnalyzer {
                 let (version, optional) = match dep_spec {
                     toml::Value::String(v) => (v.clone(), false),
                     toml::Value::Table(t) => {
-                        let version = t.get("version")
+                        let version = t
+                            .get("version")
                             .and_then(|v| v.as_str())
                             .unwrap_or("*")
                             .to_string();
-                        let optional = t.get("optional")
-                            .and_then(|o| o.as_bool())
-                            .unwrap_or(false);
+                        let optional = t.get("optional").and_then(|o| o.as_bool()).unwrap_or(false);
                         (version, optional)
                     }
                     _ => ("*".to_string(), false),
@@ -59,16 +58,18 @@ impl RustAnalyzer {
         }
 
         // Parse [dev-dependencies]
-        if let Some(dev_deps) = cargo_toml.get("dev-dependencies").and_then(|d| d.as_table()) {
+        if let Some(dev_deps) = cargo_toml
+            .get("dev-dependencies")
+            .and_then(|d| d.as_table())
+        {
             for (name, dep_spec) in dev_deps {
                 let version = match dep_spec {
                     toml::Value::String(v) => v.clone(),
-                    toml::Value::Table(t) => {
-                        t.get("version")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("*")
-                            .to_string()
-                    }
+                    toml::Value::Table(t) => t
+                        .get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("*")
+                        .to_string(),
                     _ => "*".to_string(),
                 };
 
@@ -83,16 +84,18 @@ impl RustAnalyzer {
         }
 
         // Parse [build-dependencies]
-        if let Some(build_deps) = cargo_toml.get("build-dependencies").and_then(|d| d.as_table()) {
+        if let Some(build_deps) = cargo_toml
+            .get("build-dependencies")
+            .and_then(|d| d.as_table())
+        {
             for (name, dep_spec) in build_deps {
                 let version = match dep_spec {
                     toml::Value::String(v) => v.clone(),
-                    toml::Value::Table(t) => {
-                        t.get("version")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("*")
-                            .to_string()
-                    }
+                    toml::Value::Table(t) => t
+                        .get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("*")
+                        .to_string(),
                     _ => "*".to_string(),
                 };
 
@@ -139,7 +142,9 @@ impl RustAnalyzer {
                             if let Some(bin_table) = bin.as_table() {
                                 if let Some(path) = bin_table.get("path").and_then(|p| p.as_str()) {
                                     entry_points.push(path.to_string());
-                                } else if let Some(name) = bin_table.get("name").and_then(|n| n.as_str()) {
+                                } else if let Some(name) =
+                                    bin_table.get("name").and_then(|n| n.as_str())
+                                {
                                     entry_points.push(format!("src/bin/{}.rs", name));
                                 }
                             }
@@ -195,40 +200,40 @@ impl RustAnalyzer {
         match name {
             // Web frameworks
             "actix-web" | "axum" | "warp" | "tide" | "rocket" => "Web framework".to_string(),
-            
+
             // Async runtimes
             "tokio" | "async-std" | "smol" => "Async runtime".to_string(),
-            
+
             // Serialization
             "serde" | "serde_json" | "toml" | "bincode" => "Serialization".to_string(),
-            
+
             // Database
             "sqlx" | "diesel" | "sea-orm" | "rusqlite" => "Database".to_string(),
-            
+
             // HTTP clients
             "reqwest" | "surf" | "ureq" => "HTTP client".to_string(),
-            
+
             // CLI
             "clap" | "structopt" | "argh" => "CLI framework".to_string(),
-            
+
             // Logging
             "log" | "env_logger" | "tracing" | "slog" => "Logging".to_string(),
-            
+
             // Error handling
             "anyhow" | "thiserror" | "eyre" => "Error handling".to_string(),
-            
+
             // Testing
             "assert_cmd" | "proptest" | "quickcheck" | "mockall" => "Testing".to_string(),
-            
+
             // Crypto
             "ring" | "rustls" | "openssl" | "sha2" | "rand" => "Cryptography".to_string(),
-            
+
             // Parsing
             "nom" | "pest" | "lalrpop" | "regex" => "Parsing".to_string(),
-            
+
             // Utility
             "once_cell" | "lazy_static" | "parking_lot" | "rayon" => "Utility".to_string(),
-            
+
             _ => "Application dependency".to_string(),
         }
     }
@@ -242,7 +247,7 @@ impl RustAnalyzer {
     /// Analyze build configuration
     async fn analyze_rust_build_config(&self, project_path: &Path) -> Result<BuildConfig> {
         let mut compile_flags = Vec::new();
-        
+
         // Check for common Rust flags in .cargo/config.toml
         let cargo_config_path = project_path.join(".cargo/config.toml");
         if cargo_config_path.exists() {
@@ -257,7 +262,7 @@ impl RustAnalyzer {
         if cargo_path.exists() {
             let content = tokio::fs::read_to_string(&cargo_path).await?;
             let cargo_toml: toml::Value = toml::from_str(&content)?;
-            
+
             if let Some(profile) = cargo_toml.get("profile") {
                 if profile.get("release").is_some() {
                     compile_flags.push("--release".to_string());
@@ -409,7 +414,9 @@ assert_cmd = "2.0"
         let temp_path = temp_dir.path();
 
         // Create src directory and main.rs
-        tokio::fs::create_dir_all(temp_path.join("src")).await.unwrap();
+        tokio::fs::create_dir_all(temp_path.join("src"))
+            .await
+            .unwrap();
         let mut main_rs = File::create(temp_path.join("src/main.rs")).await.unwrap();
         main_rs.write_all(b"fn main() {}").await.unwrap();
 

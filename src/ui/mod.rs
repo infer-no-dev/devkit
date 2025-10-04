@@ -249,7 +249,6 @@ impl Application {
         match key {
             KeyCode::Char('i') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // Switch to input mode
-                eprintln!("DEBUG: Switching to input mode");
                 self.input_handler
                     .set_context(keybindings::KeyContext::Input);
                 return Ok(());
@@ -487,15 +486,18 @@ impl Application {
             },
             UIEvent::ToggleHelp => {
                 self.panel_manager.toggle_help();
-            },
+            }
             UIEvent::SetLayout(layout_name) => {
                 // TODO: Implement layout switching
                 eprintln!("Layout switching not yet implemented: {}", layout_name);
-            },
+            }
             UIEvent::ShowCompletions(completions) => {
                 // TODO: Implement completion display
-                eprintln!("Completion display not yet implemented: {} completions", completions.len());
-            },
+                eprintln!(
+                    "Completion display not yet implemented: {} completions",
+                    completions.len()
+                );
+            }
             UIEvent::SwitchTheme(theme_name) => {
                 if !self.theme_manager.set_theme(&theme_name) {
                     let notification = Notification::error(

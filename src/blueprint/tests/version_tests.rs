@@ -90,19 +90,8 @@ mod blueprint_version_tests {
         #[test]
         fn test_invalid_version_formats() {
             let invalid_cases = vec![
-                "",
-                "1",
-                "1.2",
-                "1.2.3.4",
-                "a.b.c",
-                "1.a.3",
-                "1.2.c",
-                "1..3",
-                ".1.2",
-                "1.2.",
-                "-1.2.3",
-                "1.-2.3",
-                "1.2.-3",
+                "", "1", "1.2", "1.2.3.4", "a.b.c", "1.a.3", "1.2.c", "1..3", ".1.2", "1.2.",
+                "-1.2.3", "1.-2.3", "1.2.-3",
             ];
 
             for case in invalid_cases {
@@ -310,7 +299,7 @@ mod blueprint_version_tests {
         #[test]
         fn test_from_str_trait() {
             use std::str::FromStr;
-            
+
             let version: BlueprintVersion = "1.2.3".parse().unwrap();
             assert_eq!(version.major, 1);
             assert_eq!(version.minor, 2);
@@ -321,9 +310,9 @@ mod blueprint_version_tests {
         fn test_clone_and_debug() {
             let version = BlueprintVersion::from_str("1.2.3-alpha+build").unwrap();
             let cloned = version.clone();
-            
+
             assert_eq!(version, cloned);
-            
+
             // Test debug formatting doesn't panic
             let debug_str = format!("{:?}", version);
             assert!(debug_str.contains("BlueprintVersion"));
@@ -332,11 +321,11 @@ mod blueprint_version_tests {
         #[test]
         fn test_serialization() {
             let version = BlueprintVersion::from_str("1.2.3-alpha+build").unwrap();
-            
+
             // Test serialization doesn't panic
             let json = serde_json::to_string(&version).unwrap();
             let deserialized: BlueprintVersion = serde_json::from_str(&json).unwrap();
-            
+
             assert_eq!(version, deserialized);
         }
 
@@ -359,15 +348,20 @@ mod blueprint_version_tests {
 
     mod version_performance_tests {
         use super::*;
-        use std::time::Duration;
         use crate::blueprint::tests::TestAssertions;
+        use std::time::Duration;
 
         #[test]
         fn test_version_parsing_performance() {
             let test_versions = vec![
-                "1.0.0", "1.2.3", "10.20.30", "999.888.777",
-                "1.0.0-alpha", "1.0.0+build", "1.0.0-alpha+build",
-                "2.1.0-beta.1+exp.sha.123456789abcdef"
+                "1.0.0",
+                "1.2.3",
+                "10.20.30",
+                "999.888.777",
+                "1.0.0-alpha",
+                "1.0.0+build",
+                "1.0.0-alpha+build",
+                "2.1.0-beta.1+exp.sha.123456789abcdef",
             ];
 
             let start = std::time::Instant::now();
@@ -382,7 +376,7 @@ mod blueprint_version_tests {
             TestAssertions::assert_duration_within(
                 duration,
                 Duration::from_millis(50),
-                Duration::from_millis(100)
+                Duration::from_millis(100),
             );
         }
 
@@ -404,7 +398,7 @@ mod blueprint_version_tests {
             TestAssertions::assert_duration_within(
                 duration,
                 Duration::from_millis(10),
-                Duration::from_millis(50)
+                Duration::from_millis(50),
             );
         }
     }

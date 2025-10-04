@@ -4,13 +4,13 @@
 //! and build configuration for blueprint generation.
 
 use super::super::{
-    LanguageAnalyzer, LanguageModule, Language, Dependency, DependencySource,
-    BuildConfig, TestConfig, DocumentationConfig,
+    BuildConfig, Dependency, DependencySource, DocumentationConfig, Language, LanguageAnalyzer,
+    LanguageModule, TestConfig,
 };
-use anyhow::{Result, Context};
-use std::path::Path;
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::Path;
 
 pub struct PythonAnalyzer;
 
@@ -22,10 +22,10 @@ impl PythonAnalyzer {
     /// Parse requirements.txt file
     async fn parse_requirements(&self, project_path: &Path) -> Result<Vec<Dependency>> {
         let mut dependencies = Vec::new();
-        
+
         let requirements_files = [
             "requirements.txt",
-            "requirements-dev.txt", 
+            "requirements-dev.txt",
             "requirements-test.txt",
             "dev-requirements.txt",
         ];
@@ -34,7 +34,7 @@ impl PythonAnalyzer {
             let req_path = project_path.join(req_file);
             if req_path.exists() {
                 let content = tokio::fs::read_to_string(&req_path).await?;
-                
+
                 for line in content.lines() {
                     let line = line.trim();
                     if line.is_empty() || line.starts_with('#') {
@@ -43,10 +43,16 @@ impl PythonAnalyzer {
 
                     let (name, version) = if line.contains("==") {
                         let parts: Vec<&str> = line.split("==").collect();
-                        (parts[0].to_string(), parts.get(1).unwrap_or(&"*").to_string())
+                        (
+                            parts[0].to_string(),
+                            parts.get(1).unwrap_or(&"*").to_string(),
+                        )
                     } else if line.contains(">=") {
                         let parts: Vec<&str> = line.split(">=").collect();
-                        (parts[0].to_string(), format!(">={}", parts.get(1).unwrap_or(&"0")))
+                        (
+                            parts[0].to_string(),
+                            format!(">={}", parts.get(1).unwrap_or(&"0")),
+                        )
                     } else {
                         (line.to_string(), "*".to_string())
                     };
@@ -108,7 +114,8 @@ impl PythonAnalyzer {
 
                     let version = match version_spec {
                         toml::Value::String(v) => v.clone(),
-                        toml::Value::Table(t) => t.get("version")
+                        toml::Value::Table(t) => t
+                            .get("version")
                             .and_then(|v| v.as_str())
                             .unwrap_or("*")
                             .to_string(),
@@ -126,11 +133,12 @@ impl PythonAnalyzer {
             }
 
             // Development dependencies
-            if let Some(dev_deps) = poetry.get("group")
+            if let Some(dev_deps) = poetry
+                .get("group")
                 .and_then(|g| g.get("dev"))
                 .and_then(|d| d.get("dependencies"))
-                .and_then(|d| d.as_table()) {
-                
+                .and_then(|d| d.as_table())
+            {
                 for (name, version_spec) in dev_deps {
                     let version = match version_spec {
                         toml::Value::String(v) => v.clone(),
@@ -154,23 +162,33 @@ impl PythonAnalyzer {
     /// Extract dependencies from setup.py content
     fn extract_setup_py_deps(&self, content: &str) -> Result<Vec<Dependency>> {
         let mut dependencies = Vec::new();
-        
+
         // Simple regex-based extraction (could be improved with AST parsing)
         if let Some(install_requires_start) = content.find("install_requires") {
             let remaining = &content[install_requires_start..];
             if let Some(bracket_start) = remaining.find('[') {
                 if let Some(bracket_end) = remaining.find(']') {
-                    let deps_str = &remaining[bracket_start+1..bracket_end];
-                    
+                    let deps_str = &remaining[bracket_start + 1..bracket_end];
+
                     for line in deps_str.lines() {
-                        let line = line.trim().trim_matches('"').trim_matches('\'').trim_end_matches(',');
+                        let line = line
+                            .trim()
+                            .trim_matches('"')
+                            .trim_matches('\'')
+                            .trim_end_matches(',');
                         if !line.is_empty() && !line.starts_with('#') {
                             let (name, version) = if line.contains(">=") {
                                 let parts: Vec<&str> = line.split(">=").collect();
-                                (parts[0].to_string(), format!(">={}", parts.get(1).unwrap_or(&"0")))
+                                (
+                                    parts[0].to_string(),
+                                    format!(">={}", parts.get(1).unwrap_or(&"0")),
+                                )
                             } else if line.contains("==") {
                                 let parts: Vec<&str> = line.split("==").collect();
-                                (parts[0].to_string(), parts.get(1).unwrap_or(&"*").to_string())
+                                (
+                                    parts[0].to_string(),
+                                    parts.get(1).unwrap_or(&"*").to_string(),
+                                )
                             } else {
                                 (line.to_string(), "*".to_string())
                             };
@@ -202,13 +220,7 @@ impl PythonAnalyzer {
         let mut entry_points = Vec::new();
 
         // Common entry point patterns
-        let potential_entries = [
-            "main.py",
-            "__main__.py", 
-            "app.py",
-            "cli.py",
-            "run.py",
-        ];
+        let potential_entries = ["main.py", "__main__.py", "app.py", "cli.py", "run.py"];
 
         for entry in &potential_entries {
             if project_path.join(entry).exists() {
@@ -244,26 +256,26 @@ impl PythonAnalyzer {
         match name.to_lowercase().as_str() {
             // Web frameworks
             "django" | "flask" | "fastapi" | "tornado" | "bottle" => "Web framework".to_string(),
-            
+
             // Data science
             "pandas" | "numpy" | "scipy" | "matplotlib" | "seaborn" => "Data science".to_string(),
             "tensorflow" | "torch" | "scikit-learn" | "keras" => "Machine learning".to_string(),
-            
+
             // Database
             "psycopg2" | "pymongo" | "sqlalchemy" | "django-db" => "Database".to_string(),
-            
+
             // Testing
             "pytest" | "unittest2" | "nose" | "coverage" => "Testing".to_string(),
-            
+
             // Development tools
             "black" | "flake8" | "mypy" | "pylint" | "isort" => "Development tools".to_string(),
-            
+
             // HTTP clients
             "requests" | "httpx" | "aiohttp" => "HTTP client".to_string(),
-            
+
             // CLI tools
             "click" | "argparse" | "fire" => "CLI framework".to_string(),
-            
+
             _ => "Application dependency".to_string(),
         }
     }
@@ -271,9 +283,10 @@ impl PythonAnalyzer {
     /// Detect Python test framework
     async fn detect_test_framework(&self, project_path: &Path) -> Result<String> {
         // Check for pytest
-        if project_path.join("pytest.ini").exists() || 
-           project_path.join("pyproject.toml").exists() ||
-           self.has_pytest_in_deps(project_path).await? {
+        if project_path.join("pytest.ini").exists()
+            || project_path.join("pyproject.toml").exists()
+            || self.has_pytest_in_deps(project_path).await?
+        {
             return Ok("pytest".to_string());
         }
 
@@ -302,7 +315,9 @@ impl PythonAnalyzer {
         for entry in walker {
             if let Some(ext) = entry.path().extension() {
                 if ext == "py" {
-                    let content = tokio::fs::read_to_string(entry.path()).await.unwrap_or_default();
+                    let content = tokio::fs::read_to_string(entry.path())
+                        .await
+                        .unwrap_or_default();
                     if content.contains("import unittest") || content.contains("from unittest") {
                         return Ok(true);
                     }
@@ -376,7 +391,8 @@ impl LanguageAnalyzer for PythonAnalyzer {
             "setuptools"
         } else {
             "pip" // Default
-        }.to_string();
+        }
+        .to_string();
 
         let build_file = if build_tool == "poetry" {
             "pyproject.toml"
@@ -384,7 +400,8 @@ impl LanguageAnalyzer for PythonAnalyzer {
             "setup.py"
         } else {
             "requirements.txt"
-        }.to_string();
+        }
+        .to_string();
 
         Ok(BuildConfig {
             build_tool,
@@ -393,7 +410,7 @@ impl LanguageAnalyzer for PythonAnalyzer {
             optimization_level: "default".to_string(),
             target_platforms: vec![
                 "linux".to_string(),
-                "windows".to_string(), 
+                "windows".to_string(),
                 "macos".to_string(),
             ],
         })
@@ -411,16 +428,18 @@ impl LanguageAnalyzer for PythonAnalyzer {
         for entry in walker {
             if let Some(ext) = entry.path().extension() {
                 if ext == "py" {
-                    let content = tokio::fs::read_to_string(entry.path()).await.unwrap_or_default();
-                    
+                    let content = tokio::fs::read_to_string(entry.path())
+                        .await
+                        .unwrap_or_default();
+
                     if content.contains("from flask") || content.contains("import flask") {
                         interfaces.push("Flask Web API".to_string());
                     }
-                    
+
                     if content.contains("from django") || content.contains("import django") {
                         interfaces.push("Django Web API".to_string());
                     }
-                    
+
                     if content.contains("from fastapi") || content.contains("import fastapi") {
                         interfaces.push("FastAPI Web API".to_string());
                     }
@@ -456,15 +475,24 @@ mod tests {
         let temp_path = temp_dir.path();
 
         // Create requirements.txt
-        let mut requirements = File::create(temp_path.join("requirements.txt")).await.unwrap();
-        requirements.write_all(b"django==4.0.0\nrequests>=2.25.0\nflask\n# comment\n\n").await.unwrap();
+        let mut requirements = File::create(temp_path.join("requirements.txt"))
+            .await
+            .unwrap();
+        requirements
+            .write_all(b"django==4.0.0\nrequests>=2.25.0\nflask\n# comment\n\n")
+            .await
+            .unwrap();
 
         let analyzer = PythonAnalyzer::new();
         let deps = analyzer.parse_requirements(temp_path).await.unwrap();
 
         assert_eq!(deps.len(), 3);
-        assert!(deps.iter().any(|d| d.name == "django" && d.version == "4.0.0"));
-        assert!(deps.iter().any(|d| d.name == "requests" && d.version == ">=2.25.0"));
+        assert!(deps
+            .iter()
+            .any(|d| d.name == "django" && d.version == "4.0.0"));
+        assert!(deps
+            .iter()
+            .any(|d| d.name == "requests" && d.version == ">=2.25.0"));
         assert!(deps.iter().any(|d| d.name == "flask" && d.version == "*"));
     }
 

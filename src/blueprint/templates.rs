@@ -1,5 +1,5 @@
 //! Template System
-//! 
+//!
 //! This module provides Handlebars templates for generating complete project structures
 //! from system blueprints, enabling high-fidelity system self-replication.
 
@@ -28,7 +28,9 @@ impl TemplateManager {
         let mut templates = HashMap::new();
 
         // Cargo.toml template
-        templates.insert("cargo_toml".to_string(), r#"[package]
+        templates.insert(
+            "cargo_toml".to_string(),
+            r#"[package]
 name = "{{blueprint.metadata.name}}"
 version = "{{blueprint.metadata.version}}"
 description = "{{blueprint.metadata.description}}"
@@ -55,7 +57,9 @@ tempfile = "3.0"
 [[bin]]
 name = "{{snake_case blueprint.metadata.name}}"
 path = "src/main.rs"
-"#.to_string());
+"#
+            .to_string(),
+        );
 
         // main.rs template
         templates.insert("main_rs".to_string(), r#"//! {{blueprint.metadata.name}} - {{blueprint.metadata.description}}
@@ -293,7 +297,9 @@ use blueprint::{SystemBlueprint, BlueprintExtractor, BlueprintGenerator};
 "#.to_string());
 
         // lib.rs template
-        templates.insert("lib_rs".to_string(), r#"//! {{blueprint.metadata.name}} Library
+        templates.insert(
+            "lib_rs".to_string(),
+            r#"//! {{blueprint.metadata.name}} Library
 //! 
 //! {{blueprint.metadata.description}}
 
@@ -327,7 +333,9 @@ pub async fn init() -> Result<()> {
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
-"#.to_string());
+"#
+            .to_string(),
+        );
 
         // Module template
         templates.insert("module_rs".to_string(), r#"//! {{module.name}} Module
@@ -406,7 +414,9 @@ mod tests {
 "#.to_string());
 
         // Configuration template
-        templates.insert("config_toml".to_string(), r#"# {{system_name}} Configuration
+        templates.insert(
+            "config_toml".to_string(),
+            r#"# {{system_name}} Configuration
 # Generated from system blueprint
 
 [system]
@@ -443,10 +453,14 @@ log_level = "info"
 storage_method = "{{strategy.secret_management.storage_method}}"
 encryption = "{{strategy.secret_management.encryption_approach}}"
 {{/if}}
-"#.to_string());
+"#
+            .to_string(),
+        );
 
         // Test template
-        templates.insert("test_rs".to_string(), r#"//! Integration tests for {{module.name}}
+        templates.insert(
+            "test_rs".to_string(),
+            r#"//! Integration tests for {{module.name}}
 
 use {{snake_case module.name}}::*;
 use anyhow::Result;
@@ -494,7 +508,9 @@ mod integration_tests {
         Ok(())
     }
 }
-"#.to_string());
+"#
+            .to_string(),
+        );
 
         // README template
         templates.insert("readme_md".to_string(), r#"# {{blueprint.metadata.name}}
@@ -832,7 +848,9 @@ Synchronization primitives:
 "#.to_string());
 
         // CI/CD template
-        templates.insert("ci_yml".to_string(), r#"name: CI
+        templates.insert(
+            "ci_yml".to_string(),
+            r#"name: CI
 
 on:
   push:
@@ -921,7 +939,9 @@ jobs:
     
     # Add deployment steps here based on deployment strategy
     {{/if}}
-"#.to_string());
+"#
+            .to_string(),
+        );
 
         templates
     }
@@ -950,11 +970,11 @@ mod tests {
     #[test]
     fn test_template_manager() {
         let manager = TemplateManager::new();
-        
+
         assert!(manager.get_template("cargo_toml").is_some());
         assert!(manager.get_template("main_rs").is_some());
         assert!(manager.get_template("nonexistent").is_none());
-        
+
         let templates = manager.list_templates();
         assert!(!templates.is_empty());
     }
@@ -963,7 +983,7 @@ mod tests {
     fn test_add_custom_template() {
         let mut manager = TemplateManager::new();
         let custom_template = "Custom template content".to_string();
-        
+
         manager.add_template("custom".to_string(), custom_template.clone());
         assert_eq!(manager.get_template("custom"), Some(&custom_template));
     }

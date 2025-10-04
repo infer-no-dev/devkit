@@ -1,12 +1,12 @@
-use proptest::prelude::*;
-use devkit::codegen::CodeGenerator;
 use devkit::ai::AIManager;
+use devkit::codegen::CodeGenerator;
 use devkit::config::Config;
+use proptest::prelude::*;
 
 #[cfg(test)]
 mod property_tests {
     use super::*;
-    
+
     proptest! {
         #[test]
         fn test_code_generation_always_produces_valid_output(
@@ -18,12 +18,12 @@ mod property_tests {
                 let config = Config::default();
                 if let Ok(ai_manager) = AIManager::new(config).await {
                     let code_gen = CodeGenerator::new(ai_manager);
-                    
+
                     if let Ok(result) = code_gen.generate_code(&prompt, language, None).await {
                         // Properties that should always hold
                         prop_assert!(!result.generated_code.is_empty());
                         prop_assert!(result.generated_code.len() < 100_000); // Reasonable size limit
-                        
+
                         // If language is specified, check basic syntax validity
                         if let Some(lang) = &result.language {
                             match lang.as_str() {
@@ -42,7 +42,7 @@ mod property_tests {
                 }
             });
         }
-        
+
         #[test]
         fn test_context_analysis_is_deterministic(
             project_path in r"/[a-zA-Z0-9_/]{5,50}",

@@ -554,9 +554,7 @@ impl SystemDefaults {
         // Look for common template locations
         if let Some(home) = dirs::home_dir() {
             let candidates = [
-                home.join(".config")
-                    .join("devkit-env")
-                    .join("templates"),
+                home.join(".config").join("devkit-env").join("templates"),
                 home.join(".agentic").join("templates"),
                 home.join("Templates"),
             ];

@@ -690,11 +690,11 @@ impl CliValidator {
     /// Validate blueprint arguments
     fn validate_blueprint_args(&self, args: &BlueprintArgs, result: &mut ValidationResult) {
         use crate::cli::BlueprintCommands;
-        
+
         match &args.command {
             BlueprintCommands::Extract { source, output, .. } => {
                 self.validate_directory_path(source, "source", result);
-                
+
                 if let Some(parent) = output.parent() {
                     if !parent.exists() {
                         result.errors.push(ValidationError::DirectoryNotFound {
@@ -703,9 +703,11 @@ impl CliValidator {
                     }
                 }
             }
-            BlueprintCommands::Generate { blueprint, output, .. } => {
+            BlueprintCommands::Generate {
+                blueprint, output, ..
+            } => {
                 self.validate_file_path(blueprint, "blueprint", result);
-                
+
                 if let Some(parent) = output.parent() {
                     if !parent.exists() {
                         result.errors.push(ValidationError::DirectoryNotFound {
@@ -729,7 +731,10 @@ impl CliValidator {
             BlueprintCommands::Info { blueprint, .. } => {
                 self.validate_file_path(blueprint, "blueprint", result);
             }
-            BlueprintCommands::Compare { blueprint1, blueprint2 } => {
+            BlueprintCommands::Compare {
+                blueprint1,
+                blueprint2,
+            } => {
                 self.validate_file_path(blueprint1, "first blueprint", result);
                 self.validate_file_path(blueprint2, "second blueprint", result);
             }

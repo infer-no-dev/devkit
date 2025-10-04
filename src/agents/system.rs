@@ -226,7 +226,7 @@ impl AgentSystem {
     /// Start the agent system workers
     pub async fn start(&self) -> Result<(), anyhow::Error> {
         let start_time = std::time::Instant::now();
-        
+
         let mut running = self.running.write().await;
         if *running {
             return Ok(());
@@ -269,7 +269,7 @@ impl AgentSystem {
         });
 
         let startup_duration = start_time.elapsed();
-        
+
         println!(
             "Agent system started successfully in {}ms",
             startup_duration.as_millis()
@@ -281,14 +281,14 @@ impl AgentSystem {
     /// Stop the agent system and all workers
     pub async fn stop(&self) -> Result<(), anyhow::Error> {
         let start_time = std::time::Instant::now();
-        
+
         let mut running = self.running.write().await;
         if !*running {
             return Ok(());
         }
 
         println!("Stopping agent system and all workers");
-        
+
         *running = false;
         drop(running);
 
@@ -306,7 +306,7 @@ impl AgentSystem {
         }
 
         let shutdown_duration = start_time.elapsed();
-        
+
         println!(
             "Agent system stopped successfully in {}ms",
             shutdown_duration.as_millis()
@@ -413,9 +413,9 @@ impl AgentSystem {
             queued_tasks: queue.len(),
             completed_tasks: completed_tasks.len(),
         };
-        
+
         // Emit current system metrics would go here
-        
+
         stats
     }
 
@@ -428,12 +428,12 @@ impl AgentSystem {
         for (agent_id, agent) in agents.iter() {
             let status = agent.status();
             statuses.insert(agent_id.clone(), status.clone());
-            
+
             // Count status types for metrics
             let status_key = format!("{:?}", status).to_lowercase();
             *status_counts.entry(status_key).or_insert(0) += 1;
         }
-        
+
         // Log agent status distribution would go here
 
         statuses
@@ -450,17 +450,17 @@ impl AgentSystem {
         for (agent_id, agent) in agents.iter() {
             let agent_metrics = agent.get_metrics();
             metrics.insert(agent_id.clone(), agent_metrics.clone());
-            
+
             // Aggregate metrics
             total_tasks += agent_metrics.tasks_completed;
             total_errors += agent_metrics.tasks_failed;
             total_processing_time += agent_metrics.average_task_duration;
-            
+
             // Emit per-agent metrics would go here
         }
-        
+
         // Emit system-wide aggregated metrics would go here
-        
+
         if total_tasks > 0 {
             let system_avg_processing_time = total_processing_time / total_tasks as f64;
             // Record system average processing time
@@ -570,7 +570,7 @@ impl AgentSystem {
         let task_id = task.id.clone();
         let task_type = task.task_type.clone();
         let priority = task.priority.clone();
-        
+
         // Check if system is running
         if !self.is_running().await {
             println!("Task submission rejected: agent system not running");
@@ -583,10 +583,9 @@ impl AgentSystem {
             if queue.len() >= self.config.max_queue_size {
                 println!(
                     "Task queue size limit {} reached, rejecting task {}",
-                    self.config.max_queue_size,
-                    task_id
+                    self.config.max_queue_size, task_id
                 );
-                
+
                 return Err(anyhow::anyhow!(
                     "Task queue size limit {} reached",
                     self.config.max_queue_size
@@ -597,12 +596,10 @@ impl AgentSystem {
 
         let priority_score = self.calculate_priority_score(&task);
         let deadline_score = self.calculate_deadline_score(&task);
-        
+
         println!(
             "Submitting task '{}' (type: {}, priority: {:?}) to queue",
-            task_id,
-            task_type,
-            priority
+            task_id, task_type, priority
         );
 
         let prioritized_task = PrioritizedTask {
@@ -637,7 +634,7 @@ impl AgentSystem {
             task_type: task_type.clone(),
             priority: priority.clone(),
         });
-        
+
         // Metrics recording would go here
 
         Ok(())

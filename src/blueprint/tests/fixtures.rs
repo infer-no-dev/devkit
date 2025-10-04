@@ -1,7 +1,7 @@
 //! Test fixtures and sample data for blueprint evolution tests
 
 use crate::blueprint::evolution::{
-    BlueprintVersion, BlueprintChange, ChangeType, ChangeCategory, ImpactLevel
+    BlueprintChange, BlueprintVersion, ChangeCategory, ChangeType, ImpactLevel,
 };
 use crate::blueprint::tests::TestUtils;
 use crate::blueprint::SystemBlueprint;
@@ -42,22 +42,22 @@ impl TestFixtures {
             (
                 BlueprintVersion::new(1, 0, 0),
                 BlueprintVersion::new(1, 0, 1),
-                "patch_release"
+                "patch_release",
             ),
             (
                 BlueprintVersion::new(1, 0, 0),
                 BlueprintVersion::new(1, 1, 0),
-                "minor_release"
+                "minor_release",
             ),
             (
                 BlueprintVersion::new(1, 0, 0),
                 BlueprintVersion::new(2, 0, 0),
-                "major_release"
+                "major_release",
             ),
             (
                 BlueprintVersion::from_str("1.0.0-alpha").unwrap(),
                 BlueprintVersion::new(1, 0, 0),
-                "prerelease_to_stable"
+                "prerelease_to_stable",
             ),
         ]
     }
@@ -70,35 +70,35 @@ impl TestFixtures {
                 ChangeCategory::Module,
                 "modules.user_service",
                 "Added user management service",
-                ImpactLevel::Medium
+                ImpactLevel::Medium,
             ),
             TestUtils::create_test_change(
                 ChangeType::Modified,
                 ChangeCategory::Configuration,
                 "config.database.connection_pool",
                 "Updated database connection pool size",
-                ImpactLevel::Low
+                ImpactLevel::Low,
             ),
             TestUtils::create_test_change(
                 ChangeType::Removed,
                 ChangeCategory::Module,
                 "modules.legacy_auth",
                 "Removed deprecated authentication module",
-                ImpactLevel::High
+                ImpactLevel::High,
             ),
             TestUtils::create_test_change(
                 ChangeType::Modified,
                 ChangeCategory::Architecture,
                 "architecture.paradigm",
                 "Changed from monolith to microservices",
-                ImpactLevel::High
+                ImpactLevel::High,
             ),
             TestUtils::create_test_change(
                 ChangeType::Added,
                 ChangeCategory::Security,
                 "security.encryption.algorithm",
                 "Added AES-256 encryption",
-                ImpactLevel::Medium
+                ImpactLevel::Medium,
             ),
         ]
     }
@@ -111,7 +111,7 @@ impl TestFixtures {
         // Apply changes for v2
         blueprint_v2.metadata.version = "2.0.0".to_string();
         blueprint_v2.metadata.architecture_paradigm = "event-driven".to_string();
-        
+
         // Remove a module to simulate breaking change
         blueprint_v2.modules.retain(|m| m.name != "module_0");
 
@@ -121,14 +121,14 @@ impl TestFixtures {
                 ChangeCategory::Architecture,
                 "metadata.architecture_paradigm",
                 "Changed to event-driven architecture",
-                ImpactLevel::High
+                ImpactLevel::High,
             ),
             TestUtils::create_test_change(
                 ChangeType::Removed,
                 ChangeCategory::Module,
                 "modules.module_0",
                 "Removed deprecated module",
-                ImpactLevel::High
+                ImpactLevel::High,
             ),
         ];
 
@@ -143,7 +143,7 @@ impl TestFixtures {
                 Box::new(|| {
                     BlueprintVersion::from_str("invalid.version")?;
                     Ok(())
-                })
+                }),
             ),
             (
                 "empty_blueprint_name",
@@ -153,7 +153,7 @@ impl TestFixtures {
                         anyhow::bail!("Blueprint name cannot be empty");
                     }
                     Ok(())
-                })
+                }),
             ),
         ]
     }
@@ -168,30 +168,26 @@ impl TestFixtures {
                     let mut bp = Self::simple_microservices_blueprint();
                     bp.metadata.description = "Updated description".to_string();
                     bp
-                }
+                },
             ),
-            (
-                "large_blueprint_change",
-                Self::complex_blueprint(),
-                {
-                    let mut bp = Self::complex_blueprint();
-                    bp.metadata.architecture_paradigm = "new-architecture".to_string();
-                    // Add many modules
-                    for i in 100..110 {
-                        let module_name = format!("module_{:04}", i);
-                        bp.modules.push(crate::blueprint::ModuleBlueprint {
-                            name: module_name,
-                            purpose: format!("Performance test module {}", i),
-                            dependencies: vec![],
-                            public_interface: vec![],
-                            internal_structure: Default::default(),
-                            testing_strategy: Default::default(),
-                            performance_characteristics: Default::default(),
-                        });
-                    }
-                    bp
+            ("large_blueprint_change", Self::complex_blueprint(), {
+                let mut bp = Self::complex_blueprint();
+                bp.metadata.architecture_paradigm = "new-architecture".to_string();
+                // Add many modules
+                for i in 100..110 {
+                    let module_name = format!("module_{:04}", i);
+                    bp.modules.push(crate::blueprint::ModuleBlueprint {
+                        name: module_name,
+                        purpose: format!("Performance test module {}", i),
+                        dependencies: vec![],
+                        public_interface: vec![],
+                        internal_structure: Default::default(),
+                        testing_strategy: Default::default(),
+                        performance_characteristics: Default::default(),
+                    });
                 }
-            ),
+                bp
+            }),
         ]
     }
 
@@ -199,29 +195,41 @@ impl TestFixtures {
     pub fn cli_test_scenarios() -> HashMap<&'static str, Vec<&'static str>> {
         let mut scenarios = HashMap::new();
 
-        scenarios.insert("version_commands", vec![
-            "blueprint evolution version --blueprint test.json",
-            "blueprint evolution version --detailed",
-            "blueprint evolution version --format json",
-        ]);
+        scenarios.insert(
+            "version_commands",
+            vec![
+                "blueprint evolution version --blueprint test.json",
+                "blueprint evolution version --detailed",
+                "blueprint evolution version --format json",
+            ],
+        );
 
-        scenarios.insert("diff_commands", vec![
-            "blueprint evolution diff --from 1.0.0 --to 1.1.0",
-            "blueprint evolution diff --output-format detailed",
-            "blueprint evolution diff --min-impact medium",
-        ]);
+        scenarios.insert(
+            "diff_commands",
+            vec![
+                "blueprint evolution diff --from 1.0.0 --to 1.1.0",
+                "blueprint evolution diff --output-format detailed",
+                "blueprint evolution diff --min-impact medium",
+            ],
+        );
 
-        scenarios.insert("migration_commands", vec![
-            "blueprint evolution migrate 2.0.0 --dry-run",
-            "blueprint evolution migrate 1.5.0 --environment production",
-            "blueprint evolution migrate 2.1.0 --force --no-backup",
-        ]);
+        scenarios.insert(
+            "migration_commands",
+            vec![
+                "blueprint evolution migrate 2.0.0 --dry-run",
+                "blueprint evolution migrate 1.5.0 --environment production",
+                "blueprint evolution migrate 2.1.0 --force --no-backup",
+            ],
+        );
 
-        scenarios.insert("branch_commands", vec![
-            "blueprint evolution branch --create feature-auth",
-            "blueprint evolution branch --list",
-            "blueprint evolution branch --switch main",
-        ]);
+        scenarios.insert(
+            "branch_commands",
+            vec![
+                "blueprint evolution branch --create feature-auth",
+                "blueprint evolution branch --list",
+                "blueprint evolution branch --switch main",
+            ],
+        );
 
         scenarios
     }
@@ -261,31 +269,25 @@ impl TestFixtures {
         vec![
             (
                 "empty_modules",
-                TestUtils::create_test_blueprint("empty", "1.0.0")
+                TestUtils::create_test_blueprint("empty", "1.0.0"),
             ),
-            (
-                "unicode_names",
-                {
-                    let mut bp = TestUtils::create_test_blueprint("测试应用", "1.0.0");
-                    bp.metadata.description = "Приложение с Unicode символами".to_string();
-                    bp
-                }
-            ),
+            ("unicode_names", {
+                let mut bp = TestUtils::create_test_blueprint("测试应用", "1.0.0");
+                bp.metadata.description = "Приложение с Unicode символами".to_string();
+                bp
+            }),
             (
                 "very_long_name",
                 TestUtils::create_test_blueprint(
                     &"very-long-application-name-that-exceeds-normal-length-limits".repeat(3),
-                    "1.0.0"
-                )
+                    "1.0.0",
+                ),
             ),
             (
                 "special_characters",
-                TestUtils::create_test_blueprint("app-with-@#$-chars", "1.0.0")
+                TestUtils::create_test_blueprint("app-with-@#$-chars", "1.0.0"),
             ),
-            (
-                "max_modules",
-                TestUtils::create_large_blueprint(1000, 1)
-            ),
+            ("max_modules", TestUtils::create_large_blueprint(1000, 1)),
         ]
     }
 }
@@ -301,10 +303,10 @@ mod tests {
         let _monolith = TestFixtures::monolithic_blueprint();
         let _serverless = TestFixtures::serverless_blueprint();
         let _complex = TestFixtures::complex_blueprint();
-        
+
         assert!(!TestFixtures::version_transitions().is_empty());
         assert!(!TestFixtures::sample_changes().is_empty());
-        
+
         let (v1, v2, changes) = TestFixtures::migration_scenario();
         assert_ne!(v1.metadata.version, v2.metadata.version);
         assert!(!changes.is_empty());
@@ -313,12 +315,12 @@ mod tests {
     #[test]
     fn test_multi_language_fixtures() {
         let blueprints = TestFixtures::multi_language_blueprints();
-        
+
         assert!(blueprints.contains_key("rust"));
         assert!(blueprints.contains_key("nodejs"));
         assert!(blueprints.contains_key("python"));
         assert!(blueprints.contains_key("go"));
-        
+
         let rust_bp = &blueprints["rust"];
         assert_eq!(rust_bp.metadata.primary_language, "rust");
     }
@@ -327,7 +329,7 @@ mod tests {
     fn test_edge_cases() {
         let edge_cases = TestFixtures::edge_cases();
         assert!(!edge_cases.is_empty());
-        
+
         let (name, blueprint) = &edge_cases[0];
         assert_eq!(*name, "empty_modules");
         assert!(blueprint.modules.is_empty());
@@ -346,7 +348,7 @@ mod tests {
     fn test_performance_scenarios() {
         let scenarios = TestFixtures::performance_scenarios();
         assert_eq!(scenarios.len(), 2);
-        
+
         let (name, bp1, bp2) = &scenarios[0];
         assert_eq!(*name, "small_blueprint_change");
         assert_ne!(bp1.metadata.description, bp2.metadata.description);
