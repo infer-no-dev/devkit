@@ -25,6 +25,37 @@ pub enum PanelType {
     Help,
     Settings,
     Logs,
+    CodePreview,
+    FileExplorer,
+    TaskQueue,
+    SessionHistory,
+}
+
+/// Layout modes for the UI
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutMode {
+    /// Single panel takes full screen
+    Single(PanelType),
+    /// Two panels side by side
+    SideBySide(PanelType, PanelType),
+    /// Two panels stacked vertically
+    TopBottom(PanelType, PanelType),
+    /// Three panels with main on left, two on right stacked
+    ThreePane(PanelType, PanelType, PanelType),
+    /// Four panels in quadrants
+    Quadrant(PanelType, PanelType, PanelType, PanelType),
+    /// Custom layout with explicit areas
+    Custom(Vec<(PanelType, Rect)>),
+}
+
+/// Resizable pane information
+#[derive(Debug, Clone)]
+pub struct ResizablePane {
+    pub panel_type: PanelType,
+    pub size: u16, // Percentage or fixed size
+    pub min_size: u16,
+    pub max_size: u16,
+    pub resizable: bool,
 }
 
 /// Configuration for panel layout
@@ -47,6 +78,10 @@ pub struct PanelManager {
     notification_panel: NotificationPanel,
     output_blocks: OutputBlockCollection,
     help_visible: bool,
+    layout_mode: LayoutMode,
+    resizable_panes: HashMap<PanelType, ResizablePane>,
+    screen_size: Rect,
+    panel_areas: HashMap<PanelType, Rect>,
 }
 
 /// Panel for displaying agent status information
@@ -132,6 +167,26 @@ impl PanelLayout {
             PanelType::Logs => (
                 "Logs".to_string(),
                 vec![Constraint::Percentage(100)],
+                Direction::Vertical,
+            ),
+            PanelType::CodePreview => (
+                "Code Preview".to_string(),
+                vec![Constraint::Percentage(50)],
+                Direction::Vertical,
+            ),
+            PanelType::FileExplorer => (
+                "File Explorer".to_string(),
+                vec![Constraint::Percentage(30)],
+                Direction::Vertical,
+            ),
+            PanelType::TaskQueue => (
+                "Task Queue".to_string(),
+                vec![Constraint::Percentage(25)],
+                Direction::Vertical,
+            ),
+            PanelType::SessionHistory => (
+                "Session History".to_string(),
+                vec![Constraint::Percentage(40)],
                 Direction::Vertical,
             ),
         };
@@ -514,6 +569,10 @@ impl PanelManager {
             notification_panel: NotificationPanel::new(5000), // 5 second auto-dismiss
             output_blocks: OutputBlockCollection::new(1000),  // Max 1000 blocks
             help_visible: false,
+            layout_mode: LayoutMode::TopBottom(PanelType::Output, PanelType::Input),
+            resizable_panes: HashMap::new(),
+            screen_size: Rect::default(),
+            panel_areas: HashMap::new(),
         }
     }
 

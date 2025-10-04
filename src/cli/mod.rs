@@ -22,6 +22,7 @@ pub mod formatting;
 pub mod help;
 pub mod interactive;
 pub mod progress;
+pub mod session_manager;
 pub mod validation;
 
 use crate::agents::AgentSystem;

@@ -487,6 +487,26 @@ impl AgentSystem {
         agents_info
     }
 
+    /// Get information about currently active tasks
+    pub async fn get_active_tasks(&self) -> Vec<ActiveTaskInfo> {
+        let active_tasks = self.active_tasks.read().await;
+        let mut task_info = Vec::new();
+
+        for (task_id, active_task) in active_tasks.iter() {
+            task_info.push(ActiveTaskInfo {
+                id: task_id.clone(),
+                task_type: active_task.task.task_type.clone(),
+                description: active_task.task.description.clone(),
+                agent_id: active_task.agent_id.clone(),
+                priority: active_task.task.priority.clone(),
+                started_at: active_task.started_at,
+                status: "Running".to_string(), // Could be more detailed
+            });
+        }
+
+        task_info
+    }
+
     // Placeholder worker spawn methods (will be implemented in a separate file)
     async fn spawn_worker(&self, worker_id: usize) -> tokio::task::JoinHandle<()> {
         // TODO: Implement actual worker logic
@@ -666,6 +686,18 @@ pub struct AgentInfo {
     pub status: AgentStatus,
     pub capabilities: Vec<String>,
     pub metrics: AgentMetrics,
+}
+
+/// Active task information for UI display
+#[derive(Debug, Clone)]
+pub struct ActiveTaskInfo {
+    pub id: String,
+    pub task_type: String,
+    pub description: String,
+    pub agent_id: String,
+    pub priority: TaskPriority,
+    pub started_at: std::time::Instant,
+    pub status: String,
 }
 
 /// System statistics

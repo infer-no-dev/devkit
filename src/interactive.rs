@@ -8,7 +8,7 @@ use crate::codegen::{CodeGenerator, GenerationConfig, GenerationRequest, Generat
 use crate::context::CodebaseContext;
 
 /// Interactive session state
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractiveSession {
     /// Session ID for tracking
     pub session_id: String,

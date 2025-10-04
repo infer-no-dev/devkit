@@ -11,6 +11,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
+use std::path::PathBuf;
 
 /// Input handler for managing text input and cursor state
 #[derive(Debug, Clone)]
@@ -21,6 +22,9 @@ pub struct InputHandler {
     history_index: Option<usize>,
     keybindings: KeyBindings,
     current_context: KeyContext,
+    completion_candidates: Vec<String>,
+    completion_index: Option<usize>,
+    tab_completion_active: bool,
 }
 
 /// Input mode for the handler
@@ -51,6 +55,9 @@ impl InputHandler {
             history_index: None,
             keybindings,
             current_context: KeyContext::Normal,
+            completion_candidates: Vec::new(),
+            completion_index: None,
+            tab_completion_active: false,
         }
     }
 
@@ -79,6 +86,12 @@ impl InputHandler {
 
     /// Handle text input keys
     fn handle_text_input(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
+        // Reset completion on most key presses
+        match key_event.code {
+            KeyCode::Tab => {}, // Don't reset on tab
+            _ => self.reset_completion(),
+        }
+        
         match key_event.code {
             KeyCode::Char(c) => {
                 self.insert_char(c);
@@ -134,8 +147,7 @@ impl InputHandler {
                 Ok(InputResult::Action(Action::SwitchToNormalMode))
             }
             KeyCode::Tab => {
-                // TODO: Implement auto-completion
-                Ok(InputResult::Consumed)
+                self.handle_tab_completion()
             }
             _ => Ok(InputResult::None),
         }
@@ -339,6 +351,172 @@ impl InputHandler {
     /// Set the current input context
     pub fn set_context(&mut self, context: KeyContext) {
         self.current_context = context;
+        // Reset completion when switching contexts
+        self.reset_completion();
+    }
+
+    /// Handle tab completion
+    fn handle_tab_completion(&mut self) -> Result<InputResult, String> {
+        if !self.tab_completion_active {
+            // Start new completion
+            self.generate_completion_candidates();
+            if !self.completion_candidates.is_empty() {
+                self.tab_completion_active = true;
+                self.completion_index = Some(0);
+                self.apply_completion();
+            }
+        } else {
+            // Cycle through candidates
+            self.cycle_completion();
+        }
+        Ok(InputResult::Consumed)
+    }
+
+    /// Generate completion candidates based on current input
+    fn generate_completion_candidates(&mut self) {
+        self.completion_candidates.clear();
+        
+        let input = self.get_current_input();
+        let parts: Vec<&str> = input.split_whitespace().collect();
+        
+        if input.starts_with('/') {
+            // Command completion
+            self.generate_command_completions(&input[1..]);
+        } else if parts.len() >= 2 && (parts[0] == "/cd" || parts[0] == "/ls" || parts[0] == "/load") {
+            // File/directory completion
+            let partial_path = parts.last().map_or("", |&p| p);
+            self.generate_path_completions(partial_path);
+        } else if parts.len() >= 2 && parts[0] == "/theme" {
+            // Theme completion
+            self.generate_theme_completions(parts.last().map_or("", |&p| p));
+        } else if parts.len() >= 2 && parts[0] == "/config" {
+            // Config key completion
+            if parts.len() == 2 {
+                self.generate_config_key_completions(parts[1]);
+            }
+        }
+    }
+
+    /// Generate command completions
+    fn generate_command_completions(&mut self, partial: &str) {
+        let commands = [
+            "help", "status", "agents", "clear", "save", "load", "ls", "list", 
+            "cd", "pwd", "history", "artifacts", "tasks", "config", "theme", 
+            "quit", "exit"
+        ];
+        
+        for cmd in &commands {
+            if cmd.starts_with(partial) {
+                self.completion_candidates.push(format!("/{}", cmd));
+            }
+        }
+    }
+
+    /// Generate file/directory path completions
+    fn generate_path_completions(&mut self, partial_path: &str) {
+        let (dir_path, file_prefix) = if partial_path.contains('/') {
+            let path = std::path::Path::new(partial_path);
+            if let Some(parent) = path.parent() {
+                (parent.to_path_buf(), path.file_name().and_then(|n| n.to_str()).unwrap_or(""))
+            } else {
+                (PathBuf::from("."), partial_path)
+            }
+        } else {
+            (PathBuf::from("."), partial_path)
+        };
+
+        if let Ok(entries) = std::fs::read_dir(&dir_path) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                if let Some(name) = file_name.to_str() {
+                    if name.starts_with(file_prefix) && !name.starts_with('.') {
+                        let full_path = if dir_path == PathBuf::from(".") {
+                            name.to_string()
+                        } else {
+                            format!("{}/{}", dir_path.display(), name)
+                        };
+                        
+                        // Add trailing slash for directories
+                        if entry.file_type().map_or(false, |ft| ft.is_dir()) {
+                            self.completion_candidates.push(format!("{}/", full_path));
+                        } else {
+                            self.completion_candidates.push(full_path);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Sort completions
+        self.completion_candidates.sort();
+    }
+
+    /// Generate theme completions
+    fn generate_theme_completions(&mut self, partial: &str) {
+        let themes = ["dark", "light", "blue", "green"];
+        for theme in &themes {
+            if theme.starts_with(partial) {
+                self.completion_candidates.push(theme.to_string());
+            }
+        }
+    }
+
+    /// Generate config key completions
+    fn generate_config_key_completions(&mut self, partial: &str) {
+        let config_keys = [
+            "auto-save", "default-language", "show-confidence", 
+            "verbose", "max-history"
+        ];
+        for key in &config_keys {
+            if key.starts_with(partial) {
+                self.completion_candidates.push(key.to_string());
+            }
+        }
+    }
+
+    /// Cycle through completion candidates
+    fn cycle_completion(&mut self) {
+        if let Some(index) = self.completion_index {
+            let new_index = (index + 1) % self.completion_candidates.len();
+            self.completion_index = Some(new_index);
+            self.apply_completion();
+        }
+    }
+
+    /// Apply the current completion candidate
+    fn apply_completion(&mut self) {
+        if let (Some(index), Some(candidate)) = (self.completion_index, self.completion_candidates.get(self.completion_index.unwrap_or(0))) {
+            let input = self.get_current_input();
+            let parts: Vec<&str> = input.split_whitespace().collect();
+            
+            if input.starts_with('/') && parts.len() == 1 {
+                // Replace command
+                self.input_buffer = candidate.clone();
+                self.cursor_position = self.input_buffer.len();
+            } else if parts.len() >= 2 {
+                // Replace last part (file path, theme, config key, etc.)
+                let prefix = parts[..parts.len()-1].join(" ");
+                self.input_buffer = format!("{} {}", prefix, candidate);
+                self.cursor_position = self.input_buffer.len();
+            }
+        }
+    }
+
+    /// Reset completion state
+    fn reset_completion(&mut self) {
+        self.tab_completion_active = false;
+        self.completion_candidates.clear();
+        self.completion_index = None;
+    }
+
+    /// Get current completion candidates (for UI display)
+    pub fn get_completion_candidates(&self) -> &[String] {
+        &self.completion_candidates
+    }
+
+    /// Check if tab completion is active
+    pub fn is_completion_active(&self) -> bool {
+        self.tab_completion_active
     }
 
     /// Get current cursor position
