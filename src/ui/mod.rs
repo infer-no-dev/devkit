@@ -181,12 +181,7 @@ impl Application {
 
         // In input or command mode, handle input keys first
         if current_context == KeyContext::Input || current_context == KeyContext::Command {
-            eprintln!(
-                "DEBUG: In input/command mode, current_context: {:?}",
-                current_context
-            );
             if let Ok(result) = self.input_handler.handle_key_event(key_event) {
-                eprintln!("DEBUG: Input handler result: {:?}", result);
                 match result {
                     input::InputResult::Command(cmd) => {
                         // Process command
@@ -254,7 +249,6 @@ impl Application {
         match key {
             KeyCode::Char('i') if modifiers.is_empty() && current_context == KeyContext::Normal => {
                 // Switch to input mode
-                eprintln!("DEBUG: Switching to input mode");
                 self.input_handler
                     .set_context(keybindings::KeyContext::Input);
                 return Ok(());
@@ -325,10 +319,8 @@ impl Application {
 
     /// Process a command
     fn process_command(&mut self, command: String) {
-        eprintln!("DEBUG: Processing command: {}", command);
         // Send command to external processor if available
         if let Some(sender) = &self.command_sender {
-            eprintln!("DEBUG: Sending command to external processor");
             let _ = sender.send(command.clone());
         } else {
             // Fallback: Add command output

@@ -74,7 +74,7 @@ impl InputHandler {
             .keybindings
             .get_action(&combination, &self.current_context)
         {
-            return Ok(InputResult::Action(action.clone()));
+            return self.handle_action(action.clone());
         }
 
         // Handle input-specific keys based on context
@@ -84,57 +84,12 @@ impl InputHandler {
         }
     }
 
-    /// Handle text input keys
-    fn handle_text_input(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
-        eprintln!(
-            "DEBUG: Handling text input: {:?}, current context: {:?}",
-            key_event, self.current_context
-        );
-
-        // Reset completion on most key presses
-        match key_event.code {
-            KeyCode::Tab => {} // Don't reset on tab
-            _ => self.reset_completion(),
-        }
-
-        match key_event.code {
-            KeyCode::Char(c) => {
-                self.insert_char(c);
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Backspace => {
-                self.delete_char_before_cursor();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Delete => {
-                self.delete_char_at_cursor();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Left => {
-                self.move_cursor_left();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Right => {
-                self.move_cursor_right();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Home => {
-                self.move_cursor_to_start();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::End => {
-                self.move_cursor_to_end();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Up => {
-                self.previous_history();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Down => {
-                self.next_history();
-                Ok(InputResult::Consumed)
-            }
-            KeyCode::Enter => {
+    /// Handle actions from keybinding system
+    fn handle_action(&mut self, action: Action) -> Result<InputResult, String> {
+        use crate::ui::keybindings::Action;
+        
+        match action {
+            Action::ConfirmInput => {
                 let input = self.get_current_input();
                 if !input.is_empty() {
                     self.add_to_history(input.clone());
@@ -147,9 +102,66 @@ impl InputHandler {
                     _ => Ok(InputResult::None),
                 }
             }
-            KeyCode::Esc => {
+            Action::DeleteChar => {
+                self.delete_char_before_cursor();
+                Ok(InputResult::Consumed)
+            }
+            Action::DeleteWord => {
+                self.delete_word_before_cursor();
+                Ok(InputResult::Consumed)
+            }
+            Action::ClearInput => {
+                self.clear_input();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorLeft => {
+                self.move_cursor_left();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorRight => {
+                self.move_cursor_right();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorStart => {
+                self.move_cursor_to_start();
+                Ok(InputResult::Consumed)
+            }
+            Action::MoveCursorEnd => {
+                self.move_cursor_to_end();
+                Ok(InputResult::Consumed)
+            }
+            Action::SwitchToNormalMode => {
                 self.clear_input();
                 Ok(InputResult::Action(Action::SwitchToNormalMode))
+            }
+            _ => Ok(InputResult::Action(action))
+        }
+    }
+
+    /// Handle text input keys
+    fn handle_text_input(&mut self, key_event: KeyEvent) -> Result<InputResult, String> {
+        // Reset completion on most key presses
+        match key_event.code {
+            KeyCode::Tab => {} // Don't reset on tab
+            _ => self.reset_completion(),
+        }
+
+        match key_event.code {
+            KeyCode::Char(c) => {
+                self.insert_char(c);
+                Ok(InputResult::Consumed)
+            }
+            KeyCode::Delete => {
+                self.delete_char_at_cursor();
+                Ok(InputResult::Consumed)
+            }
+            KeyCode::Up => {
+                self.previous_history();
+                Ok(InputResult::Consumed)
+            }
+            KeyCode::Down => {
+                self.next_history();
+                Ok(InputResult::Consumed)
             }
             KeyCode::Tab => self.handle_tab_completion(),
             _ => Ok(InputResult::None),
@@ -353,7 +365,6 @@ impl InputHandler {
 
     /// Set the current input context
     pub fn set_context(&mut self, context: KeyContext) {
-        eprintln!("DEBUG: Setting input context to {:?}", context);
         self.current_context = context;
         // Reset completion when switching contexts
         self.reset_completion();
