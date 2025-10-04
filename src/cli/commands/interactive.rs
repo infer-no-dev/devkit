@@ -31,7 +31,24 @@ pub async fn run(
 
     // Create and initialize agent system
     let agent_system = Arc::new(AgentSystem::new());
-    let _ = agent_system.initialize().await;
+    
+    // Initialize and start the agent system
+    match agent_system.initialize().await {
+        Ok(_) => runner.print_info("Agent system initialized successfully"),
+        Err(e) => {
+            runner.print_error(&format!("Failed to initialize agent system: {}", e));
+            runner.print_info("Interactive mode will continue with limited functionality");
+        }
+    }
+    
+    // Start the agent system workers
+    match agent_system.start().await {
+        Ok(_) => runner.print_info("Agent system started successfully"),
+        Err(e) => {
+            runner.print_error(&format!("Failed to start agent system: {}", e));
+            runner.print_info("You can try restarting with /restart or use system commands only");
+        }
+    }
 
     // Create communication channels
     let (ui_tx, _ui_rx) = mpsc::unbounded_channel::<UIEvent>();
@@ -42,11 +59,28 @@ pub async fn run(
 
     runner.print_info("Interactive mode initialized. Starting UI...");
 
-    // Add initial system notification
-    let welcome_notification = Notification::info(
-        "Welcome to Devkit Interactive Mode".to_string(),
-        "🚀 Ready! Type commands or use natural language to interact with AI agents. Type /help for commands.".to_string(),
-    );
+    // Check agent system status and add appropriate notification
+    let system_status = if agent_system.is_running().await {
+        let agents_info = agent_system.get_agents_info().await;
+        if agents_info.is_empty() {
+            (
+                "🎆 Devkit Interactive Mode - Limited".to_string(),
+                "⚠️  Agent system started but no agents are available. Use /restart to reinitialize agents.".to_string()
+            )
+        } else {
+            (
+                "🎆 Devkit Interactive Mode - Ready!".to_string(),
+                format!("🚀 All systems operational! {} agents active. Type commands or use natural language. /help for commands.", agents_info.len())
+            )
+        }
+    } else {
+        (
+            "🎆 Devkit Interactive Mode - System Issue".to_string(),
+            "❌ Agent system not running. Use /restart to fix, or stick to system commands (/help, /ls, /cd). Type /help for troubleshooting.".to_string()
+        )
+    };
+    
+    let welcome_notification = Notification::info(system_status.0, system_status.1);
     app.add_notification(welcome_notification);
 
     // Create interactive manager to handle the session
@@ -346,6 +380,13 @@ impl InteractiveManager {
                 }
                 _ => Ok("Available layouts: single, split, three, quad".to_string()),
             },
+            "restart" => {
+                // Restart the agent system
+                match self.restart_agent_system().await {
+                    Ok(msg) => Ok(format!("✅ {}", msg)),
+                    Err(e) => Ok(format!("❌ Failed to restart agent system: {}", e))
+                }
+            }
             "quit" | "exit" => {
                 let _ = self.ui_sender.send(UIEvent::Quit);
                 Ok("Goodbye!".to_string())
@@ -393,6 +434,21 @@ impl InteractiveManager {
             metadata: std::collections::HashMap::new(),
         };
 
+        // Check if agent system is running first
+        if !self.agent_system.is_running().await {
+            return Ok(format!(
+                "❌ Agent system is not running. 
+
+💡 Troubleshooting:
+• The agent system failed to start properly
+• Try restarting with /restart command  
+• Use /status to check system status
+• Use /agents to see available agents
+
+🔧 Alternative: Use system commands (starting with /) like /help, /ls, /cd instead"
+            ));
+        }
+
         // Send task to agent system
         match self.agent_system.submit_task(task).await {
             Ok(result) => {
@@ -406,12 +462,26 @@ impl InteractiveManager {
                 });
 
                 Ok(format!(
-                    "Agent Response: {}\n\nArtifacts generated: {}",
+                    "✅ Agent Response: {}\n\n📦 Artifacts generated: {}",
                     result.output,
                     result.artifacts.len()
                 ))
             }
-            Err(e) => Ok(format!("Agent processing failed: {}", e)),
+            Err(e) => {
+                let error_msg = e.to_string();
+                if error_msg.contains("not running") {
+                    Ok(format!(
+                        "❌ Agent system stopped unexpectedly.
+
+💡 Try:
+• /restart to restart the agent system
+• /status to check system status
+• /agents to list available agents"
+                    ))
+                } else {
+                    Ok(format!("❌ Agent processing failed: {}\n\n💡 Try rephrasing your request or check /help for examples", e))
+                }
+            }
         }
     }
 
@@ -445,6 +515,7 @@ impl InteractiveManager {
   /status       - Show system status
   /agents       - List active agents and capabilities
   /tasks        - Show active agent tasks
+  /restart      - Restart the agent system (use if agents not working)
   /config [key] [value] - Show or update configuration
 
 🎨 Interface:
@@ -467,15 +538,33 @@ impl InteractiveManager {
   - Press Ctrl+C to exit at any time
   - Commands are case-insensitive
   - Multiple sessions allow parallel work on different projects
-  - Bookmarks let you quickly return to important sessions"#
+  - Bookmarks let you quickly return to important sessions
+  - If you see "agent system not running" errors, try /restart
+  - Use /status to check if agents are working properly"#
             .to_string()
     }
 
     /// Get system status
     async fn get_status(&self) -> String {
         let session = self.session.read().await;
+        let agent_running = self.agent_system.is_running().await;
+        let agents_info = self.agent_system.get_agents_info().await;
+        let active_tasks = self.agent_system.get_active_tasks().await;
+        
         format!(
-            "Session ID: {}\nProject: {:?}\nHistory entries: {}\nArtifacts: {}",
+            "🖥️  System Status:\n\
+            Agent System: {}\n\
+            Active Agents: {}\n\
+            Active Tasks: {}\n\n\
+            📁 Session Info:\n\
+            Session ID: {}\n\
+            Project: {:?}\n\
+            History Entries: {}\n\
+            Artifacts: {}\n\n\
+            💡 Tip: Use /agents for detailed agent information or /restart if agents are not running",
+            if agent_running { "✅ Running" } else { "❌ Stopped" },
+            agents_info.len(),
+            active_tasks.len(),
             session.session_id,
             session.project_path,
             session.history.len(),
@@ -510,6 +599,26 @@ impl InteractiveManager {
         }
 
         output
+    }
+
+    /// Restart the agent system
+    async fn restart_agent_system(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        // First stop the system if it's running
+        if self.agent_system.is_running().await {
+            self.agent_system.stop().await?;
+        }
+
+        // Re-initialize with agents
+        self.agent_system.initialize().await?;
+        
+        // Start the system
+        self.agent_system.start().await?;
+        
+        let agents_info = self.agent_system.get_agents_info().await;
+        Ok(format!(
+            "Agent system restarted successfully! {} agents are now active.",
+            agents_info.len()
+        ))
     }
 
     /// List files in the current directory
