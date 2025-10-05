@@ -92,6 +92,12 @@ pub async fn run(
         command_tx,
     );
 
+    // Send welcome message to output panel
+    let _ = ui_tx.send(UIEvent::Output {
+        content: "Welcome to DevKit Interactive Mode! Press 'i' to start typing commands.".to_string(),
+        block_type: "system".to_string(),
+    });
+
     // Spawn background tasks
     let agent_monitor = spawn_agent_monitor(agent_system.clone(), ui_tx.clone());
     let command_processor = spawn_command_processor(interactive_manager, command_rx);
@@ -156,6 +162,7 @@ impl InteractiveManager {
         &self,
         command: String,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        
         // Add user input to session history
         let entry = ConversationEntry {
             timestamp: std::time::SystemTime::now(),
@@ -1053,12 +1060,13 @@ fn spawn_agent_monitor(
     ui_sender: mpsc::UnboundedSender<UIEvent>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut interval = interval(Duration::from_millis(500));
+        let mut interval = interval(Duration::from_secs(5)); // Reduced frequency to 5 seconds
+        let mut last_status = String::new();
 
         loop {
             interval.tick().await;
 
-            // Get real-time agent status updates
+            // Get real-time agent status updates (only send if status changed)
             let agents_info = agent_system.get_agents_info().await;
 
             for agent_info in agents_info {
@@ -1071,21 +1079,10 @@ fn spawn_agent_monitor(
                 });
             }
 
-            // Send periodic system status
-            let agent_statuses = agent_system.get_agent_statuses().await;
-            if !agent_statuses.is_empty() {
-                let status_summary = agent_statuses
-                    .iter()
-                    .map(|(name, status)| format!("{}: {:?}", name, status))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                // Send agent status as notification instead
-                let _ = ui_sender.send(UIEvent::Output {
-                    content: format!("System Status: {}", status_summary),
-                    block_type: "status".to_string(),
-                });
-            }
+            // Disabled agent status spam - only send status updates when agents actually change status
+            // TODO: Re-enable this with proper status change detection when agents are actually working
+            let _agent_statuses = agent_system.get_agent_statuses().await;
+            // Status monitoring disabled for now to prevent UI spam
         }
     })
 }

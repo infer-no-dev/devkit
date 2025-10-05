@@ -504,21 +504,23 @@ impl Application {
             UIEvent::Output {
                 content,
                 block_type,
-            } => match block_type.as_str() {
-                "user" => self.panel_manager.output_blocks().add_user_input(&content),
-                "agent" => self
-                    .panel_manager
-                    .output_blocks()
-                    .add_agent_response(&content),
-                "system" => self
-                    .panel_manager
-                    .output_blocks()
-                    .add_system_message(&content),
-                "error" => self.panel_manager.output_blocks().add_error(&content),
-                _ => self
-                    .panel_manager
-                    .output_blocks()
-                    .add_system_message(&content),
+            } => {
+                match block_type.as_str() {
+                    "user" => self.panel_manager.output_blocks().add_user_input(&content),
+                    "agent" => self
+                        .panel_manager
+                        .output_blocks()
+                        .add_agent_response(&content),
+                    "system" => self
+                        .panel_manager
+                        .output_blocks()
+                        .add_system_message(&content),
+                    "error" => self.panel_manager.output_blocks().add_error(&content),
+                    _ => self
+                        .panel_manager
+                        .output_blocks()
+                        .add_system_message(&content),
+                };
             },
             UIEvent::ToggleHelp => {
                 self.panel_manager.toggle_help();
