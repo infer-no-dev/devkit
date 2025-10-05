@@ -51,7 +51,7 @@ pub async fn run(
     }
 
     // Create communication channels
-    let (ui_tx, _ui_rx) = mpsc::unbounded_channel::<UIEvent>();
+    let (ui_tx, ui_rx) = mpsc::unbounded_channel::<UIEvent>();
     let (command_tx, command_rx) = mpsc::unbounded_channel::<String>();
 
     // Connect command sender to UI
@@ -60,7 +60,7 @@ pub async fn run(
     runner.print_info("Interactive mode initialized. Starting UI...");
 
     // Check agent system status and add appropriate notification
-    let system_status = if agent_system.is_running().await {
+    let agent_status = if agent_system.is_running().await {
         let agents_info = agent_system.get_agents_info().await;
         if agents_info.is_empty() {
             (
@@ -80,7 +80,7 @@ pub async fn run(
         )
     };
     
-    let welcome_notification = Notification::info(system_status.0, system_status.1);
+    let welcome_notification = Notification::info(agent_status.0, agent_status.1);
     app.add_notification(welcome_notification);
 
     // Create interactive manager to handle the session
@@ -96,9 +96,9 @@ pub async fn run(
     let agent_monitor = spawn_agent_monitor(agent_system.clone(), ui_tx.clone());
     let command_processor = spawn_command_processor(interactive_manager, command_rx);
 
-    // Run the main UI event loop
+    // Run the main UI event loop with proper event handling
     let ui_result = tokio::select! {
-        result = app.run() => result,
+        result = app.run_with_events(ui_rx) => result,
         _ = tokio::signal::ctrl_c() => {
             runner.print_info("Received shutdown signal");
             Ok(())
@@ -120,7 +120,6 @@ pub async fn run(
         }
     }
 }
-
 /// Interactive manager to handle session state and agent communication
 struct InteractiveManager {
     session: Arc<RwLock<InteractiveSession>>,

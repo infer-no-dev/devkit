@@ -171,6 +171,42 @@ impl Application {
         Ok(())
     }
 
+    /// Run the UI event loop with external event handling
+    pub async fn run_with_events(&mut self, mut ui_rx: tokio::sync::mpsc::UnboundedReceiver<UIEvent>) -> Result<(), UIError> {
+        let mut tick_interval = interval(self.config.tick_rate);
+
+        while self.running {
+            // Handle input events
+            if event::poll(Duration::from_millis(0))? {
+                if let Event::Key(key) = event::read()? {
+                    self.handle_key_event(key.code, key.modifiers)?;
+                }
+            }
+
+            // Handle UI events from external sources (commands, etc.)
+            while let Ok(ui_event) = ui_rx.try_recv() {
+                self.handle_event(ui_event);
+            }
+
+            // Tick for animations and updates
+            tick_interval.tick().await;
+            self.tick();
+
+            // Render the UI
+            let theme = self.theme_manager.current_theme().clone();
+            let panel_manager = &mut self.panel_manager;
+            let input_handler = &mut self.input_handler;
+            self.terminal
+                .draw(|f| {
+                    Self::render_frame(f, &theme, panel_manager, input_handler);
+                })
+                .map_err(|e| UIError::RenderError(format!("Render failed: {}", e)))?;
+        }
+
+        self.cleanup()?;
+        Ok(())
+    }
+
     /// Handle key events
     fn handle_key_event(&mut self, key: KeyCode, modifiers: KeyModifiers) -> Result<(), UIError> {
         // Create KeyEvent for input handler
