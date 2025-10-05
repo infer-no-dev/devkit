@@ -18,25 +18,32 @@
 //! ```
 
 // pub mod agent;
+pub mod config;
+pub mod hotreload;
 pub mod loader;
 pub mod manager;
-// pub mod manifest;
+pub mod manifest;
 pub mod marketplace;
-// pub mod registry;
-// pub mod sandbox;
+pub mod registry;
+pub mod sandbox;
 pub mod types;
+pub mod wasm;
 
 // Re-export core types
 // pub use agent::{PluginAgent, PluginWrapper};
+pub use config::{PluginConfigManager, PluginConfig, ConfigValue, GlobalPluginConfig};
+pub use hotreload::{PluginHotReloader, HotReloadConfig, HotReloadStats, HotReloadEvent, WatchedPlugin};
 pub use loader::{PluginLoader, PluginLoaderFactory, PluginType};
 pub use manager::PluginManager;
-// pub use manifest::{PluginManifest, PluginMetadata};
+pub use manifest::{PluginManifestParser, PluginManifest, ManifestValidationConfig, ManifestParseResult};
 pub use marketplace::{MarketplaceClient, MarketplaceConfig, MarketplacePlugin};
-// pub use registry::PluginRegistry;
+pub use registry::{PluginRegistry, PluginRegistryEntry, PluginFilter};
+pub use sandbox::{PluginSandbox, SandboxConfig, ResourceUsage};
 pub use types::{
     Plugin, PluginError, PluginEvent, PluginHandle, PluginInfo, PluginState, PluginStatus,
-    PluginMetadata, PluginCapability, PluginHealth, PluginDependency,
+    PluginMetadata, PluginCapability, PluginHealth, PluginDependency, PluginPermission,
 };
+pub use wasm::{WasmRuntime, WasmConfig, WasmPlugin};
 
 use crate::agents::{Agent, AgentError};
 use serde::{Deserialize, Serialize};

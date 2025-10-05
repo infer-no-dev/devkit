@@ -69,6 +69,7 @@ tempfile = "3.0"
 sysinfo = "0.29"
 url = "2.5"
 libloading = "0.8"
+semver = "1.0"
 
 # Main binary
 [[bin]]

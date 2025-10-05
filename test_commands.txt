@@ -1,0 +1,4 @@
+how many files are in this directory?
+/ls
+/pwd
+exit

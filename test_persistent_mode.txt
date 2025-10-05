@@ -1,0 +1,4 @@
+test command 1
+test command 2  
+test command 3
+exit

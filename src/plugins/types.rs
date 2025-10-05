@@ -192,6 +192,19 @@ impl Clone for PluginHandle {
     }
 }
 
+impl std::fmt::Debug for PluginHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginHandle")
+            .field("id", &self.id)
+            .field("plugin", &"<Plugin trait object>")
+            .field("state", &self.state)
+            .field("metadata", &self.metadata)
+            .field("load_time", &self.load_time)
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 /// Plugin system events
 #[derive(Debug, Clone)]
 pub enum PluginEvent {

@@ -402,3 +402,16 @@ impl PluginManager {
     }
 }
 
+impl std::fmt::Debug for PluginManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginManager")
+            .field("config", &self.config)
+            .field("plugins", &self.plugins)
+            .field("dependency_graph", &self.dependency_graph)
+            .field("loader", &"<PluginLoader trait object>")
+            .field("registry", &self.registry)
+            .field("stats", &self.stats)
+            .finish()
+    }
+}
+
