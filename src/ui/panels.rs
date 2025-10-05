@@ -550,13 +550,13 @@ impl PanelManager {
         // Add default panel layouts
         layouts.insert(
             PanelType::AgentStatus,
-            PanelLayout::new(PanelType::AgentStatus),
+            PanelLayout::new(PanelType::AgentStatus).with_visibility(false), // Hide agent status by default
         );
-        layouts.insert(PanelType::Output, PanelLayout::new(PanelType::Output));
+        layouts.insert(PanelType::Output, PanelLayout::new(PanelType::Output).with_constraints(vec![Constraint::Min(5)]));
         layouts.insert(PanelType::Input, PanelLayout::new(PanelType::Input));
         layouts.insert(
             PanelType::Notifications,
-            PanelLayout::new(PanelType::Notifications),
+            PanelLayout::new(PanelType::Notifications).with_visibility(false), // Hide notifications by default
         );
         layouts.insert(PanelType::Help, PanelLayout::new(PanelType::Help));
         layouts.insert(PanelType::Settings, PanelLayout::new(PanelType::Settings));

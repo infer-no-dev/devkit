@@ -360,43 +360,44 @@ impl BlockCollection {
         self.add_block(block);
     }
 
-    /// Render the block collection (placeholder)
+    /// Render the block collection with proper formatting
     pub fn render(
         &self,
         f: &mut ratatui::Frame,
         area: ratatui::layout::Rect,
         theme: &crate::ui::themes::Theme,
     ) {
-        use ratatui::text::{Line, Span};
-        use ratatui::widgets::{Block, Borders, List, ListItem};
+        use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+        use ratatui::text::Text;
 
-        let items: Vec<ListItem> = self
-            .blocks
-            .iter()
-            .map(|block| {
-                let content = if block.content.len() > 50 {
-                    format!("{}...", &block.content[..47])
-                } else {
-                    block.content.clone()
-                };
+        // Collect all rendered blocks into a single text
+        let mut all_lines = Vec::new();
+        
+        for block in &self.blocks {
+            let block_text = block.render(theme);
+            all_lines.extend(block_text.lines);
+            // Add empty line between blocks
+            all_lines.push(Line::from(""));
+        }
+        
+        // If no blocks, show helpful message
+        if self.blocks.is_empty() {
+            all_lines.push(Line::from("No output yet. Press 'i' to enter input mode and start typing commands."));
+        }
 
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!("{:?}: ", block.block_type), theme.primary_style()),
-                    Span::styled(content, theme.secondary_style()),
-                ]))
-            })
-            .collect();
-
-        let list = List::new(items)
+        let text = Text::from(all_lines);
+        
+        let paragraph = Paragraph::new(text)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("Output")
+                    .title(format!("Output ({})", self.blocks.len()))
                     .style(theme.border_style()),
             )
-            .style(theme.secondary_style());
+            .wrap(Wrap { trim: true })
+            .style(theme.primary_style());
 
-        f.render_widget(list, area);
+        f.render_widget(paragraph, area);
     }
 }
 
