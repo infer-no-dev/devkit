@@ -133,6 +133,9 @@ pub enum Commands {
 
     /// System blueprint operations
     Blueprint(BlueprintArgs),
+
+    /// Plugin marketplace operations
+    Plugin(PluginArgs),
 }
 
 /// Project initialization arguments
@@ -538,11 +541,18 @@ pub struct ShellArgs {
     pub command: ShellCommands,
 }
 
-/// Blueprint system arguments
+/// System blueprint operations
 #[derive(Args)]
 pub struct BlueprintArgs {
     #[command(subcommand)]
     pub command: BlueprintCommands,
+}
+
+/// Plugin marketplace operations
+#[derive(Args)]
+pub struct PluginArgs {
+    #[command(subcommand)]
+    pub command: PluginCommands,
 }
 
 #[derive(Subcommand)]
@@ -610,6 +620,63 @@ pub enum BlueprintCommands {
     Evolution(commands::evolution::EvolutionCommand),
 }
 
+#[derive(Subcommand)]
+pub enum PluginCommands {
+    /// Search for plugins in the marketplace
+    Search {
+        /// Search query
+        query: Option<String>,
+        
+        /// Plugin category to filter by
+        #[arg(long)]
+        category: Option<String>,
+        
+        /// Show only free plugins
+        #[arg(long)]
+        free_only: bool,
+        
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Show detailed information about a plugin
+    Info {
+        /// Plugin ID to show info for
+        plugin_id: String,
+    },
+
+    /// Install a plugin from the marketplace
+    Install {
+        /// Plugin ID to install
+        plugin_id: String,
+        
+        /// Specific version to install
+        #[arg(long)]
+        version: Option<String>,
+        
+        /// License key for paid plugins
+        #[arg(long)]
+        license_key: Option<String>,
+    },
+
+    /// List installed plugins
+    List {
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: OutputFormat,
+    },
+
+    /// Update plugins
+    Update {
+        /// Specific plugin to update (updates all if not specified)
+        plugin_id: Option<String>,
+    },
+
+    /// Show plugin system status
+    Status,
+}
+
 /// Demo workflow arguments
 #[derive(Args)]
 pub struct DemoArgs {
@@ -646,7 +713,7 @@ pub enum ShellCommands {
 }
 
 /// Output format options
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, clap::ValueEnum)]
 pub enum OutputFormat {
     Text,
     Json,
@@ -747,6 +814,7 @@ impl CliRunner {
             Commands::Shell(args) => self.run_shell(args.command).await,
             Commands::Demo(args) => self.run_demo(args).await,
             Commands::Blueprint(args) => self.run_blueprint(args.command).await,
+            Commands::Plugin(args) => self.run_plugin(args.command).await,
         }
     }
 
@@ -957,5 +1025,12 @@ impl CliRunner {
         command: BlueprintCommands,
     ) -> Result<(), Box<dyn std::error::Error>> {
         commands::blueprint::run(self, command).await
+    }
+
+    async fn run_plugin(
+        &mut self,
+        command: PluginCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        commands::plugin::run(self, command).await
     }
 }

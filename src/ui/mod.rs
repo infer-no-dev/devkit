@@ -222,17 +222,15 @@ impl Application {
                     input::InputResult::Command(cmd) => {
                         // Process command
                         self.process_command(cmd);
-                        // Switch back to normal mode after command
-                        self.input_handler
-                            .set_context(keybindings::KeyContext::Normal);
+                        // Stay in command mode instead of switching back to normal
+                        // User must press ESC to exit command mode
                         return Ok(());
                     }
                     input::InputResult::Input(input) => {
                         // Process input
                         self.process_command(input);
-                        // Switch back to normal mode after input
-                        self.input_handler
-                            .set_context(keybindings::KeyContext::Normal);
+                        // Stay in input mode instead of switching back to normal
+                        // User must press ESC to exit input mode
                         return Ok(());
                     }
                     input::InputResult::Action(action) => {
@@ -355,9 +353,14 @@ impl Application {
 
     /// Process a command
     fn process_command(&mut self, command: String) {
+        eprintln!("DEBUG: UI::process_command called with: {}", command);
         // Send command to external processor if available
         if let Some(sender) = &self.command_sender {
-            let _ = sender.send(command.clone());
+            eprintln!("DEBUG: Sending command to external processor: {}", command);
+            match sender.send(command.clone()) {
+                Ok(_) => eprintln!("DEBUG: Command sent successfully"),
+                Err(e) => eprintln!("ERROR: Failed to send command: {}", e),
+            }
         } else {
             // Fallback: Add command output
             self.panel_manager.output_blocks().add_user_input(&command);
@@ -658,10 +661,10 @@ impl Application {
         // Create status text based on context
         let status_text = match context {
             keybindings::KeyContext::Input => {
-                "INPUT MODE: Type your command and press Enter | ESC: Cancel | ?: Help | q: Quit"
+                "INPUT MODE: Type commands and press Enter to submit | ESC: Exit to normal mode | Multiple commands allowed"
             }
             keybindings::KeyContext::Command => {
-                "COMMAND MODE: Type /command and press Enter | ESC: Cancel | ?: Help | q: Quit"
+                "COMMAND MODE: Type /commands and press Enter to submit | ESC: Exit to normal mode | Multiple commands allowed"
             }
             _ => "i: Input | :: Command | Tab: Cycle Panels | ?: Help | q: Quit | Ctrl+C: Exit",
         };

@@ -162,6 +162,7 @@ impl InteractiveManager {
         &self,
         command: String,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        eprintln!("DEBUG: InteractiveManager::process_command called with: {}", command);
         
         // Add user input to session history
         let entry = ConversationEntry {
@@ -187,7 +188,9 @@ impl InteractiveManager {
         let response = if command.starts_with("/") {
             self.process_system_command(&command[1..]).await?
         } else {
-            self.process_natural_language_command(&command).await?
+            // For now, use a simple fallback to test command processing
+            // TODO: Re-enable agent system when it's more stable
+            self.process_simple_response(&command).await
         };
 
         // Add response to session history
@@ -404,6 +407,59 @@ impl InteractiveManager {
         }
     }
 
+    /// Simple response for testing command processing
+    async fn process_simple_response(&self, command: &str) -> String {
+        // Classify the command for a more relevant response
+        let response = match self.classify_command(command) {
+            EntryType::Generate => format!(
+                "🔧 I understand you want to generate something: '{}'
+
+✨ In a full system, I would:
+• Analyze your requirements
+• Generate the appropriate code
+• Provide explanations and examples
+
+💡 For now, try system commands like /help, /status, or /ls",
+                command
+            ),
+            EntryType::Debug => format!(
+                "🐛 I see you want help with debugging: '{}'
+
+🔍 In a full system, I would:
+• Analyze your code for issues
+• Suggest fixes and improvements
+• Provide debugging strategies
+
+💡 For now, try system commands like /help, /status, or /ls",
+                command
+            ),
+            EntryType::Explain => format!(
+                "📚 I understand you want an explanation of: '{}'
+
+📖 In a full system, I would:
+• Break down complex concepts
+• Provide detailed explanations
+• Give relevant examples
+
+💡 For now, try system commands like /help, /status, or /ls",
+                command
+            ),
+            _ => format!(
+                "💬 I received your message: '{}'
+
+🤖 In a full system, I would:
+• Process your natural language request
+• Coordinate with specialized agents
+• Provide comprehensive assistance
+
+💡 Current system status: Basic command processing active
+💡 Try system commands like /help, /status, /agents, or /ls",
+                command
+            ),
+        };
+        response
+    }
+
     /// Process natural language commands through agents
     async fn process_natural_language_command(
         &self,
@@ -440,24 +496,37 @@ impl InteractiveManager {
             metadata: std::collections::HashMap::new(),
         };
 
-        // Check if agent system is running first
-        if !self.agent_system.is_running().await {
-            return Ok(format!(
-                "❌ Agent system is not running. 
+        // Check if agent system is running first (with timeout)
+        let status_check = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            self.agent_system.is_running()
+        ).await;
+        
+        match status_check {
+            Ok(false) | Err(_) => {
+                return Ok(format!(
+                    "❌ Agent system is not running or not responding. 
 
 💡 Troubleshooting:
-• The agent system failed to start properly
+• The agent system failed to start properly or is stuck
 • Try restarting with /restart command  
 • Use /status to check system status
 • Use /agents to see available agents
 
 🔧 Alternative: Use system commands (starting with /) like /help, /ls, /cd instead"
-            ));
+                ));
+            }
+            Ok(true) => {
+                // Agent system is running, continue
+            }
         }
 
-        // Send task to agent system
-        match self.agent_system.submit_task(task).await {
-            Ok(result) => {
+        // Send task to agent system with timeout
+        let task_future = self.agent_system.submit_task(task);
+        let timeout_duration = std::time::Duration::from_secs(30); // 30 second timeout
+        
+        match tokio::time::timeout(timeout_duration, task_future).await {
+            Ok(Ok(result)) => {
                 // Send agent status update to UI
                 let _ = self.ui_sender.send(UIEvent::AgentStatusUpdate {
                     agent_name: "Processing".to_string(),
@@ -473,7 +542,7 @@ impl InteractiveManager {
                     result.artifacts.len()
                 ))
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 let error_msg = e.to_string();
                 if error_msg.contains("not running") {
                     Ok(format!(
@@ -487,6 +556,18 @@ impl InteractiveManager {
                 } else {
                     Ok(format!("❌ Agent processing failed: {}\n\n💡 Try rephrasing your request or check /help for examples", e))
                 }
+            }
+            Err(_) => {
+                // Timeout occurred
+                Ok(format!(
+                    "⏱️ Agent processing timed out after 30 seconds.
+
+💡 Possible causes:
+• Agent system is overloaded or stuck
+• Complex request taking too long to process
+• Try simpler commands or /restart the agent system
+• Use /status to check system health"
+                ))
             }
         }
     }
@@ -1093,10 +1174,21 @@ fn spawn_command_processor(
     mut command_rx: mpsc::UnboundedReceiver<String>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        eprintln!("DEBUG: Command processor started");
         while let Some(command) = command_rx.recv().await {
-            if let Err(e) = manager.process_command(command).await {
-                eprintln!("Error processing command: {}", e);
+            eprintln!("DEBUG: Command processor received: {}", command);
+            match manager.process_command(command.clone()).await {
+                Ok(_) => eprintln!("DEBUG: Command processed successfully: {}", command),
+                Err(e) => {
+                    eprintln!("ERROR: Command processing failed for '{}': {}", command, e);
+                    // Send error to UI
+                    let _ = manager.ui_sender.send(UIEvent::Output {
+                        content: format!("Error processing command '{}': {}", command, e),
+                        block_type: "error".to_string(),
+                    });
+                }
             }
         }
+        eprintln!("DEBUG: Command processor ended - channel closed");
     })
 }

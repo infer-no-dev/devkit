@@ -14,6 +14,7 @@ pub mod error;
 pub mod integrations;
 pub mod interactive;
 pub mod logging;
+pub mod plugins;
 pub mod services;
 pub mod shell;
 pub mod system_bus;

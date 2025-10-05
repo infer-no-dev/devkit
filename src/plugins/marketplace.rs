@@ -3,7 +3,7 @@
 //! Handles discovery, installation, and management of plugins from various sources.
 //! Supports both free and paid plugins with transparent pricing and licensing.
 
-use crate::plugins::{PluginError, PluginMetadata};
+use crate::plugins::types::{PluginError, PluginMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;

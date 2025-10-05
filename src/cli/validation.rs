@@ -274,6 +274,7 @@ impl CliValidator {
             Commands::Shell(args) => self.validate_shell_args(args, &mut result),
             Commands::Demo(args) => self.validate_demo_args(args, &mut result),
             Commands::Blueprint(args) => self.validate_blueprint_args(args, &mut result),
+            Commands::Plugin(args) => self.validate_plugin_args(args, &mut result),
         }
 
         result.is_valid = result.errors.is_empty();
@@ -686,6 +687,7 @@ impl CliValidator {
     fn validate_status_args(&self, _args: &StatusArgs, _result: &mut ValidationResult) {}
     fn validate_shell_args(&self, _args: &ShellArgs, _result: &mut ValidationResult) {}
     fn validate_demo_args(&self, _args: &DemoArgs, _result: &mut ValidationResult) {}
+    fn validate_plugin_args(&self, _args: &PluginArgs, _result: &mut ValidationResult) {}
 
     /// Validate blueprint arguments
     fn validate_blueprint_args(&self, args: &BlueprintArgs, result: &mut ValidationResult) {

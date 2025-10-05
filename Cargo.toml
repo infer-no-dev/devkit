@@ -67,6 +67,8 @@ rand = { version = "0.8", features = ["std_rng"] }
 gethostname = "0.4"
 tempfile = "3.0"
 sysinfo = "0.29"
+url = "2.5"
+libloading = "0.8"
 
 # Main binary
 [[bin]]

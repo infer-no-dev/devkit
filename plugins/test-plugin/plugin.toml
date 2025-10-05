@@ -1,0 +1,29 @@
+[metadata]
+id = "test-plugin"
+name = "Test Plugin"
+version = "1.0.0"
+description = "A test plugin for demonstrating the plugin loader system"
+author = "DevKit Team"
+homepage = "https://github.com/devkit-plugins/test-plugin"
+repository = "https://github.com/devkit-plugins/test-plugin"
+license = "MIT"
+tags = ["test", "example", "demo"]
+entry_point = "plugin.py"
+created_at = "2024-01-01T00:00:00Z"
+updated_at = "2024-01-01T00:00:00Z"
+
+[[dependencies]]
+id = "python-runtime"
+version = ">=3.8"
+optional = false
+reason = "Required for Python plugin execution"
+
+[permissions]
+permissions = ["filesystem:read", "network:http"]
+
+[[capabilities]]
+capability = "CodeAnalysis"
+
+[[capabilities]]
+capability = "Custom"
+name = "TestExecution"

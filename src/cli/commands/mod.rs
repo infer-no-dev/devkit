@@ -17,6 +17,7 @@ pub mod interactive;
 pub mod profile;
 pub mod review;
 pub mod shell;
+pub mod plugin;
 pub mod status;
 pub mod template;
 
