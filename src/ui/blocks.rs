@@ -272,6 +272,8 @@ pub struct BlockFilter {
 pub struct BlockCollection {
     blocks: Vec<OutputBlock>,
     max_blocks: usize,
+    scroll_offset: usize,
+    auto_scroll: bool,
 }
 
 /// Type alias for backward compatibility
@@ -283,6 +285,8 @@ impl BlockCollection {
         Self {
             blocks: Vec::new(),
             max_blocks,
+            scroll_offset: 0,
+            auto_scroll: true,
         }
     }
 
@@ -295,6 +299,85 @@ impl BlockCollection {
             let excess = self.blocks.len() - self.max_blocks;
             self.blocks.drain(0..excess);
         }
+
+        // Auto-scroll to bottom when new content is added
+        if self.auto_scroll {
+            // For auto-scroll, we'll just let the render method handle positioning
+            // by using the total line count as the scroll offset
+            let total_lines = self.get_total_display_lines();
+            self.scroll_offset = total_lines;
+        }
+    }
+
+    /// Scroll up by the specified number of lines
+    pub fn scroll_up(&mut self, lines: usize) {
+        if self.scroll_offset > 0 {
+            self.scroll_offset = self.scroll_offset.saturating_sub(lines);
+            self.auto_scroll = false; // Disable auto-scroll when manually scrolling
+        }
+    }
+
+    /// Scroll down by the specified number of lines
+    pub fn scroll_down(&mut self, lines: usize) {
+        let total_lines = self.get_total_display_lines();
+        if self.scroll_offset < total_lines {
+            self.scroll_offset += lines;
+            // Check if we've scrolled to the bottom
+            if self.scroll_offset >= total_lines {
+                self.scroll_to_bottom();
+            }
+        }
+    }
+
+    /// Scroll to the top
+    pub fn scroll_to_top(&mut self) {
+        self.scroll_offset = 0;
+        self.auto_scroll = false;
+    }
+
+    /// Scroll to the bottom
+    pub fn scroll_to_bottom(&mut self) {
+        let total_lines = self.get_total_display_lines();
+        // Ensure we don't scroll past the content
+        self.scroll_offset = total_lines.saturating_sub(1);
+        self.auto_scroll = true;
+    }
+
+    /// Page up (scroll up by a page)
+    pub fn page_up(&mut self, page_size: usize) {
+        self.scroll_up(page_size);
+    }
+
+    /// Page down (scroll down by a page)
+    pub fn page_down(&mut self, page_size: usize) {
+        self.scroll_down(page_size);
+    }
+
+    /// Toggle auto-scroll mode
+    pub fn toggle_auto_scroll(&mut self) {
+        self.auto_scroll = !self.auto_scroll;
+        if self.auto_scroll {
+            self.scroll_to_bottom();
+        }
+    }
+
+    /// Get current scroll offset
+    pub fn get_scroll_offset(&self) -> usize {
+        self.scroll_offset
+    }
+
+    /// Check if auto-scroll is enabled
+    pub fn is_auto_scroll(&self) -> bool {
+        self.auto_scroll
+    }
+
+    /// Calculate total number of display lines for all blocks
+    fn get_total_display_lines(&self) -> usize {
+        self.blocks.iter().map(|block| {
+            // Header line + content lines + metadata lines + separator
+            1 + block.content.lines().count() + 
+            block.metadata.len() + 1 // separator line
+        }).sum()
     }
 
     /// Get all blocks
@@ -360,17 +443,21 @@ impl BlockCollection {
         self.add_block(block);
     }
 
-    /// Render the block collection with proper formatting
+    /// Render the block collection with proper formatting and scrolling support
     pub fn render(
         &self,
         f: &mut ratatui::Frame,
         area: ratatui::layout::Rect,
         theme: &crate::ui::themes::Theme,
     ) {
-        use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+        use ratatui::widgets::{Block, Borders, Paragraph, Wrap, Scrollbar, ScrollbarOrientation, ScrollbarState};
         use ratatui::text::Text;
+        use ratatui::layout::{Constraint, Direction, Layout};
 
-        // Collect all rendered blocks into a single text
+        // Calculate available height for content (subtract borders)
+        let content_height = area.height.saturating_sub(2) as usize; // 2 for top and bottom borders
+        
+        // Collect all rendered blocks into lines
         let mut all_lines = Vec::new();
         
         for block in &self.blocks {
@@ -385,19 +472,81 @@ impl BlockCollection {
             all_lines.push(Line::from("No output yet. Press 'i' to enter input mode and start typing commands."));
         }
 
-        let text = Text::from(all_lines);
+        // Apply scrolling - take lines from scroll_offset to scroll_offset + content_height
+        let total_lines = all_lines.len();
+        
+        // Ensure valid scroll position
+        let start_line = if total_lines == 0 {
+            0
+        } else if self.auto_scroll && total_lines > content_height {
+            // For auto-scroll, show the last content_height lines
+            total_lines.saturating_sub(content_height)
+        } else {
+            // For manual scroll, use scroll_offset but ensure it's valid
+            self.scroll_offset.min(total_lines.saturating_sub(content_height).max(0))
+        };
+        
+        let end_line = (start_line + content_height).min(total_lines);
+        
+        let visible_lines = if total_lines > 0 && start_line < total_lines {
+            all_lines[start_line..end_line].to_vec()
+        } else {
+            all_lines
+        };
+
+        let text = Text::from(visible_lines);
+        
+        // Create title with scroll information
+        let scroll_info = if total_lines > content_height {
+            format!(" ({}/{}) {}", 
+                start_line + 1, 
+                total_lines, 
+                if self.auto_scroll { "[AUTO]" } else { "[MANUAL]" }
+            )
+        } else {
+            String::new()
+        };
+        
+        let title = format!("Output ({}){}", self.blocks.len(), scroll_info);
+        
+        // Split area to make room for scrollbar if needed
+        let show_scrollbar = total_lines > content_height;
+        let (paragraph_area, scrollbar_area) = if show_scrollbar {
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(0), Constraint::Length(1)])
+                .split(area);
+            (chunks[0], chunks[1])
+        } else {
+            (area, ratatui::layout::Rect::default())
+        };
         
         let paragraph = Paragraph::new(text)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(format!("Output ({})", self.blocks.len()))
+                    .title(title)
                     .style(theme.border_style()),
             )
             .wrap(Wrap { trim: true })
             .style(theme.primary_style());
 
-        f.render_widget(paragraph, area);
+        f.render_widget(paragraph, paragraph_area);
+        
+        // Render scrollbar if needed
+        if show_scrollbar {
+            let mut scrollbar_state = ScrollbarState::default()
+                .content_length(total_lines)
+                .viewport_content_length(content_height)
+                .position(start_line);
+                
+            let scrollbar = Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"));
+                
+            f.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+        }
     }
 }
 
