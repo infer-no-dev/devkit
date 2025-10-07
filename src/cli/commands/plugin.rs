@@ -3,7 +3,9 @@
 //! Handles plugin marketplace operations: search, install, uninstall, list, update
 
 use crate::cli::{CliRunner, PluginCommands, OutputFormat};
+use crate::plugins::{MarketplaceClient, MarketplaceConfig, PluginSearchQuery};
 use serde_json;
+use std::path::PathBuf;
 
 /// Execute plugin commands
 pub async fn run(
@@ -51,50 +53,46 @@ async fn handle_search(
         runner.print_verbose("Filter: Free plugins only");
     }
     
-    // Mock search results for demo
-    let mock_plugins = vec![
-        PluginSearchResult {
-            id: "rust-analyzer-plus".to_string(),
-            name: "Rust Analyzer Plus".to_string(),
-            version: "1.2.3".to_string(),
-            description: "Enhanced Rust code analysis and completion".to_string(),
-            category: "analysis".to_string(),
-            price: "Free".to_string(),
-            rating: 4.8,
-            downloads: 15420,
+    // Create marketplace client with mock configuration
+    let config = MarketplaceConfig::default();
+    
+    let client = MarketplaceClient::new(config)?;
+    
+    let search_query = PluginSearchQuery {
+        query: query.clone(),
+        category: category.clone(),
+        free_only,
+        ..Default::default()
+    };
+    
+    let plugins = client.search(search_query).await?;
+    let search_results: Vec<PluginSearchResult> = plugins.iter().map(|p| PluginSearchResult {
+        id: p.marketplace_info.plugin_id.clone(),
+        name: p.metadata.name.clone(),
+        version: p.metadata.version.clone(),
+        description: p.metadata.description.clone(),
+        category: p.marketplace_info.category.clone(),
+        price: if p.licensing.is_free {
+            "Free".to_string()
+        } else {
+            p.licensing.pricing.as_ref()
+                .map(|pricing| format!("${:.2}", pricing.base_price as f64 / 100.0))
+                .unwrap_or("Paid".to_string())
         },
-        PluginSearchResult {
-            id: "typescript-guru".to_string(),
-            name: "TypeScript Guru".to_string(),
-            version: "2.1.0".to_string(),
-            description: "Advanced TypeScript code generation and refactoring".to_string(),
-            category: "generation".to_string(),
-            price: "$9.99/month".to_string(),
-            rating: 4.6,
-            downloads: 8932,
-        },
-        PluginSearchResult {
-            id: "python-formatter".to_string(),
-            name: "Python Pro Formatter".to_string(),
-            version: "1.0.5".to_string(),
-            description: "Professional Python code formatting and linting".to_string(),
-            category: "formatting".to_string(),
-            price: "Free".to_string(),
-            rating: 4.4,
-            downloads: 23156,
-        },
-    ];
+        rating: p.stats.rating.unwrap_or(0.0),
+        downloads: p.stats.downloads as u32,
+    }).collect();
     
     match format {
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&mock_plugins)?);
+            println!("{}", serde_json::to_string_pretty(&search_results)?);
         }
         _ => {
-            print_plugins_table(&mock_plugins);
+            print_plugins_table(&search_results);
         }
     }
     
-    runner.print_success(&format!("Found {} plugins", mock_plugins.len()));
+    runner.print_success(&format!("Found {} plugins", search_results.len()));
     Ok(())
 }
 
@@ -138,7 +136,12 @@ async fn handle_install(
         runner.print_verbose(&format!("Using license key: {}...", &key[..8.min(key.len())]));
     }
     
-    // Simulate installation steps
+    // Create marketplace client with mock configuration
+    let config = MarketplaceConfig::default();
+    
+    let mut client = MarketplaceClient::new(config)?;
+    
+    // Perform the actual installation with progress feedback
     runner.print_info("📥 Downloading plugin package...");
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     
@@ -149,10 +152,17 @@ async fn handle_install(
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     
     runner.print_info("🔌 Activating plugin...");
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     
-    runner.print_success(&format!("Plugin '{}' installed successfully!", plugin_id));
-    runner.print_info("💡 Use 'devkit plugin list' to see installed plugins");
+    // Try the actual installation - this will fail if there are issues
+    match client.install_plugin(plugin_id, version, license_key).await {
+        Ok(_installation) => {
+            runner.print_success(&format!("Plugin '{}' installed successfully!", plugin_id));
+            runner.print_info("💡 Use 'devkit plugin list' to see installed plugins");
+        }
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    }
     
     Ok(())
 }
@@ -163,25 +173,28 @@ async fn handle_list(
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("📋 Listing installed plugins...");
     
-    // Mock installed plugins
-    let installed_plugins = vec![
+    // Create marketplace client with mock configuration
+    let config = MarketplaceConfig::default();
+    
+    let client = MarketplaceClient::new(config)?;
+    let installations = client.list_installed()?;
+    
+    let installed_plugins: Vec<InstalledPlugin> = installations.iter().map(|inst| {
         InstalledPlugin {
-            id: "rust-analyzer-plus".to_string(),
-            name: "Rust Analyzer Plus".to_string(),
-            version: "1.2.3".to_string(),
+            id: inst.plugin_id.clone(),
+            name: format!("{}Plugin", inst.plugin_id.split('-').collect::<Vec<&str>>().iter().map(|s| {
+                let mut chars = s.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                }
+            }).collect::<Vec<String>>().join(" ")),
+            version: inst.version.clone(),
             status: "Active".to_string(),
-            auto_update: true,
-            installed: "2024-10-01".to_string(),
-        },
-        InstalledPlugin {
-            id: "python-formatter".to_string(),
-            name: "Python Pro Formatter".to_string(),
-            version: "1.0.5".to_string(),
-            status: "Active".to_string(),
-            auto_update: false,
-            installed: "2024-09-28".to_string(),
-        },
-    ];
+            auto_update: inst.auto_update,
+            installed: inst.installed_at.format("%Y-%m-%d").to_string(),
+        }
+    }).collect();
     
     match format {
         OutputFormat::Json => {

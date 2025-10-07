@@ -51,6 +51,7 @@ pub trait Plugin: Send + Sync {
 
 /// Plugin capabilities that can be advertised
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
 pub enum PluginCapability {
     /// Can analyze code
     CodeAnalysis,
@@ -71,6 +72,7 @@ pub enum PluginCapability {
     /// Can provide documentation
     Documentation,
     /// Custom capability
+    #[serde(untagged)]
     Custom(String),
 }
 

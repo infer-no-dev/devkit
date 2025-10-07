@@ -1,0 +1,48 @@
+{
+  "installations": {
+    "rust-analyzer-plus": {
+      "plugin_id": "rust-analyzer-plus",
+      "version": "1.2.3",
+      "installed_at": "2025-10-06T00:56:12.993928870Z",
+      "installation_source": {
+        "Marketplace": {
+          "registry": "mock"
+        }
+      },
+      "license_info": null,
+      "auto_update": true
+    },
+    "python-formatter": {
+      "plugin_id": "python-formatter",
+      "version": "1.0.5",
+      "installed_at": "2024-09-28T09:15:00Z",
+      "installation_source": {
+        "Marketplace": {
+          "registry": "community"
+        }
+      },
+      "license_info": null,
+      "auto_update": false
+    },
+    "typescript-guru": {
+      "plugin_id": "typescript-guru",
+      "version": "2.1.0",
+      "installed_at": "2025-10-06T00:57:34.928018458Z",
+      "installation_source": {
+        "Marketplace": {
+          "registry": "mock"
+        }
+      },
+      "license_info": {
+        "license_key": "TS-GURU-LICENSE-123456789",
+        "activated_at": "2025-10-06T00:57:34.928021142Z",
+        "expires_at": null,
+        "features": [],
+        "max_activations": null,
+        "current_activations": 1
+      },
+      "auto_update": true
+    }
+  },
+  "last_update_check": "2024-10-05T10:00:00Z"
+}

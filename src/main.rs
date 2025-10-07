@@ -13,6 +13,7 @@ mod config;
 mod context;
 mod interactive;
 mod logging;
+mod plugins;
 mod shell;
 mod ui;
 

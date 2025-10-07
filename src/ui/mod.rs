@@ -333,6 +333,46 @@ impl Application {
                         _ => {}
                     }
                 }
+                Some(PanelType::Output) => {
+                    match key {
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            // Scroll up one line
+                            self.panel_manager.output_blocks().scroll_up(1);
+                            return Ok(());
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            // Scroll down one line
+                            self.panel_manager.output_blocks().scroll_down(1);
+                            return Ok(());
+                        }
+                        KeyCode::PageUp | KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+                            // Page up
+                            self.panel_manager.output_blocks().page_up(10);
+                            return Ok(());
+                        }
+                        KeyCode::PageDown | KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
+                            // Page down
+                            self.panel_manager.output_blocks().page_down(10);
+                            return Ok(());
+                        }
+                        KeyCode::Home | KeyCode::Char('g') => {
+                            // Go to top
+                            self.panel_manager.output_blocks().scroll_to_top();
+                            return Ok(());
+                        }
+                        KeyCode::End | KeyCode::Char('G') => {
+                            // Go to bottom
+                            self.panel_manager.output_blocks().scroll_to_bottom();
+                            return Ok(());
+                        }
+                        KeyCode::Char('a') => {
+                            // Toggle auto-scroll
+                            self.panel_manager.output_blocks().toggle_auto_scroll();
+                            return Ok(());
+                        }
+                        _ => {}
+                    }
+                }
                 Some(PanelType::Notifications) => {
                     match key {
                         KeyCode::Char('c') => {
@@ -348,18 +388,55 @@ impl Application {
             }
         }
 
+        // Global scrolling keys (work regardless of focus when in normal mode)
+        if current_context == KeyContext::Normal {
+            match key {
+                KeyCode::Up | KeyCode::Char('k') if modifiers.is_empty() => {
+                    // Scroll up one line in output
+                    self.panel_manager.output_blocks().scroll_up(1);
+                    return Ok(());
+                }
+                KeyCode::Down | KeyCode::Char('j') if modifiers.is_empty() => {
+                    // Scroll down one line in output
+                    self.panel_manager.output_blocks().scroll_down(1);
+                    return Ok(());
+                }
+                KeyCode::PageUp if modifiers.is_empty() => {
+                    // Page up in output
+                    self.panel_manager.output_blocks().page_up(10);
+                    return Ok(());
+                }
+                KeyCode::PageDown if modifiers.is_empty() => {
+                    // Page down in output
+                    self.panel_manager.output_blocks().page_down(10);
+                    return Ok(());
+                }
+                KeyCode::Home if modifiers.is_empty() => {
+                    // Go to top of output
+                    self.panel_manager.output_blocks().scroll_to_top();
+                    return Ok(());
+                }
+                KeyCode::End if modifiers.is_empty() => {
+                    // Go to bottom of output
+                    self.panel_manager.output_blocks().scroll_to_bottom();
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 
     /// Process a command
     fn process_command(&mut self, command: String) {
-        eprintln!("DEBUG: UI::process_command called with: {}", command);
+        tracing::debug!("UI::process_command called with: {}", command);
         // Send command to external processor if available
         if let Some(sender) = &self.command_sender {
-            eprintln!("DEBUG: Sending command to external processor: {}", command);
+            tracing::debug!("Sending command to external processor: {}", command);
             match sender.send(command.clone()) {
-                Ok(_) => eprintln!("DEBUG: Command sent successfully"),
-                Err(e) => eprintln!("ERROR: Failed to send command: {}", e),
+                Ok(_) => tracing::debug!("Command sent successfully"),
+                Err(e) => tracing::error!("Failed to send command: {}", e),
             }
         } else {
             // Fallback: Add command output
@@ -530,11 +607,11 @@ impl Application {
             }
             UIEvent::SetLayout(layout_name) => {
                 // TODO: Implement layout switching
-                eprintln!("Layout switching not yet implemented: {}", layout_name);
+                tracing::debug!("Layout switching not yet implemented: {}", layout_name);
             }
             UIEvent::ShowCompletions(completions) => {
                 // TODO: Implement completion display
-                eprintln!(
+                tracing::debug!(
                     "Completion display not yet implemented: {} completions",
                     completions.len()
                 );

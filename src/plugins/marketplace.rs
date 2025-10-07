@@ -7,7 +7,10 @@ use crate::plugins::types::{PluginError, PluginMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::fs;
 use url::Url;
+use chrono::{DateTime, Utc};
+use semver::Version;
 
 /// Plugin marketplace configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -280,14 +283,100 @@ impl MarketplaceClient {
 
     /// Search for plugins in the marketplace
     pub async fn search(&self, query: PluginSearchQuery) -> Result<Vec<MarketplacePlugin>, PluginError> {
-        // Implementation would query each registry in priority order
-        // and aggregate results, handling auth where needed
-        todo!("Implement marketplace search")
+        let db = self.load_plugin_database()?;
+        let mut results = db.plugins;
+        
+        // Apply text search filter
+        if let Some(search_term) = &query.query {
+            let search_term = search_term.to_lowercase();
+            results.retain(|plugin| {
+                plugin.metadata.name.to_lowercase().contains(&search_term)
+                    || plugin.metadata.description.to_lowercase().contains(&search_term)
+                    || plugin.marketplace_info.tags.iter().any(|tag| tag.to_lowercase().contains(&search_term))
+            });
+        }
+        
+        // Apply category filter
+        if let Some(category) = &query.category {
+            results.retain(|plugin| plugin.marketplace_info.category == *category);
+        }
+        
+        // Apply free-only filter
+        if query.free_only {
+            results.retain(|plugin| plugin.licensing.is_free);
+        }
+        
+        // Apply verified-only filter
+        if query.verified_only {
+            results.retain(|plugin| plugin.marketplace_info.publisher.verified);
+        }
+        
+        // Apply minimum rating filter
+        if let Some(min_rating) = query.min_rating {
+            results.retain(|plugin| {
+                plugin.stats.rating.map(|r| r >= min_rating).unwrap_or(false)
+            });
+        }
+        
+        // Apply tag filters
+        if !query.tags.is_empty() {
+            results.retain(|plugin| {
+                query.tags.iter().any(|tag| {
+                    plugin.marketplace_info.tags.iter().any(|plugin_tag| {
+                        plugin_tag.to_lowercase() == tag.to_lowercase()
+                    })
+                })
+            });
+        }
+        
+        // Sort results
+        results.sort_by(|a, b| {
+            use crate::plugins::marketplace::SortOption;
+            match query.sort_by {
+                SortOption::Relevance => {
+                    // Simple relevance score based on downloads and rating
+                    let score_a = (a.stats.downloads as f32) * a.stats.rating.unwrap_or(0.0);
+                    let score_b = (b.stats.downloads as f32) * b.stats.rating.unwrap_or(0.0);
+                    score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+                }
+                SortOption::Downloads => b.stats.downloads.cmp(&a.stats.downloads),
+                SortOption::Rating => {
+                    let rating_a = a.stats.rating.unwrap_or(0.0);
+                    let rating_b = b.stats.rating.unwrap_or(0.0);
+                    rating_b.partial_cmp(&rating_a).unwrap_or(std::cmp::Ordering::Equal)
+                }
+                SortOption::Updated => b.marketplace_info.updated_at.cmp(&a.marketplace_info.updated_at),
+                SortOption::Name => a.metadata.name.cmp(&b.metadata.name),
+                SortOption::Price => {
+                    let price_a = a.licensing.pricing.as_ref().map(|p| p.base_price).unwrap_or(0);
+                    let price_b = b.licensing.pricing.as_ref().map(|p| p.base_price).unwrap_or(0);
+                    price_a.cmp(&price_b)
+                }
+            }
+        });
+        
+        // Apply pagination
+        let start = query.offset.unwrap_or(0);
+        let end = if let Some(limit) = query.limit {
+            std::cmp::min(start + limit, results.len())
+        } else {
+            results.len()
+        };
+        
+        if start >= results.len() {
+            Ok(vec![])
+        } else {
+            Ok(results[start..end].to_vec())
+        }
     }
 
     /// Get detailed information about a specific plugin
     pub async fn get_plugin(&self, plugin_id: &str) -> Result<MarketplacePlugin, PluginError> {
-        todo!("Implement plugin lookup")
+        let db = self.load_plugin_database()?;
+        db.plugins
+            .into_iter()
+            .find(|p| p.marketplace_info.plugin_id == plugin_id)
+            .ok_or_else(|| PluginError::LoadFailed(format!("Plugin not found: {}", plugin_id)))
     }
 
     /// Install a plugin from the marketplace
@@ -297,27 +386,165 @@ impl MarketplaceClient {
         version: Option<&str>,
         license_key: Option<&str>,
     ) -> Result<PluginInstallation, PluginError> {
-        todo!("Implement plugin installation")
+        // Load plugin metadata
+        let plugin = self.get_plugin(plugin_id).await?;
+        
+        // Version selection
+        let desired_version = version.unwrap_or(&plugin.metadata.version);
+        
+        // License handling (mock): if paid and no license key, error
+        if !plugin.licensing.is_free && license_key.is_none() {
+            return Err(PluginError::LoadFailed("License key required for paid plugin".into()));
+        }
+        
+        // Determine platform download URL (mock: we don't actually download)
+        let platform = self.get_current_platform();
+        let _url = plugin
+            .download
+            .urls
+            .get(&platform)
+            .cloned()
+            .ok_or_else(|| PluginError::LoadFailed(format!("No download available for platform {}", platform)))?;
+        
+        // Update installation DB
+        let mut db = self.load_installation_database()?;
+        let installation = PluginInstallation {
+            plugin_id: plugin_id.to_string(),
+            version: desired_version.to_string(),
+            installed_at: Utc::now(),
+            installation_source: InstallationSource::Marketplace { registry: "mock".into() },
+            license_info: license_key.map(|k| LicenseActivation {
+                license_key: k.to_string(),
+                activated_at: Utc::now(),
+                expires_at: None,
+                features: vec![],
+                max_activations: None,
+                current_activations: 1,
+            }),
+            auto_update: true,
+        };
+        db.installations.insert(plugin_id.to_string(), installation.clone());
+        self.save_installation_database(&db)?;
+        
+        Ok(installation)
     }
 
     /// Uninstall a plugin
     pub async fn uninstall_plugin(&mut self, plugin_id: &str) -> Result<(), PluginError> {
-        todo!("Implement plugin uninstallation")
+        let mut db = self.load_installation_database()?;
+        db.installations.remove(plugin_id);
+        self.save_installation_database(&db)?;
+        Ok(())
     }
 
     /// Update a plugin to the latest version
     pub async fn update_plugin(&mut self, plugin_id: &str) -> Result<(), PluginError> {
-        todo!("Implement plugin updates")
+        // Mock: simply set installed version to the latest in database
+        let plugin = self.get_plugin(plugin_id).await?;
+        let mut db = self.load_installation_database()?;
+        if let Some(inst) = db.installations.get_mut(plugin_id) {
+            // Compare versions; if newer, update
+            if Version::parse(&plugin.metadata.version).unwrap_or_else(|_| Version::new(0,0,0))
+                > Version::parse(&inst.version).unwrap_or_else(|_| Version::new(0,0,0))
+            {
+                inst.version = plugin.metadata.version.clone();
+                inst.installed_at = Utc::now();
+                self.save_installation_database(&db)?;
+            }
+        } else {
+            return Err(PluginError::LoadFailed("Plugin not installed".into()));
+        }
+        Ok(())
     }
 
     /// List installed plugins
-    pub fn list_installed(&self) -> Vec<&PluginInstallation> {
-        self.installations.values().collect()
+    pub fn list_installed(&self) -> Result<Vec<PluginInstallation>, PluginError> {
+        let db = self.load_installation_database()?;
+        Ok(db.installations.into_values().collect())
     }
 
     /// Check for available updates
     pub async fn check_updates(&self) -> Result<Vec<PluginUpdateInfo>, PluginError> {
-        todo!("Implement update checking")
+        let db = self.load_installation_database()?;
+        let plugin_db = self.load_plugin_database()?;
+        
+        let mut updates = Vec::new();
+        for (plugin_id, inst) in db.installations.iter() {
+            if let Some(plugin) = plugin_db.plugins.iter().find(|p| &p.marketplace_info.plugin_id == plugin_id) {
+                let current = Version::parse(&inst.version).unwrap_or_else(|_| Version::new(0,0,0));
+                let latest = Version::parse(&plugin.metadata.version).unwrap_or_else(|_| Version::new(0,0,0));
+                let update_available = latest > current;
+                updates.push(PluginUpdateInfo {
+                    plugin_id: plugin_id.clone(),
+                    current_version: inst.version.clone(),
+                    latest_version: plugin.metadata.version.clone(),
+                    update_available,
+                    breaking_changes: false,
+                    changelog: None,
+                });
+            }
+        }
+        Ok(updates)
+    }
+
+    fn get_mock_data_path(&self) -> PathBuf {
+        // Use mock_marketplace directory for development
+        PathBuf::from("mock_marketplace")
+    }
+
+    fn load_plugin_database(&self) -> Result<PluginDatabase, PluginError> {
+        let db_path = self.get_mock_data_path().join("plugins_database.json");
+        let content = fs::read_to_string(&db_path)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to read plugin database: {}", e)))?;
+        
+        serde_json::from_str(&content)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to parse plugin database: {}", e)))
+    }
+
+    fn load_installation_database(&self) -> Result<InstallationDatabase, PluginError> {
+        let db_path = self.get_mock_data_path().join("installations.json");
+        match fs::read_to_string(&db_path) {
+            Ok(content) => {
+                serde_json::from_str(&content)
+                    .map_err(|e| PluginError::LoadFailed(format!("Failed to parse installation database: {}", e)))
+            }
+            Err(_) => {
+                // Return empty database if file doesn't exist
+                Ok(InstallationDatabase {
+                    installations: HashMap::new(),
+                    last_update_check: Utc::now(),
+                })
+            }
+        }
+    }
+
+    fn save_installation_database(&self, db: &InstallationDatabase) -> Result<(), PluginError> {
+        let db_path = self.get_mock_data_path().join("installations.json");
+        
+        // Create directory if it doesn't exist
+        if let Some(parent) = db_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| PluginError::LoadFailed(format!("Failed to create directory: {}", e)))?;
+        }
+        
+        let content = serde_json::to_string_pretty(db)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to serialize installation database: {}", e)))?;
+        
+        fs::write(&db_path, content)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to write installation database: {}", e)))
+    }
+
+    fn get_current_platform(&self) -> String {
+        // Simple platform detection
+        if cfg!(target_os = "linux") {
+            "linux-x86_64".to_string()
+        } else if cfg!(target_os = "macos") {
+            "macos-x86_64".to_string()
+        } else if cfg!(target_os = "windows") {
+            "windows-x86_64".to_string()
+        } else {
+            "unknown".to_string()
+        }
     }
 }
 
@@ -330,3 +557,16 @@ pub struct PluginUpdateInfo {
     pub breaking_changes: bool,
     pub changelog: Option<String>,
 }
+
+/// Internal database structure for mock implementation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PluginDatabase {
+    pub plugins: Vec<MarketplacePlugin>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct InstallationDatabase {
+    pub installations: HashMap<String, PluginInstallation>,
+    pub last_update_check: DateTime<Utc>,
+}
+

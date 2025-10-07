@@ -134,6 +134,7 @@ struct InteractiveManager {
     ui_sender: mpsc::UnboundedSender<UIEvent>,
     command_sender: mpsc::UnboundedSender<String>,
     session_manager: Arc<RwLock<SessionManager>>,
+    agent_mode_enabled: Arc<RwLock<bool>>,
 }
 
 impl InteractiveManager {
@@ -154,6 +155,7 @@ impl InteractiveManager {
             ui_sender,
             command_sender,
             session_manager: Arc::new(RwLock::new(session_manager)),
+            agent_mode_enabled: Arc::new(RwLock::new(true)), // Default to enabled
         })
     }
 
@@ -162,7 +164,7 @@ impl InteractiveManager {
         &self,
         command: String,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        eprintln!("DEBUG: InteractiveManager::process_command called with: {}", command);
+        tracing::debug!("InteractiveManager::process_command called with: {}", command);
         
         // Add user input to session history
         let entry = ConversationEntry {
@@ -188,9 +190,34 @@ impl InteractiveManager {
         let response = if command.starts_with("/") {
             self.process_system_command(&command[1..]).await?
         } else {
-            // For now, use a simple fallback to test command processing
-            // TODO: Re-enable agent system when it's more stable
-            self.process_simple_response(&command).await
+            // Check if agent mode is enabled
+            let agent_mode = *self.agent_mode_enabled.read().await;
+            
+            if agent_mode {
+                // Try agent system first, fall back to simple response if unavailable
+                match self.process_natural_language_command(&command).await {
+                    Ok(agent_response) => agent_response,
+                    Err(_) => {
+                        // Agent system failed, use fallback
+                        let fallback = self.process_simple_response(&command).await;
+                        format!(
+                            "{}
+
+⚠️  Note: Agent system failed. Try /restart, /agents simple, or /status for more information.",
+                            fallback
+                        )
+                    }
+                }
+            } else {
+                // Agent mode disabled, use simple responses
+                let response = self.process_simple_response(&command).await;
+                format!(
+                    "{}
+
+💡 Agent mode is disabled. Use /agents enable to activate full natural language processing.",
+                    response
+                )
+            }
         };
 
         // Add response to session history
@@ -248,7 +275,40 @@ impl InteractiveManager {
         match *cmd {
             "help" => Ok(self.get_help_text()),
             "status" => Ok(self.get_status().await),
-            "agents" => Ok(self.list_agents().await),
+            "agents" => {
+                if let Some(subcommand) = parts.get(1) {
+                    match *subcommand {
+                        "enable" => {
+                            *self.agent_mode_enabled.write().await = true;
+                            Ok("✅ Agent mode enabled - natural language processing is now active".to_string())
+                        }
+                        "disable" | "simple" => {
+                            *self.agent_mode_enabled.write().await = false;
+                            Ok("⚠️ Agent mode disabled - using simple responses only".to_string())
+                        }
+                        "status" => {
+                            let enabled = *self.agent_mode_enabled.read().await;
+                            let agent_running = self.agent_system.is_running().await;
+                            let agents_info = self.agent_system.get_agents_info().await;
+                            
+                            Ok(format!(
+                                "🤖 Agent System Status:\n\n\
+                                Mode: {}\n\
+                                System Running: {}\n\
+                                Active Agents: {}\n\n\
+                                💡 Use '/agents enable/disable' to toggle mode",
+                                if enabled { "✅ Enabled (Natural Language)" } else { "⚠️ Disabled (Simple Responses)" },
+                                if agent_running { "✅ Running" } else { "❌ Stopped" },
+                                agents_info.len()
+                            ))
+                        }
+                        "list" | "info" => Ok(self.list_agents().await),
+                        _ => Ok("Usage: /agents [enable|disable|status|list|info]".to_string())
+                    }
+                } else {
+                    Ok(self.list_agents().await)
+                }
+            },
             "clear" => {
                 let _ = self.ui_sender.send(UIEvent::Output {
                     content: "\n\n\n\n\n\n\n\n\n\n".to_string(),
@@ -395,6 +455,9 @@ impl InteractiveManager {
                     Ok(msg) => Ok(format!("✅ {}", msg)),
                     Err(e) => Ok(format!("❌ Failed to restart agent system: {}", e))
                 }
+            }
+            "diagnose" | "diagnostic" => {
+                Ok(self.run_system_diagnostics().await)
             }
             "quit" | "exit" => {
                 let _ = self.ui_sender.send(UIEvent::Quit);
@@ -601,8 +664,13 @@ impl InteractiveManager {
 🤖 Agent & System:
   /status       - Show system status
   /agents       - List active agents and capabilities
+  /agents status - Show detailed agent system status and mode
+  /agents enable - Enable full natural language processing
+  /agents disable - Disable agents, use simple responses only
+  /agents list   - Show all available agents with capabilities
   /tasks        - Show active agent tasks
   /restart      - Restart the agent system (use if agents not working)
+  /diagnose     - Run comprehensive system diagnostics
   /config [key] [value] - Show or update configuration
 
 🎨 Interface:
@@ -612,13 +680,16 @@ impl InteractiveManager {
   /help         - Show this help message
   /quit         - Exit interactive mode
 
-💬 Natural Language Commands:
+💬 Natural Language Commands (when agent mode is enabled):
   - "generate a function to..."
   - "explain this code in the current file"
   - "optimize this algorithm"
   - "add tests for the main function"
   - "debug this compilation error"
   - "refactor this code to use better patterns"
+  - "create a REST API for user management"
+  - "how do I implement a binary search?"
+  - "what's wrong with this SQL query?"
 
 ⌨️  Tips:
   - Use Tab for command completion (enhanced with new features)
@@ -626,6 +697,9 @@ impl InteractiveManager {
   - Commands are case-insensitive
   - Multiple sessions allow parallel work on different projects
   - Bookmarks let you quickly return to important sessions
+  - If natural language isn't working, use /agents status to check mode
+  - Try /agents enable to activate full AI processing
+  - Use /agents disable if you want simple responses only
   - If you see "agent system not running" errors, try /restart
   - Use /status to check if agents are working properly"#
             .to_string()
@@ -706,6 +780,139 @@ impl InteractiveManager {
             "Agent system restarted successfully! {} agents are now active.",
             agents_info.len()
         ))
+    }
+
+    /// Run comprehensive system diagnostics
+    async fn run_system_diagnostics(&self) -> String {
+        let mut report = String::from("🔍 System Diagnostics Report\n\n");
+        
+        // Check agent mode
+        let agent_mode_enabled = *self.agent_mode_enabled.read().await;
+        report.push_str(&format!(
+            "🤖 Agent Mode: {}\n",
+            if agent_mode_enabled { "✅ Enabled" } else { "⚠️ Disabled" }
+        ));
+        
+        if !agent_mode_enabled {
+            report.push_str("   ⚠️  Natural language processing is disabled. Use '/agents enable' to activate.\n");
+        }
+        
+        // Check agent system status
+        let system_running = self.agent_system.is_running().await;
+        report.push_str(&format!(
+            "💻 Agent System: {}\n",
+            if system_running { "✅ Running" } else { "❌ Stopped" }
+        ));
+        
+        if !system_running {
+            report.push_str("   ❌ Agent system is not running. Try '/restart' to fix.\n");
+            report.push_str("   💡 This will prevent natural language processing from working.\n");
+        }
+        
+        // Check agents
+        let agents_info = self.agent_system.get_agents_info().await;
+        report.push_str(&format!(
+            "🤖 Available Agents: {} active\n",
+            agents_info.len()
+        ));
+        
+        if agents_info.is_empty() {
+            report.push_str("   ⚠️  No agents are currently registered.\n");
+            if system_running {
+                report.push_str("   💡 Try '/restart' to reinitialize agents.\n");
+            }
+        } else {
+            for agent in &agents_info {
+                let status_icon = match agent.status {
+                    crate::agents::AgentStatus::Idle => "✅",
+                    crate::agents::AgentStatus::Busy => "🟡",
+                    crate::agents::AgentStatus::Error { .. } => "❌",
+                    crate::agents::AgentStatus::Processing { .. } => "🔄",
+                    crate::agents::AgentStatus::ShuttingDown => "⏹️",
+                    crate::agents::AgentStatus::Offline => "⚫",
+                };
+                report.push_str(&format!(
+                    "   {} {} ({}): {:?}\n",
+                    status_icon, agent.name, agent.id, agent.status
+                ));
+            }
+        }
+        
+        // Check active tasks
+        let active_tasks = self.agent_system.get_active_tasks().await;
+        report.push_str(&format!(
+            "💼 Active Tasks: {}\n",
+            active_tasks.len()
+        ));
+        
+        if !active_tasks.is_empty() {
+            for task in active_tasks.iter().take(3) {
+                report.push_str(&format!(
+                    "   • {} ({})\n",
+                    task.id, task.status
+                ));
+            }
+            if active_tasks.len() > 3 {
+                report.push_str(&format!("   ... and {} more\n", active_tasks.len() - 3));
+            }
+        }
+        
+        // Check system health
+        report.push_str("\n🔍 Health Check:\n");
+        
+        let mut issues_found = 0;
+        let mut warnings_found = 0;
+        
+        if !system_running {
+            issues_found += 1;
+            report.push_str("❌ Agent system is not running\n");
+        }
+        
+        if !agent_mode_enabled {
+            warnings_found += 1;
+            report.push_str("⚠️  Agent mode is disabled\n");
+        }
+        
+        if agents_info.is_empty() && system_running {
+            issues_found += 1;
+            report.push_str("❌ No agents available despite system running\n");
+        }
+        
+        if issues_found == 0 && warnings_found == 0 {
+            report.push_str("✅ All systems operational!\n");
+        } else if issues_found == 0 {
+            report.push_str("🟡 System is working with minor warnings\n");
+        } else {
+            report.push_str("❌ Issues detected that may prevent proper functionality\n");
+        }
+        
+        // Recommendations
+        report.push_str("\n💡 Recommendations:\n");
+        
+        if !system_running {
+            report.push_str("• Run '/restart' to start the agent system\n");
+        }
+        
+        if !agent_mode_enabled {
+            report.push_str("• Run '/agents enable' to activate natural language processing\n");
+        }
+        
+        if agents_info.is_empty() && system_running {
+            report.push_str("• Run '/restart' to reinitialize agents\n");
+        }
+        
+        if system_running && agent_mode_enabled && !agents_info.is_empty() {
+            report.push_str("• Try a natural language command like 'explain how variables work in Rust'\n");
+            report.push_str("• Use '/help' to see available commands\n");
+            report.push_str("• Use '/agents status' for detailed agent information\n");
+        }
+        
+        report.push_str(&format!(
+            "\n📈 Summary: {} issues, {} warnings found",
+            issues_found, warnings_found
+        ));
+        
+        report
     }
 
     /// List files in the current directory
@@ -1174,13 +1381,13 @@ fn spawn_command_processor(
     mut command_rx: mpsc::UnboundedReceiver<String>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        eprintln!("DEBUG: Command processor started");
+        tracing::debug!("Command processor started");
         while let Some(command) = command_rx.recv().await {
-            eprintln!("DEBUG: Command processor received: {}", command);
+            tracing::debug!("Command processor received: {}", command);
             match manager.process_command(command.clone()).await {
-                Ok(_) => eprintln!("DEBUG: Command processed successfully: {}", command),
+                Ok(_) => tracing::debug!("Command processed successfully: {}", command),
                 Err(e) => {
-                    eprintln!("ERROR: Command processing failed for '{}': {}", command, e);
+                    tracing::error!("Command processing failed for '{}': {}", command, e);
                     // Send error to UI
                     let _ = manager.ui_sender.send(UIEvent::Output {
                         content: format!("Error processing command '{}': {}", command, e),
@@ -1189,6 +1396,6 @@ fn spawn_command_processor(
                 }
             }
         }
-        eprintln!("DEBUG: Command processor ended - channel closed");
+        tracing::debug!("Command processor ended - channel closed");
     })
 }

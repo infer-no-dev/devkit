@@ -36,7 +36,7 @@ pub use hotreload::{PluginHotReloader, HotReloadConfig, HotReloadStats, HotReloa
 pub use loader::{PluginLoader, PluginLoaderFactory, PluginType};
 pub use manager::PluginManager;
 pub use manifest::{PluginManifestParser, PluginManifest, ManifestValidationConfig, ManifestParseResult};
-pub use marketplace::{MarketplaceClient, MarketplaceConfig, MarketplacePlugin};
+pub use marketplace::{MarketplaceClient, MarketplaceConfig, MarketplacePlugin, PluginSearchQuery};
 pub use registry::{PluginRegistry, PluginRegistryEntry, PluginFilter};
 pub use sandbox::{PluginSandbox, SandboxConfig, ResourceUsage};
 pub use types::{
