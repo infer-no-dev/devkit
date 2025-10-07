@@ -3,14 +3,15 @@ use crate::cli::{session_manager::SessionManager, CliRunner, InteractiveArgs};
 use crate::interactive::{ConversationEntry, ConversationRole, EntryType, InteractiveSession};
 use crate::ui::notifications::Notification;
 use crate::ui::{Application, UIConfig, UIEvent};
+use crate::web::{WebServer, DashboardConfig};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::time::{interval, Duration};
 use uuid::Uuid;
 
 pub async fn run(
     runner: &mut CliRunner,
-    _args: InteractiveArgs,
+    args: InteractiveArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("Starting interactive mode...");
 
@@ -53,9 +54,50 @@ pub async fn run(
     // Create communication channels
     let (ui_tx, ui_rx) = mpsc::unbounded_channel::<UIEvent>();
     let (command_tx, command_rx) = mpsc::unbounded_channel::<String>();
+    let (web_event_tx, _web_event_rx) = broadcast::channel::<UIEvent>(1000);
 
     // Connect command sender to UI
     app.set_command_sender(command_tx.clone());
+
+    // Check if web dashboard is enabled (CLI arg overrides config)
+    let base_web_config = &runner.config_manager().config().web;
+    let web_enabled = args.web || base_web_config.enabled;
+    let web_host = args.web_host.as_deref().unwrap_or(&base_web_config.host);
+    let web_port = args.web_port.unwrap_or(base_web_config.port);
+    
+    let web_server_handle = if web_enabled {
+        runner.print_info(&format!("Starting web dashboard on {}:{}", web_host, web_port));
+        
+        // Convert config to DashboardConfig with CLI overrides
+        let dashboard_config = DashboardConfig {
+            enabled: web_enabled,
+            host: web_host.to_string(),
+            port: web_port,
+            cors_enabled: base_web_config.cors_enabled,
+            static_files_path: base_web_config.static_files_path.clone(),
+        };
+        
+        let web_server = WebServer::new(
+            dashboard_config,
+            web_event_tx.clone(),
+            command_tx.clone(),
+        );
+        
+        Some(tokio::spawn(async move {
+            if let Err(e) = web_server.start().await {
+                tracing::error!("Web server error: {}", e);
+            }
+        }))
+    } else {
+        None
+    };
+
+    // Store web event broadcaster for later use by the interactive manager
+    let web_event_broadcaster = if web_enabled {
+        Some(web_event_tx.clone())
+    } else {
+        None
+    };
 
     runner.print_info("Interactive mode initialized. Starting UI...");
 
@@ -90,6 +132,7 @@ pub async fn run(
         None, // TODO: Fix context manager integration
         ui_tx.clone(),
         command_tx,
+        web_event_broadcaster,
     );
 
     // Send welcome message to output panel
@@ -114,6 +157,12 @@ pub async fn run(
     // Cleanup background tasks
     agent_monitor.abort();
     command_processor.abort();
+    
+    // Cleanup web server if it was started
+    if let Some(web_handle) = web_server_handle {
+        web_handle.abort();
+        runner.print_info("Web server stopped");
+    }
 
     match ui_result {
         Ok(_) => {
@@ -135,6 +184,7 @@ struct InteractiveManager {
     command_sender: mpsc::UnboundedSender<String>,
     session_manager: Arc<RwLock<SessionManager>>,
     agent_mode_enabled: Arc<RwLock<bool>>,
+    web_event_sender: Option<broadcast::Sender<UIEvent>>,
 }
 
 impl InteractiveManager {
@@ -144,6 +194,7 @@ impl InteractiveManager {
         context_manager: Option<crate::context::ContextManager>,
         ui_sender: mpsc::UnboundedSender<UIEvent>,
         command_sender: mpsc::UnboundedSender<String>,
+        web_event_sender: Option<broadcast::Sender<UIEvent>>,
     ) -> Arc<Self> {
         let mut session_manager = SessionManager::new();
         let session_id = session_manager.create_session(session.project_path.clone());
@@ -156,7 +207,16 @@ impl InteractiveManager {
             command_sender,
             session_manager: Arc::new(RwLock::new(session_manager)),
             agent_mode_enabled: Arc::new(RwLock::new(true)), // Default to enabled
+            web_event_sender,
         })
+    }
+
+    /// Send event to both UI and web dashboard
+    fn send_event(&self, event: UIEvent) {
+        let _ = self.ui_sender.send(event.clone());
+        if let Some(web_sender) = &self.web_event_sender {
+            let _ = web_sender.send(event);
+        }
     }
 
     /// Process a user command
@@ -180,8 +240,8 @@ impl InteractiveManager {
             session.add_history_entry(entry);
         }
 
-        // Send user input to UI
-        let _ = self.ui_sender.send(UIEvent::Output {
+        // Send user input to UI and web
+        self.send_event(UIEvent::Output {
             content: command.clone(),
             block_type: "user".to_string(),
         });
@@ -234,8 +294,8 @@ impl InteractiveManager {
             session.add_history_entry(response_entry);
         }
 
-        // Send response to UI
-        let _ = self.ui_sender.send(UIEvent::Output {
+        // Send response to UI and web
+        self.send_event(UIEvent::Output {
             content: response,
             block_type: "agent".to_string(),
         });
@@ -310,10 +370,7 @@ impl InteractiveManager {
                 }
             },
             "clear" => {
-                let _ = self.ui_sender.send(UIEvent::Output {
-                    content: "\n\n\n\n\n\n\n\n\n\n".to_string(),
-                    block_type: "system".to_string(),
-                });
+                self.send_event(UIEvent::ClearOutput);
                 Ok("Screen cleared".to_string())
             }
             "save" => {
@@ -366,9 +423,7 @@ impl InteractiveManager {
             }
             "theme" => {
                 if let Some(theme_name) = parts.get(1) {
-                    let _ = self
-                        .ui_sender
-                        .send(UIEvent::SwitchTheme(theme_name.to_string()));
+                    self.send_event(UIEvent::SwitchTheme(theme_name.to_string()));
                     Ok(format!("Switched to {} theme", theme_name))
                 } else {
                     Ok("Available themes: dark, light, blue, green".to_string())
@@ -430,21 +485,19 @@ impl InteractiveManager {
             },
             "layout" => match parts.get(1).map(|&s| s) {
                 Some("single") => {
-                    let _ = self
-                        .ui_sender
-                        .send(UIEvent::SetLayout("single".to_string()));
+                    self.send_event(UIEvent::SetLayout("single".to_string()));
                     Ok("Switched to single panel layout".to_string())
                 }
                 Some("split") => {
-                    let _ = self.ui_sender.send(UIEvent::SetLayout("split".to_string()));
+                    self.send_event(UIEvent::SetLayout("split".to_string()));
                     Ok("Switched to split panel layout".to_string())
                 }
                 Some("three") => {
-                    let _ = self.ui_sender.send(UIEvent::SetLayout("three".to_string()));
+                    self.send_event(UIEvent::SetLayout("three".to_string()));
                     Ok("Switched to three panel layout".to_string())
                 }
                 Some("quad") => {
-                    let _ = self.ui_sender.send(UIEvent::SetLayout("quad".to_string()));
+                    self.send_event(UIEvent::SetLayout("quad".to_string()));
                     Ok("Switched to quad panel layout".to_string())
                 }
                 _ => Ok("Available layouts: single, split, three, quad".to_string()),
@@ -460,7 +513,7 @@ impl InteractiveManager {
                 Ok(self.run_system_diagnostics().await)
             }
             "quit" | "exit" => {
-                let _ = self.ui_sender.send(UIEvent::Quit);
+                self.send_event(UIEvent::Quit);
                 Ok("Goodbye!".to_string())
             }
             _ => Ok(format!(
@@ -586,12 +639,12 @@ impl InteractiveManager {
 
         // Send task to agent system with timeout
         let task_future = self.agent_system.submit_task(task);
-        let timeout_duration = std::time::Duration::from_secs(30); // 30 second timeout
+        let timeout_duration = std::time::Duration::from_secs(600); // 10 minute timeout for code generation
         
         match tokio::time::timeout(timeout_duration, task_future).await {
             Ok(Ok(result)) => {
-                // Send agent status update to UI
-                let _ = self.ui_sender.send(UIEvent::AgentStatusUpdate {
+                // Send agent status update to UI and web
+                self.send_event(UIEvent::AgentStatusUpdate {
                     agent_name: "Processing".to_string(),
                     status: crate::agents::AgentStatus::Idle,
                     task: None,
@@ -623,7 +676,7 @@ impl InteractiveManager {
             Err(_) => {
                 // Timeout occurred
                 Ok(format!(
-                    "⏱️ Agent processing timed out after 30 seconds.
+                    "⏱️ Agent processing timed out after 10 minutes.
 
 💡 Possible causes:
 • Agent system is overloaded or stuck
@@ -679,6 +732,12 @@ impl InteractiveManager {
   /layout [type] - Change layout (single/split/three/quad)
   /help         - Show this help message
   /quit         - Exit interactive mode
+
+🌐 Web Dashboard:
+  DevKit also supports a web dashboard for browser-based interaction.
+  • Use --web flag to enable: devkit interactive --web
+  • Specify port: devkit interactive --web --web-port 3000
+  • Or enable in config: devkit config set web.enabled true
 
 💬 Natural Language Commands (when agent mode is enabled):
   - "generate a function to..."
