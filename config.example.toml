@@ -1,0 +1,98 @@
+# DevKit Configuration Example
+# Copy this file to config.toml and customize as needed
+# 
+# This example shows optimized timeout settings for interactive code generation
+
+[general]
+workspace_path = "/path/to/your/workspace"  # Set your workspace path
+log_level = "info"
+auto_save = true
+backup_enabled = true
+telemetry_enabled = false
+
+[agents]
+max_concurrent_agents = 5
+# Timeout for agent tasks - increased to 10 minutes for complex code generation
+agent_timeout_seconds = 600
+default_agent_priority = "normal"
+
+[agents.notification_settings]
+enabled = true
+sound_enabled = false
+desktop_notifications = true
+auto_dismiss_timeout = 5000
+
+[codegen]
+[codegen.default_style]
+indentation = "spaces"
+indent_size = 4
+line_length = 100
+naming_convention = "snake_case"
+include_comments = true
+include_type_hints = true
+
+[codegen.ai_model_settings]
+default_provider = "ollama"
+default_model = "llama3.2:latest"
+context_window_size = 32768
+temperature = 0.7
+max_tokens = 4000
+
+[codegen.ai_model_settings.ollama]
+endpoint = "http://localhost:11434"
+# AI model timeout - increased to 10 minutes for complex generation tasks
+timeout_seconds = 600
+max_retries = 3
+default_model = "llama3.2:latest"
+
+[shell]
+preferred_shell = "bash"
+# Shell command timeout - increased to 2 minutes for intensive operations
+command_timeout = 120
+history_enabled = true
+
+[ui]
+theme = "default"
+color_scheme = "dark"
+font_size = 14
+show_line_numbers = true
+show_timestamps = true
+auto_scroll = true
+
+[ui.panel_layout]
+output_panel_percentage = 70
+agent_panel_percentage = 30
+notification_panel_height = 5
+input_panel_height = 3
+
+[web]
+enabled = false  # Set to true to enable web dashboard
+host = "127.0.0.1"
+port = 8080
+cors_enabled = true
+auth_enabled = false
+session_timeout_minutes = 60
+
+[logging]
+min_level = "info"
+include_location = false
+include_thread_info = true
+capture_metrics = true
+buffer_size = 1000
+flush_timeout_ms = 5000
+environment = "development"
+
+# Keybindings
+[keybindings]
+quit = "q"
+input_mode = "i"
+command_mode = ":"
+scroll_up = "k"
+scroll_down = "j"
+page_up = "u"
+page_down = "d"
+agent_view = "a"
+settings = "s"
+escape = "Esc"
+enter = "Enter"
+backspace = "Backspace"
