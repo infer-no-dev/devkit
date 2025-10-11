@@ -449,6 +449,7 @@ impl BlockCollection {
         f: &mut ratatui::Frame,
         area: ratatui::layout::Rect,
         theme: &crate::ui::themes::Theme,
+        is_focused: bool,
     ) {
         use ratatui::widgets::{Block, Borders, Paragraph, Wrap, Scrollbar, ScrollbarOrientation, ScrollbarState};
         use ratatui::text::Text;
@@ -496,7 +497,7 @@ impl BlockCollection {
 
         let text = Text::from(visible_lines);
         
-        // Create title with scroll information
+        // Create title with scroll information and focus indicator
         let scroll_info = if total_lines > content_height {
             format!(" ({}/{}) {}", 
                 start_line + 1, 
@@ -507,7 +508,8 @@ impl BlockCollection {
             String::new()
         };
         
-        let title = format!("Output ({}){}", self.blocks.len(), scroll_info);
+        let focus_indicator = if is_focused { " [FOCUSED]" } else { "" };
+        let title = format!("Output ({}){}{}", self.blocks.len(), scroll_info, focus_indicator);
         
         // Split area to make room for scrollbar if needed
         let show_scrollbar = total_lines > content_height;
@@ -526,7 +528,7 @@ impl BlockCollection {
                 Block::default()
                     .borders(Borders::ALL)
                     .title(title)
-                    .style(theme.border_style()),
+                    .style(theme.panel_border_style(is_focused)),
             )
             .wrap(Wrap { trim: true })
             .style(theme.primary_style());

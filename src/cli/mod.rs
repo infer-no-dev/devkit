@@ -179,6 +179,18 @@ pub struct InteractiveArgs {
     /// Monitor mode (read-only)
     #[arg(short, long)]
     pub monitor: bool,
+
+    /// Enable web dashboard
+    #[arg(short, long)]
+    pub web: bool,
+
+    /// Web dashboard port (default: 8080)
+    #[arg(long)]
+    pub web_port: Option<u16>,
+
+    /// Web dashboard host (default: 127.0.0.1)
+    #[arg(long)]
+    pub web_host: Option<String>,
 }
 
 /// Code analysis arguments

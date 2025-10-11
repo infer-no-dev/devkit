@@ -576,7 +576,7 @@ impl InputHandler {
     }
 
     /// Render the input area
-    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme, current_mode: &KeyContext) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme, current_mode: &KeyContext, is_focused: bool) {
         let input_style = theme.input_style();
         let cursor_style = theme.input_cursor_style();
 
@@ -622,15 +622,17 @@ impl InputHandler {
             .style(input_style)
             .wrap(Wrap { trim: false });
 
-        // Draw the input area with a border
+        // Draw the input area with a border and focus-aware styling
+        let title = match current_mode {
+            KeyContext::Input => if is_focused { "Input [FOCUSED]" } else { "Input" },
+            KeyContext::Command => if is_focused { "Command [FOCUSED]" } else { "Command" },
+            _ => if is_focused { "Input [FOCUSED]" } else { "Input" },
+        };
+        
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(match current_mode {
-                KeyContext::Input => "Input",
-                KeyContext::Command => "Command",
-                _ => "Input",
-            })
-            .style(theme.border_style());
+            .title(title)
+            .style(theme.panel_border_style(is_focused));
 
         let inner_area = block.inner(area);
         f.render_widget(block, area);

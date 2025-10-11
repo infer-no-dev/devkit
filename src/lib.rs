@@ -19,6 +19,7 @@ pub mod services;
 pub mod shell;
 pub mod system_bus;
 pub mod ui;
+pub mod web;
 
 #[cfg(test)]
 pub mod testing;

@@ -238,11 +238,12 @@ fn test_ui_event_types() {
             content: "output".to_string(),
             block_type: "user".to_string(),
         },
+        UIEvent::ClearOutput,
         UIEvent::ToggleHelp,
         UIEvent::SwitchTheme("Dark".to_string()),
     ];
     
-    assert_eq!(events.len(), 7);
+    assert_eq!(events.len(), 8);
     
     // Test event matching
     match &events[0] {
@@ -316,4 +317,38 @@ fn test_block_filtering_with_metadata() {
     let filtered = collection.get_filtered_blocks(&filter);
     assert_eq!(filtered.len(), 1);
     assert_eq!(filtered[0].content, "Message 1");
+}
+
+#[test]
+fn test_clear_output_functionality() {
+    let mut collection = BlockCollection::new(10);
+    
+    // Add some blocks
+    collection.add_user_input("User input 1");
+    collection.add_agent_response("Agent response 1");
+    collection.add_system_message("System message 1");
+    
+    // Verify blocks were added
+    assert_eq!(collection.len(), 3);
+    assert!(!collection.is_empty());
+    
+    // Clear the collection
+    collection.clear();
+    
+    // Verify all blocks are cleared
+    assert_eq!(collection.len(), 0);
+    assert!(collection.is_empty());
+    assert_eq!(collection.get_blocks().len(), 0);
+}
+
+#[test]
+fn test_clear_output_ui_event() {
+    // Test that ClearOutput event variant exists and can be created
+    let clear_event = UIEvent::ClearOutput;
+    
+    // Test pattern matching
+    match clear_event {
+        UIEvent::ClearOutput => assert!(true),
+        _ => panic!("Expected ClearOutput event"),
+    }
 }

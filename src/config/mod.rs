@@ -20,6 +20,7 @@ pub struct Config {
     pub codegen: CodegenConfig,
     pub shell: ShellConfig,
     pub ui: UIConfig,
+    pub web: WebConfig,
     pub logging: crate::logging::LogConfig,
     pub keybindings: HashMap<String, String>,
 }
@@ -160,6 +161,19 @@ pub struct PanelLayoutConfig {
     pub agent_panel_percentage: u16,
     pub notification_panel_height: u16,
     pub input_panel_height: u16,
+}
+
+/// Web dashboard configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebConfig {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    pub cors_enabled: bool,
+    pub static_files_path: Option<String>,
+    pub auth_enabled: bool,
+    pub auth_token: Option<String>,
+    pub session_timeout_minutes: u32,
 }
 
 /// Configuration manager with enhanced features
@@ -728,9 +742,16 @@ impl ConfigManager {
 
 impl Default for Config {
     fn default() -> Self {
-        // Use intelligent system-aware defaults
-        let system_defaults = defaults::SystemDefaults::detect();
-        system_defaults.generate_config()
+        Self {
+            general: GeneralConfig::default(),
+            agents: AgentConfig::default(),
+            codegen: CodegenConfig::default(),
+            shell: ShellConfig::default(),
+            ui: UIConfig::default(),
+            web: WebConfig::default(),
+            logging: crate::logging::LogConfig::default(),
+            keybindings: default_keybindings(),
+        }
     }
 }
 
@@ -852,6 +873,21 @@ impl Default for PanelLayoutConfig {
             agent_panel_percentage: 30,
             notification_panel_height: 5,
             input_panel_height: 3,
+        }
+    }
+}
+
+impl Default for WebConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            cors_enabled: true,
+            static_files_path: None,
+            auth_enabled: false,
+            auth_token: None,
+            session_timeout_minutes: 60,
         }
     }
 }

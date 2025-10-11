@@ -16,6 +16,7 @@ mod logging;
 mod plugins;
 mod shell;
 mod ui;
+mod web;
 
 #[cfg(test)]
 mod testing;

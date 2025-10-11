@@ -45,6 +45,7 @@ impl SystemDefaults {
             codegen: self.generate_codegen_config(),
             shell: self.generate_shell_config(),
             ui: self.generate_ui_config(),
+            web: WebConfig::default(),
             logging: self.generate_logging_config(),
             keybindings: self.generate_keybindings(),
         }

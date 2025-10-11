@@ -15,18 +15,24 @@ use std::io::{stdout, Stdout};
 use std::time::{Duration, Instant};
 use tokio::time::interval;
 pub mod blocks;
+pub mod enhanced_panels;
+pub mod error_handler;
 pub mod input;
 pub mod keybindings;
 pub mod notifications;
 pub mod panels;
+pub mod progress;
 pub mod syntax;
 pub mod themes;
 
 use crate::agents::{AgentStatus, TaskPriority};
+use enhanced_panels::EnhancedPanelManager;
+use error_handler::UIErrorHandler;
 use input::InputHandler;
 use keybindings::{Action, KeyBindings, KeyContext, KeybindingManager};
 use notifications::Notification;
 use panels::{AgentDisplayInfo, PanelManager, PanelType};
+use progress::ProgressManager;
 use themes::{Theme, ThemeManager};
 
 /// UI configuration
@@ -55,12 +61,17 @@ pub struct Application {
     terminal: Terminal<CrosstermBackend<Stdout>>,
     theme_manager: ThemeManager,
     panel_manager: PanelManager,
+    enhanced_panel_manager: EnhancedPanelManager,
+    error_handler: UIErrorHandler,
+    progress_manager: ProgressManager,
     input_handler: InputHandler,
     keybinding_manager: KeybindingManager,
     config: UIConfig,
     running: bool,
     last_tick: Instant,
     command_sender: Option<tokio::sync::mpsc::UnboundedSender<String>>,
+    notification_sender: tokio::sync::mpsc::UnboundedSender<Notification>,
+    notification_receiver: tokio::sync::mpsc::UnboundedReceiver<Notification>,
 }
 
 /// UI events that can be sent to the application
@@ -80,6 +91,7 @@ pub enum UIEvent {
         content: String,
         block_type: String,
     },
+    ClearOutput,
     ToggleHelp,
     SwitchTheme(String),
     SetLayout(String),
@@ -127,16 +139,32 @@ impl Application {
             );
         }
 
+        // Create notification channel
+        let (notification_tx, notification_rx) = tokio::sync::mpsc::unbounded_channel();
+        
+        // Initialize enhanced components
+        let mut enhanced_panel_manager = EnhancedPanelManager::new();
+        let error_handler = UIErrorHandler::new(notification_tx.clone());
+        let progress_manager = ProgressManager::new();
+        
+        // Set up component relationships
+        enhanced_panel_manager.set_notification_sender(notification_tx.clone());
+
         Ok(Self {
             terminal,
             theme_manager,
             panel_manager: PanelManager::new(),
+            enhanced_panel_manager,
+            error_handler,
+            progress_manager,
             input_handler: InputHandler::new(KeyBindings::default()),
             keybinding_manager: KeybindingManager::new(),
             config,
             running: true,
             last_tick: Instant::now(),
             command_sender: None,
+            notification_sender: notification_tx,
+            notification_receiver: notification_rx,
         })
     }
 
@@ -503,13 +531,20 @@ impl Application {
             .split(main_area);
 
         let mut chunk_idx = 0;
+        
+        // Collect focus information before any mutable borrows
+        let current_focus = panel_manager.get_focus().cloned();
+        let agent_focused = current_focus == Some(PanelType::AgentStatus);
+        let notification_focused = current_focus == Some(PanelType::Notifications);
+        let output_focused = current_focus == Some(PanelType::Output);
+        let input_focused = current_focus == Some(PanelType::Input);
 
         // Render agent status panel if visible
         if let Some(layout) = panel_manager.get_panel_layout(&PanelType::AgentStatus) {
             if layout.visible && chunk_idx < chunks.len() {
                 panel_manager
                     .agent_panel()
-                    .render(f, chunks[chunk_idx], theme);
+                    .render(f, chunks[chunk_idx], theme, agent_focused);
                 chunk_idx += 1;
             }
         }
@@ -519,7 +554,7 @@ impl Application {
             if layout.visible && chunk_idx < chunks.len() {
                 panel_manager
                     .notification_panel()
-                    .render(f, chunks[chunk_idx], theme);
+                    .render(f, chunks[chunk_idx], theme, notification_focused);
                 chunk_idx += 1;
             }
         }
@@ -529,7 +564,7 @@ impl Application {
             if layout.visible && chunk_idx < chunks.len() {
                 panel_manager
                     .output_blocks()
-                    .render(f, chunks[chunk_idx], theme);
+                    .render(f, chunks[chunk_idx], theme, output_focused);
                 chunk_idx += 1;
             }
         }
@@ -537,7 +572,7 @@ impl Application {
         // Render input panel if visible
         if let Some(layout) = panel_manager.get_panel_layout(&PanelType::Input) {
             if layout.visible && chunk_idx < chunks.len() {
-                input_handler.render(f, chunks[chunk_idx], theme, input_handler.current_context());
+                input_handler.render(f, chunks[chunk_idx], theme, input_handler.current_context(), input_focused);
             }
         }
 
@@ -601,6 +636,9 @@ impl Application {
                         .output_blocks()
                         .add_system_message(&content),
                 };
+            },
+            UIEvent::ClearOutput => {
+                self.panel_manager.output_blocks().clear();
             },
             UIEvent::ToggleHelp => {
                 self.panel_manager.toggle_help();

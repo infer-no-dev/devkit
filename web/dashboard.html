@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevKit Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --bg-accent: #3d3d3d;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --border-color: #404040;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --error-color: #dc3545;
+            --info-color: #17a2b8;
+            --agent-color: #6f42c1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background-color: var(--bg-secondary);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header h1 {
+            color: var(--text-primary);
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            height: calc(100vh - 80px);
+        }
+
+        .panel {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel h2 {
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .system-stats {
+            grid-column: 1 / -1;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-card {
+            background-color: var(--bg-accent);
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid var(--info-color);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .agents-panel {
+            grid-column: 1;
+            grid-row: 2 / 4;
+        }
+
+        .output-panel {
+            grid-column: 2;
+            grid-row: 2 / 4;
+        }
+
+        .scrollable-content {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 100%;
+        }
+
+        .agent-item, .output-item, .notification-item {
+            background-color: var(--bg-accent);
+            margin-bottom: 0.5rem;
+            padding: 0.75rem;
+            border-radius: 6px;
+            border-left: 4px solid var(--info-color);
+        }
+
+        .agent-item.active {
+            border-left-color: var(--success-color);
+        }
+
+        .agent-item.inactive {
+            border-left-color: var(--text-secondary);
+        }
+
+        .agent-name {
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .agent-status {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .output-item.user {
+            border-left-color: var(--info-color);
+        }
+
+        .output-item.agent {
+            border-left-color: var(--agent-color);
+        }
+
+        .output-item.system {
+            border-left-color: var(--warning-color);
+        }
+
+        .output-item.error {
+            border-left-color: var(--error-color);
+        }
+
+        .output-content {
+            font-family: 'Consolas', monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .timestamp {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            opacity: 0.7;
+        }
+
+        .command-input {
+            position: fixed;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .command-input input {
+            flex: 1;
+            background-color: var(--bg-accent);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.5rem;
+            color: var(--text-primary);
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+
+        .command-input input:focus {
+            outline: none;
+            border-color: var(--info-color);
+        }
+
+        .command-input button {
+            background-color: var(--info-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background-color 0.2s;
+        }
+
+        .command-input button:hover {
+            background-color: #138496;
+        }
+
+        .clear-button {
+            background-color: var(--warning-color);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: auto;
+            margin-bottom: 0.5rem;
+        }
+
+        .clear-button:hover {
+            background-color: #e0a800;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            z-index: 1000;
+        }
+
+        .connection-status.connected {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .connection-status.disconnected {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 2rem;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                padding-bottom: 100px;
+            }
+
+            .system-stats {
+                grid-column: 1;
+            }
+
+            .agents-panel, .output-panel {
+                grid-column: 1;
+                grid-row: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛠️ DevKit Dashboard</h1>
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span>System Active</span>
+        </div>
+    </div>
+
+    <div class="connection-status" id="connectionStatus">Connecting...</div>
+
+    <div class="main-content">
+        <div class="panel system-stats">
+            <h2>📊 System Overview</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="agentsCount">0</div>
+                    <div class="stat-label">Active Agents</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="outputCount">0</div>
+                    <div class="stat-label">Output Blocks</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="notificationCount">0</div>
+                    <div class="stat-label">Notifications</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="version">v0.1.0</div>
+                    <div class="stat-label">DevKit Version</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel agents-panel">
+            <h2>🤖 Agents</h2>
+            <div class="scrollable-content" id="agentsContent">
+                <div class="empty-state">No agents active</div>
+            </div>
+        </div>
+
+        <div class="panel output-panel">
+            <h2>📝 Output</h2>
+            <button class="clear-button" onclick="clearOutput()">Clear Output</button>
+            <div class="scrollable-content" id="outputContent">
+                <div class="empty-state">No output yet</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="command-input">
+        <input type="text" id="commandInput" placeholder="Enter command..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendCommand()">Send</button>
+    </div>
+
+    <script>
+        class DevKitDashboard {
+            constructor() {
+                this.ws = null;
+                this.reconnectInterval = null;
+                this.agents = new Map();
+                this.outputBlocks = [];
+                this.notifications = [];
+                this.init();
+            }
+
+            init() {
+                this.connectWebSocket();
+                this.setupEventListeners();
+                this.fetchInitialData();
+            }
+
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                
+                this.ws = new WebSocket(wsUrl);
+                
+                this.ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    this.updateConnectionStatus('connected');
+                    this.clearReconnectInterval();
+                };
+                
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleWebSocketMessage(data);
+                };
+                
+                this.ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    this.updateConnectionStatus('disconnected');
+                    this.scheduleReconnect();
+                };
+                
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    this.updateConnectionStatus('disconnected');
+                };
+            }
+
+            scheduleReconnect() {
+                if (!this.reconnectInterval) {
+                    this.reconnectInterval = setInterval(() => {
+                        console.log('Attempting to reconnect WebSocket...');
+                        this.connectWebSocket();
+                    }, 3000);
+                }
+            }
+
+            clearReconnectInterval() {
+                if (this.reconnectInterval) {
+                    clearInterval(this.reconnectInterval);
+                    this.reconnectInterval = null;
+                }
+            }
+
+            updateConnectionStatus(status) {
+                const statusEl = document.getElementById('connectionStatus');
+                statusEl.className = `connection-status ${status}`;
+                statusEl.textContent = status === 'connected' ? 'Connected' : 'Disconnected';
+            }
+
+            handleWebSocketMessage(data) {
+                switch (data.type) {
+                    case 'initial_state':
+                        this.handleInitialState(data.data);
+                        break;
+                    case 'agent_status_update':
+                        this.handleAgentUpdate(data.data);
+                        break;
+                    case 'output':
+                        this.handleOutput(data.data);
+                        break;
+                    case 'clear_output':
+                        this.handleClearOutput();
+                        break;
+                    case 'notification':
+                        this.handleNotification(data.data);
+                        break;
+                    default:
+                        console.log('Unknown message type:', data.type);
+                }
+            }
+
+            handleInitialState(data) {
+                document.getElementById('agentsCount').textContent = data.agents || 0;
+                document.getElementById('outputCount').textContent = data.output_blocks || 0;
+                document.getElementById('notificationCount').textContent = data.notifications || 0;
+                document.getElementById('version').textContent = data.version || 'v0.1.0';
+            }
+
+            handleAgentUpdate(data) {
+                this.agents.set(data.agent_name, data);
+                this.renderAgents();
+                this.updateStats();
+            }
+
+            handleOutput(data) {
+                this.outputBlocks.push({
+                    content: data.content,
+                    block_type: data.block_type,
+                    timestamp: data.timestamp || Date.now() / 1000,
+                    id: Date.now() + Math.random()
+                });
+                
+                // Keep only the last 100 output blocks
+                if (this.outputBlocks.length > 100) {
+                    this.outputBlocks = this.outputBlocks.slice(-100);
+                }
+                
+                this.renderOutput();
+                this.updateStats();
+            }
+
+            handleClearOutput() {
+                this.outputBlocks = [];
+                this.renderOutput();
+                this.updateStats();
+            }
+
+            handleNotification(data) {
+                this.notifications.unshift(data);
+                
+                // Keep only the last 50 notifications
+                if (this.notifications.length > 50) {
+                    this.notifications = this.notifications.slice(0, 50);
+                }
+                
+                this.updateStats();
+                
+                // Show a brief visual notification
+                this.showBriefNotification(data);
+            }
+
+            renderAgents() {
+                const container = document.getElementById('agentsContent');
+                
+                if (this.agents.size === 0) {
+                    container.innerHTML = '<div class="empty-state">No agents active</div>';
+                    return;
+                }
+
+                const agentsHtml = Array.from(this.agents.entries()).map(([name, agent]) => `
+                    <div class="agent-item ${agent.status.toLowerCase()}">
+                        <div class="agent-name">${name}</div>
+                        <div class="agent-status">
+                            Status: ${agent.status}
+                            ${agent.task ? `<br>Task: ${agent.task}` : ''}
+                            ${agent.progress ? `<br>Progress: ${Math.round(agent.progress * 100)}%` : ''}
+                        </div>
+                    </div>
+                `).join('');
+
+                container.innerHTML = agentsHtml;
+            }
+
+            renderOutput() {
+                const container = document.getElementById('outputContent');
+                
+                if (this.outputBlocks.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No output yet</div>';
+                    return;
+                }
+
+                const outputHtml = this.outputBlocks.map(block => {
+                    const typeClass = block.block_type.toLowerCase();
+                    const timestamp = new Date(block.timestamp * 1000).toLocaleTimeString();
+                    
+                    return `
+                        <div class="output-item ${typeClass}">
+                            <div class="output-content">${this.escapeHtml(block.content)}</div>
+                            <div class="timestamp">${timestamp} - ${block.block_type}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.innerHTML = outputHtml;
+                container.scrollTop = container.scrollHeight;
+            }
+
+            updateStats() {
+                document.getElementById('agentsCount').textContent = this.agents.size;
+                document.getElementById('outputCount').textContent = this.outputBlocks.length;
+                document.getElementById('notificationCount').textContent = this.notifications.length;
+            }
+
+            async fetchInitialData() {
+                try {
+                    // Fetch system status
+                    const statusResponse = await fetch('/api/status');
+                    if (statusResponse.ok) {
+                        const status = await statusResponse.json();
+                        this.handleInitialState(status);
+                    }
+
+                    // Fetch agents
+                    const agentsResponse = await fetch('/api/agents');
+                    if (agentsResponse.ok) {
+                        const agents = await agentsResponse.json();
+                        agents.forEach(agent => {
+                            this.agents.set(agent.name, agent);
+                        });
+                        this.renderAgents();
+                    }
+
+                    // Fetch recent output
+                    const outputResponse = await fetch('/api/output?limit=50');
+                    if (outputResponse.ok) {
+                        const output = await outputResponse.json();
+                        this.outputBlocks = output.map(block => ({
+                            content: block.content,
+                            block_type: block.block_type,
+                            timestamp: block.timestamp,
+                            id: block.id
+                        }));
+                        this.renderOutput();
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch initial data:', error);
+                }
+            }
+
+            sendCommand(command) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'command',
+                        command: command
+                    }));
+                } else {
+                    // Fallback to HTTP API
+                    fetch('/api/command', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ command })
+                    }).catch(error => {
+                        console.error('Failed to send command:', error);
+                    });
+                }
+            }
+
+            setupEventListeners() {
+                // Handle command input
+                document.getElementById('commandInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.handleSendCommand();
+                    }
+                });
+            }
+
+            handleSendCommand() {
+                const input = document.getElementById('commandInput');
+                const command = input.value.trim();
+                
+                if (command) {
+                    this.sendCommand(command);
+                    input.value = '';
+                }
+            }
+
+            async clearOutput() {
+                try {
+                    const response = await fetch('/api/output/clear', { method: 'POST' });
+                    if (!response.ok) {
+                        console.error('Failed to clear output');
+                    }
+                } catch (error) {
+                    console.error('Failed to clear output:', error);
+                }
+            }
+
+            showBriefNotification(notification) {
+                // Create a temporary notification element
+                const notifEl = document.createElement('div');
+                notifEl.style.cssText = `
+                    position: fixed;
+                    top: 5rem;
+                    right: 1rem;
+                    background-color: var(--info-color);
+                    color: white;
+                    padding: 1rem;
+                    border-radius: 4px;
+                    z-index: 1001;
+                    max-width: 300px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                `;
+                notifEl.innerHTML = `
+                    <strong>${this.escapeHtml(notification.title)}</strong><br>
+                    <small>${this.escapeHtml(notification.message)}</small>
+                `;
+                
+                document.body.appendChild(notifEl);
+                
+                // Remove after 3 seconds
+                setTimeout(() => {
+                    if (document.body.contains(notifEl)) {
+                        document.body.removeChild(notifEl);
+                    }
+                }, 3000);
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // Global functions for HTML event handlers
+        let dashboard;
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendCommand();
+            }
+        }
+
+        function sendCommand() {
+            dashboard.handleSendCommand();
+        }
+
+        function clearOutput() {
+            dashboard.clearOutput();
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            dashboard = new DevKitDashboard();
+        });
+    </script>
+</body>
+</html>

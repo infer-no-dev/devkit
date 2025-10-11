@@ -405,7 +405,7 @@ impl NotificationPanel {
     }
 
     /// Render the notification panel
-    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme, is_focused: bool) {
         // Get notifications to display based on filters
         let notifications_to_show: Vec<&Notification> = self
             .notifications
@@ -429,12 +429,18 @@ impl NotificationPanel {
             })
             .collect();
 
-        // Create the notification list
+        // Create the notification list with focus-aware styling
+        let title = if is_focused {
+            format!("Notifications ({}) [FOCUSED]", self.notifications.len())
+        } else {
+            format!("Notifications ({})", self.notifications.len())
+        };
+        
         let notification_list = List::new(items).block(
             Block::default()
-                .title("Notifications")
+                .title(title)
                 .borders(Borders::ALL)
-                .style(theme.border_style()),
+                .style(theme.panel_border_style(is_focused)),
         );
 
         f.render_widget(notification_list, area);

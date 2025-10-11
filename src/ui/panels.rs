@@ -493,7 +493,7 @@ impl AgentStatusPanel {
     }
 
     /// Render the agent status panel
-    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme, is_focused: bool) {
         let agents = self.get_sorted_agents();
 
         // Create list items
@@ -512,12 +512,18 @@ impl AgentStatusPanel {
             }
         }
 
-        // Create the agent list
+        // Create the agent list with focus-aware styling
+        let title = if is_focused {
+            format!("Agents ({}) [FOCUSED]", self.agents.len())
+        } else {
+            format!("Agents ({})", self.agents.len())
+        };
+        
         let agent_list = List::new(items).block(
             Block::default()
-                .title(format!("Agents ({})", self.agents.len()))
+                .title(title)
                 .borders(Borders::ALL)
-                .style(theme.border_style()),
+                .style(theme.panel_border_style(is_focused)),
         );
 
         f.render_widget(agent_list, area);

@@ -18,9 +18,74 @@ pub async fn run(
     // Ensure we have necessary managers
     runner.ensure_context_manager().await?;
 
-    // Create interactive session
+    // Get project path 
     let project_path = std::env::current_dir().ok();
-    let session = InteractiveSession::new(project_path);
+    
+    // Analyze context if possible
+    let codebase_context = match (&project_path, runner.context_manager_mut()) {
+        (Some(path), Some(context_manager)) => {
+            // Create analysis configuration for interactive mode
+            let config = crate::context::AnalysisConfig {
+                include_patterns: vec![
+                    "*.rs".to_string(),
+                    "*.py".to_string(), 
+                    "*.js".to_string(),
+                    "*.ts".to_string(),
+                    "*.go".to_string(),
+                    "*.java".to_string(),
+                    "*.cpp".to_string(),
+                    "*.c".to_string(),
+                    "*.h".to_string(),
+                    "*.md".to_string(),
+                    "*.toml".to_string(),
+                    "*.json".to_string(),
+                    "*.yaml".to_string(),
+                    "*.yml".to_string(),
+                ],
+                exclude_patterns: vec![
+                    "target/**".to_string(),
+                    "node_modules/**".to_string(),
+                    ".git/**".to_string(),
+                    "*.log".to_string(),
+                    "*.tmp".to_string(),
+                ],
+                max_file_size_mb: 10,
+                follow_symlinks: false,
+                analyze_dependencies: true,
+                deep_analysis: false, // Disable for faster startup
+                cache_results: true,
+            };
+            
+            match context_manager.analyze_codebase(path.clone(), config).await {
+                Ok(context) => {
+                    Some(context)
+                },
+                Err(_) => None
+            }
+        },
+        _ => None
+    };
+    
+    // Print status messages based on result
+    match (&codebase_context, &project_path) {
+        (Some(context), _) => {
+            runner.print_success(&format!(
+                "Codebase analysis complete: {} files, {} symbols, {} languages",
+                context.metadata.total_files,
+                context.metadata.indexed_symbols,
+                context.metadata.languages.len()
+            ));
+        },
+        (None, Some(_)) => {
+            runner.print_warning("Failed to analyze codebase. Interactive mode will work with limited context.");
+        },
+        (None, None) => {
+            runner.print_info("No project directory found. Using basic mode.");
+        }
+    };
+
+    // Create interactive session
+    let session = InteractiveSession::new(project_path.clone());
 
     // Create UI configuration
     let ui_config = UIConfig::new()
@@ -125,14 +190,18 @@ pub async fn run(
     let welcome_notification = Notification::info(agent_status.0, agent_status.1);
     app.add_notification(welcome_notification);
 
+    // Take ownership of context manager from runner to pass to interactive manager
+    let context_manager = runner.context_manager.take();
+    
     // Create interactive manager to handle the session
     let interactive_manager = InteractiveManager::new(
         session,
         agent_system.clone(),
-        None, // TODO: Fix context manager integration
+        context_manager,
         ui_tx.clone(),
         command_tx,
         web_event_broadcaster,
+        codebase_context,
     );
 
     // Send welcome message to output panel
@@ -180,6 +249,7 @@ struct InteractiveManager {
     session: Arc<RwLock<InteractiveSession>>,
     agent_system: Arc<AgentSystem>,
     context_manager: Option<crate::context::ContextManager>,
+    codebase_context: Option<crate::context::CodebaseContext>,
     ui_sender: mpsc::UnboundedSender<UIEvent>,
     command_sender: mpsc::UnboundedSender<String>,
     session_manager: Arc<RwLock<SessionManager>>,
@@ -195,6 +265,7 @@ impl InteractiveManager {
         ui_sender: mpsc::UnboundedSender<UIEvent>,
         command_sender: mpsc::UnboundedSender<String>,
         web_event_sender: Option<broadcast::Sender<UIEvent>>,
+        codebase_context: Option<crate::context::CodebaseContext>,
     ) -> Arc<Self> {
         let mut session_manager = SessionManager::new();
         let session_id = session_manager.create_session(session.project_path.clone());
@@ -203,6 +274,7 @@ impl InteractiveManager {
             session: Arc::new(RwLock::new(session)),
             agent_system,
             context_manager,
+            codebase_context,
             ui_sender,
             command_sender,
             session_manager: Arc::new(RwLock::new(session_manager)),
@@ -509,6 +581,9 @@ impl InteractiveManager {
                     Err(e) => Ok(format!("❌ Failed to restart agent system: {}", e))
                 }
             }
+            "context" => {
+                Ok(self.show_codebase_context().await)
+            }
             "diagnose" | "diagnostic" => {
                 Ok(self.run_system_diagnostics().await)
             }
@@ -594,19 +669,51 @@ impl InteractiveManager {
             _ => "general_chat",
         };
 
+        // Build context with codebase information if available
+        let mut context = serde_json::json!({
+            "user_input": command,
+            "session_id": "interactive",
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        });
+        
+        // Add codebase context if available
+        if let Some(ref codebase_ctx) = self.codebase_context {
+            context["codebase"] = serde_json::json!({
+                "root_path": codebase_ctx.root_path,
+                "total_files": codebase_ctx.metadata.total_files,
+                "total_lines": codebase_ctx.metadata.total_lines,
+                "languages": codebase_ctx.metadata.languages,
+                "indexed_symbols": codebase_ctx.metadata.indexed_symbols,
+                "language_breakdown": codebase_ctx.metadata.language_breakdown,
+                // Include up to 10 recent files for context
+                "recent_files": codebase_ctx.files
+                    .iter()
+                    .take(10)
+                    .map(|f| serde_json::json!({
+                        "path": f.relative_path,
+                        "language": f.language,
+                        "line_count": f.line_count,
+                        "symbols": f.symbols.iter().take(5).map(|s| &s.name).collect::<Vec<_>>()
+                    }))
+                    .collect::<Vec<_>>(),
+                // Include repository info if available
+                "repository": codebase_ctx.repository_info.as_ref().map(|repo| serde_json::json!({
+                    "branch": repo.current_branch,
+                    "has_uncommitted_changes": !repo.status.is_clean,
+                    "total_commits": repo.commit_count
+                }))
+            });
+        }
+        
         // Create agent task
         let task = AgentTask {
             id: format!("task_{}", Uuid::new_v4()),
             task_type: task_type.to_string(),
             description: command.to_string(),
-            context: serde_json::json!({
-                "user_input": command,
-                "session_id": "interactive",
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs()
-            }),
+            context,
             priority: TaskPriority::Normal,
             deadline: None,
             metadata: std::collections::HashMap::new(),
@@ -724,6 +831,7 @@ impl InteractiveManager {
   /tasks        - Show active agent tasks
   /restart      - Restart the agent system (use if agents not working)
   /diagnose     - Run comprehensive system diagnostics
+  /context      - Show codebase context and analysis information
   /config [key] [value] - Show or update configuration
 
 🎨 Interface:
@@ -972,6 +1080,99 @@ impl InteractiveManager {
         ));
         
         report
+    }
+
+    /// Show codebase context information
+    async fn show_codebase_context(&self) -> String {
+        if let Some(ref context) = self.codebase_context {
+            let mut output = String::from("🏗️  Codebase Context Information\n\n");
+            
+            // Basic stats
+            output.push_str(&format!(
+                "📊 Overview:\n\
+                Root Path: {}\n\
+                Total Files: {}\n\
+                Total Lines: {}\n\
+                Total Size: {:.2} MB\n\
+                Indexed Symbols: {}\n\n",
+                context.root_path.display(),
+                context.metadata.total_files,
+                context.metadata.total_lines,
+                context.metadata.total_size_bytes as f64 / 1_048_576.0,
+                context.metadata.indexed_symbols
+            ));
+            
+            // Language breakdown
+            if !context.metadata.languages.is_empty() {
+                output.push_str("🔤 Languages:\n");
+                for (lang, count) in &context.metadata.languages {
+                    output.push_str(&format!("  {} - {} files\n", lang, count));
+                }
+                output.push('\n');
+            }
+            
+            // Dependencies
+            if !context.dependencies.is_empty() {
+                output.push_str(&format!("📦 Dependencies ({}):\n", context.dependencies.len()));
+                for dep in context.dependencies.iter().take(10) {
+                    output.push_str(&format!(
+                        "  {} {} ({:?})\n", 
+                        dep.name, 
+                        dep.version.as_deref().unwrap_or("*"),
+                        dep.dependency_type
+                    ));
+                }
+                if context.dependencies.len() > 10 {
+                    output.push_str(&format!("  ... and {} more\n", context.dependencies.len() - 10));
+                }
+                output.push('\n');
+            }
+            
+            // Repository info
+            if let Some(ref repo) = context.repository_info {
+                output.push_str(&format!(
+                    "📋 Repository:\n\
+                    Current Branch: {}\n\
+                    Total Commits: {}\n\
+                    Uncommitted Changes: {}\n\n",
+                    repo.current_branch.as_deref().unwrap_or("Unknown"),
+                    repo.commit_count,
+                    if !repo.status.is_clean { "Yes" } else { "No" }
+                ));
+            }
+            
+            // Recent files (top 10)
+            output.push_str("📁 Recent Files (sample):\n");
+            for (i, file) in context.files.iter().take(10).enumerate() {
+                output.push_str(&format!(
+                    "  {}. {} ({}) - {} lines\n",
+                    i + 1,
+                    file.relative_path.display(),
+                    file.language,
+                    file.line_count
+                ));
+            }
+            
+            if context.files.len() > 10 {
+                output.push_str(&format!("  ... and {} more files\n", context.files.len() - 10));
+            }
+            
+            // Analysis metadata
+            output.push_str(&format!(
+                "\n⚡ Analysis Details:\n\
+                Analysis Time: {} ms\n\
+                Semantic Patterns: {}\n\
+                File Relationships: {}\n\
+                Cache Status: Available for faster AI processing",
+                context.metadata.analysis_duration_ms,
+                context.metadata.semantic_patterns_found,
+                context.metadata.semantic_relationships
+            ));
+            
+            output
+        } else {
+            "❌ No codebase context available.\n\n💡 This means:\n• AI agents have limited understanding of your project\n• Code generation may be less accurate\n• File relationships are not available\n\n🔧 Try restarting interactive mode in a project directory to enable context analysis.".to_string()
+        }
     }
 
     /// List files in the current directory

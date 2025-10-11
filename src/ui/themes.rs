@@ -405,6 +405,27 @@ impl Theme {
     pub fn muted_style(&self) -> Style {
         Style::default().fg(self.colors.muted)
     }
+
+    /// Get border style for focused panels
+    pub fn focused_border_style(&self) -> Style {
+        Style::default()
+            .fg(self.colors.accent)
+            .add_modifier(Modifier::BOLD)
+    }
+
+    /// Get border style for unfocused panels
+    pub fn unfocused_border_style(&self) -> Style {
+        self.border_style()
+    }
+
+    /// Get border style based on focus state
+    pub fn panel_border_style(&self, is_focused: bool) -> Style {
+        if is_focused {
+            self.focused_border_style()
+        } else {
+            self.unfocused_border_style()
+        }
+    }
 }
 
 impl StyleScheme {

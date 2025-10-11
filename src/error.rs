@@ -237,6 +237,7 @@ pub enum RecoveryStrategy {
 }
 
 /// Error handler for implementing recovery strategies
+#[derive(Debug)]
 pub struct ErrorHandler {
     pub strategies: std::collections::HashMap<String, RecoveryStrategy>,
     pub default_strategy: RecoveryStrategy,
