@@ -133,6 +133,9 @@ pub enum ShortcutAction {
     
     // Custom action (plugin-defined)
     Custom(String),
+    
+    // Easter egg: Vim escape sequences that actually work
+    VimEscape(String),
 }
 
 /// Keyboard shortcut manager
@@ -153,6 +156,8 @@ pub struct ShortcutManager {
     enabled: bool,
     /// User customizations
     custom_shortcuts: HashMap<KeyShortcut, ShortcutAction>,
+    /// Vim sequence tracking for easter egg
+    vim_sequence: Vec<char>,
 }
 
 /// Help information for shortcuts
@@ -204,6 +209,7 @@ impl ShortcutManager {
             last_key_time: std::time::Instant::now(),
             enabled: true,
             custom_shortcuts: HashMap::new(),
+            vim_sequence: Vec::new(),
         };
 
         manager.register_default_shortcuts();
@@ -215,6 +221,11 @@ impl ShortcutManager {
     pub fn process_key_event(&mut self, key_event: KeyEvent) -> ShortcutResult {
         if !self.enabled {
             return ShortcutResult::None;
+        }
+
+        // Easter egg: Check for Vim escape sequences first!
+        if let Some(vim_action) = self.check_vim_escape(&key_event) {
+            return ShortcutResult::Action(vim_action);
         }
 
         let now = std::time::Instant::now();
@@ -323,6 +334,52 @@ impl ShortcutManager {
         self.rebuild_context_mappings();
         
         Ok(())
+    }
+
+    /// Easter egg: Check for Vim escape sequences and provide helpful messages
+    fn check_vim_escape(&mut self, key_event: &KeyEvent) -> Option<ShortcutAction> {
+        // Only track non-control characters for vim sequences
+        if !key_event.modifiers.contains(KeyModifiers::CONTROL) {
+            if let KeyCode::Char(c) = key_event.code {
+                self.vim_sequence.push(c);
+                
+                // Keep only the last 10 characters to prevent memory issues
+                if self.vim_sequence.len() > 10 {
+                    self.vim_sequence.drain(0..1);
+                }
+                
+                let sequence: String = self.vim_sequence.iter().collect();
+                
+                // Check for various vim escape sequences
+                if sequence.ends_with(":q!") {
+                    self.vim_sequence.clear();
+                    return Some(ShortcutAction::VimEscape(
+                        "🎉 Finally escaping Vim after 7 years! Welcome to DevKit where Ctrl+Q actually works!".to_string()
+                    ));
+                } else if sequence.ends_with(":wq") {
+                    self.vim_sequence.clear();
+                    return Some(ShortcutAction::VimEscape(
+                        "💾 Saving and quitting like a Vim pro! But you're in DevKit now - try Ctrl+S instead! 😄".to_string()
+                    ));
+                } else if sequence.ends_with("ZZ") {
+                    self.vim_sequence.clear();
+                    return Some(ShortcutAction::VimEscape(
+                        "🎩 Fancy Vim exit detected! DevKit respects the classics (but makes them actually usable)".to_string()
+                    ));
+                } else if sequence.ends_with(":x") {
+                    self.vim_sequence.clear();
+                    return Some(ShortcutAction::VimEscape(
+                        "⚡ Quick Vim exit! In DevKit, everything is quick - no cryptic commands needed!".to_string()
+                    ));
+                } else if sequence.ends_with(":help") {
+                    self.vim_sequence.clear();
+                    return Some(ShortcutAction::VimEscape(
+                        "📚 Looking for help? In DevKit, just press Ctrl+H - no ':' required!".to_string()
+                    ));
+                }
+            }
+        }
+        None
     }
 
     /// Unregister a shortcut
