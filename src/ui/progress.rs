@@ -114,6 +114,7 @@ pub enum ProgressUpdate {
 }
 
 /// Progress tracker for individual operations
+#[derive(Debug, Clone)]
 pub struct ProgressTracker {
     id: String,
     sender: mpsc::UnboundedSender<ProgressUpdate>,

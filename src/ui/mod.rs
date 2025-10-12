@@ -14,7 +14,9 @@ use ratatui::{
 use std::io::{stdout, Stdout};
 use std::time::{Duration, Instant};
 use tokio::time::interval;
+pub mod behavior_editor;
 pub mod blocks;
+pub mod coordination_viz;
 pub mod enhanced_panels;
 pub mod error_handler;
 pub mod input;

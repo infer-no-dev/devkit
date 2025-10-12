@@ -869,7 +869,7 @@ impl EnhancedPanelManager {
     }
 
     /// Render scrollbar for a panel
-    fn render_scrollbar(&self, f: &mut Frame<'_>, area: Rect, theme: &Theme, panel_id: &str) {
+    fn render_scrollbar(&mut self, f: &mut Frame<'_>, area: Rect, theme: &Theme, panel_id: &str) {
         if let Some(scroll_state) = self.scroll_states.get_mut(panel_id) {
             let scrollbar = Scrollbar::default()
                 .orientation(ScrollbarOrientation::VerticalRight)

@@ -5,6 +5,8 @@
 
 pub mod agents;
 pub mod ai;
+pub mod analytics;
+pub mod artifacts;
 pub mod blueprint;
 pub mod cli;
 pub mod codegen;
@@ -16,6 +18,7 @@ pub mod interactive;
 pub mod logging;
 pub mod plugins;
 pub mod services;
+pub mod session;
 pub mod shell;
 pub mod system_bus;
 pub mod ui;
@@ -30,6 +33,9 @@ pub mod tests;
 
 // Re-export commonly used types
 pub use agents::{Agent, AgentError, AgentResult, AgentStatus, AgentTask, TaskPriority};
+pub use artifacts::{
+    ArtifactManager, EnhancedArtifact, ArtifactDisplay, ArtifactViewerState, ViewMode,
+};
 pub use codegen::{CodeGenError as CodegenError, CodeGenerator, GenerationConfig};
 pub use config::{Config, ConfigError, ConfigManager};
 pub use context::{CodebaseContext, ContextError, FileContext};

@@ -2,8 +2,13 @@
 //!
 //! This module provides the multi-agent system for task coordination and execution.
 //! Agents can be specialized for different tasks like code generation, analysis, and debugging.
+//! The system also includes customizable behavior profiles that define agent personalities,
+//! decision-making patterns, and interaction styles.
 
 pub mod agent_types;
+pub mod behavior;
+pub mod enhanced_agent;
+pub mod progress;
 pub mod review;
 pub mod system;
 pub mod task;
@@ -14,6 +19,9 @@ use std::fmt;
 use uuid::Uuid;
 
 // Re-export commonly used types
+pub use behavior::{AgentBehaviorProfile, BehaviorProfileManager, BehaviorValue, PersonalityTraits};
+pub use enhanced_agent::{EnhancedCodeGenAgent, CodeGenConfig};
+pub use progress::{AgentProgressTracker, AgentProgressExtension, AgentProgressUpdate, TaskMetrics};
 pub use system::{AgentInfo, AgentSystem};
 pub use task::{AgentResult, AgentTask, TaskPriority};
 
@@ -113,6 +121,12 @@ pub enum AgentError {
 
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
+
+    #[error("Progress tracking error: {0}")]
+    ProgressTrackingError(#[from] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
 }
 
 impl fmt::Display for AgentStatus {
