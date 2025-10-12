@@ -6,7 +6,7 @@
 //! modes including network graphs, timeline views, and dashboard layouts.
 
 use crate::agents::{Agent, AgentStatus, TaskPriority, AgentMetrics};
-use crate::session::{Session, AgentSessionInfo, TaskInfo};
+// use crate::session::{Session, AgentSessionInfo, TaskInfo}; // Temporarily disabled - unused imports
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -154,11 +154,13 @@ pub struct UIState {
 }
 
 /// System snapshot for visualization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SystemSnapshot {
-    /// Timestamp of the snapshot
+    /// Timestamp of the snapshot (skipped in serialization)
+    #[serde(skip, default = "Instant::now")]
     pub timestamp: Instant,
-    /// System time
+    /// System time (skipped in serialization) 
+    #[serde(skip, default = "SystemTime::now")]
     pub system_time: SystemTime,
     /// Agent states
     pub agents: HashMap<String, AgentState>,
@@ -173,7 +175,7 @@ pub struct SystemSnapshot {
 }
 
 /// Agent state for visualization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgentState {
     /// Agent identifier
     pub id: String,
@@ -200,7 +202,7 @@ pub struct AgentState {
 }
 
 /// Task state for visualization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TaskState {
     /// Task identifier
     pub id: String,
@@ -214,16 +216,18 @@ pub struct TaskState {
     pub assigned_agent: Option<String>,
     /// Task dependencies
     pub dependencies: Vec<String>,
-    /// Start time
+    /// Start time (skipped in serialization)
+    #[serde(skip, default = "Instant::now")]
     pub started_at: Instant,
-    /// Estimated completion time
+    /// Estimated completion time (skipped in serialization)
+    #[serde(skip, default)]
     pub estimated_completion: Option<Instant>,
     /// Task status
     pub status: TaskStatus,
 }
 
 /// Task status for visualization
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum TaskStatus {
     Pending,
     Running,
@@ -234,7 +238,7 @@ pub enum TaskStatus {
 }
 
 /// Resource usage information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ResourceUsage {
     /// CPU usage percentage (0.0 to 1.0)
     pub cpu_usage: f64,
@@ -255,7 +259,7 @@ pub struct ResourceUsage {
 }
 
 /// System-wide metrics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SystemMetrics {
     /// Total tasks processed
     pub total_tasks: usize,
@@ -276,7 +280,7 @@ pub struct SystemMetrics {
 }
 
 /// Agent interaction event
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgentInteraction {
     /// Unique interaction identifier
     pub id: String,
@@ -286,7 +290,8 @@ pub struct AgentInteraction {
     pub to_agent: String,
     /// Interaction type
     pub interaction_type: InteractionType,
-    /// Timestamp
+    /// Timestamp (skipped in serialization)
+    #[serde(skip, default = "Instant::now")]
     pub timestamp: Instant,
     /// Duration (if applicable)
     pub duration: Option<Duration>,
@@ -299,7 +304,7 @@ pub struct AgentInteraction {
 }
 
 /// Types of agent interactions
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum InteractionType {
     /// Task delegation
     TaskDelegation,
@@ -1111,10 +1116,10 @@ impl CoordinationVisualizer {
 
     /// Set visualization mode
     pub fn set_mode(&mut self, mode: VisualizationMode) {
-        self.mode = mode;
         if let Some(index) = self.modes.iter().position(|m| m == &mode) {
             self.mode_index = index;
         }
+        self.mode = mode;
     }
 
     /// Get current system snapshot

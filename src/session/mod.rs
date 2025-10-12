@@ -877,7 +877,6 @@ pub struct TextRange {
 }
 
 /// Comprehensive session manager
-#[derive(Debug)]
 pub struct SessionManager {
     /// Active sessions in memory
     active_sessions: Arc<RwLock<HashMap<String, Session>>>,
@@ -1063,6 +1062,12 @@ pub enum SessionError {
 
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
+}
+
+impl From<Box<dyn std::error::Error + Send + Sync>> for SessionError {
+    fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        SessionError::CollaborationError(err.to_string())
+    }
 }
 
 impl SessionManager {
@@ -1269,7 +1274,7 @@ impl SessionManager {
         
         let branch = SessionBranch {
             id: branch_id.clone(),
-            name: branch_name,
+            name: branch_name.clone(),
             description,
             parent_id: Some(parent_branch),
             created_at: Utc::now(),
@@ -1285,7 +1290,7 @@ impl SessionManager {
 
         self.save_session(&session).await?;
 
-        info!("Created branch '{}' for session {}", branch.name, session_id);
+        info!("Created branch '{}' for session {}", branch_name, session_id);
         Ok(branch_id)
     }
 
@@ -1309,7 +1314,7 @@ impl SessionManager {
     }
 
     /// Get session analytics
-    pub async fn get_analytics(&self, session_id: &str) -> Result<SessionAnalytics, SessionError> {
+    pub async fn get_analytics(&mut self, session_id: &str) -> Result<SessionAnalytics, SessionError> {
         let session = self.load_session(session_id).await?;
         Ok(session.analytics.clone())
     }
@@ -1450,34 +1455,44 @@ impl SessionManager {
         let persistence = Arc::clone(&self.persistence);
         let auto_save_interval = self.config.auto_save_interval;
 
-        // Auto-save task
-        let auto_save_task = {
-            let session_id = session_id.clone();
-            let active_sessions = Arc::clone(&active_sessions);
-            let persistence = Arc::clone(&persistence);
-
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(auto_save_interval * 60));
-                loop {
-                    interval.tick().await;
-                    
-                    if let Ok(sessions) = active_sessions.read() {
-                        if let Some(session) = sessions.get(&session_id) {
+        // Auto-save task - create as async closure that returns ()
+        let session_id_clone = session_id.clone();
+        let active_sessions_clone = Arc::clone(&active_sessions);
+        let persistence_clone = Arc::clone(&persistence);
+        
+        let auto_save_future = async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(auto_save_interval * 60));
+            loop {
+                interval.tick().await;
+                
+                // Clone the session data to avoid holding the lock across await points
+                let session_data = {
+                    if let Ok(sessions) = active_sessions_clone.read() {
+                        if let Some(session) = sessions.get(&session_id_clone) {
                             if session.config.auto_save {
-                                if let Err(e) = persistence.save_session(session).await {
-                                    error!("Auto-save failed for session {}: {}", session_id, e);
-                                }
+                                Some(session.clone())
+                            } else {
+                                None
                             }
                         } else {
                             // Session no longer active, exit task
-                            break;
+                            return;
                         }
+                    } else {
+                        None
+                    }
+                };
+                
+                // Save the session without holding any locks
+                if let Some(session) = session_data {
+                    if let Err(e) = persistence_clone.save_session(&session).await {
+                        error!("Auto-save failed for session {}: {}", session_id_clone, e);
                     }
                 }
-            })
+            }
         };
 
-        self.background_tasks.spawn(auto_save_task);
+        self.background_tasks.spawn(auto_save_future);
         Ok(())
     }
 

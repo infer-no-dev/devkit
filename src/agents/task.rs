@@ -63,7 +63,7 @@ impl AgentTask {
 }
 
 /// Priority levels for agent tasks
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TaskPriority {
     /// Low priority tasks (background processing)
     Low = 1,

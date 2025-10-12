@@ -87,6 +87,13 @@ pub enum DevKitError {
     #[error("Command failed: {command} - {reason}")]
     CommandFailed { command: String, reason: String },
 
+    // Contextual error with additional information
+    #[error("{context}: {source}")]
+    ContextualError {
+        source: Box<dyn std::error::Error + Send + Sync>,
+        context: String,
+    },
+
     // Generic fallback
     #[error("Internal error: {message}")]
     Internal { message: String },

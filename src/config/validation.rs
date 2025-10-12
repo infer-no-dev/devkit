@@ -4,6 +4,84 @@ use crate::config::{Config, ConfigError};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+/// Validation function to check OpenAI provider configuration
+fn validate_openai_provider_config(config: &Config) -> Result<(), ConfigError> {
+    if config.codegen.ai_model_settings.default_provider == "openai"
+        && config.codegen.ai_model_settings.openai.is_none()
+    {
+        return Err(ConfigError::ValidationError(
+            "OpenAI is set as the default provider but no OpenAI configuration is provided".to_string()
+        ));
+    }
+    Ok(())
+}
+
+/// Validation function to check Anthropic provider configuration
+fn validate_anthropic_provider_config(config: &Config) -> Result<(), ConfigError> {
+    if config.codegen.ai_model_settings.default_provider == "anthropic"
+        && config.codegen.ai_model_settings.anthropic.is_none()
+    {
+        return Err(ConfigError::ValidationError(
+            "Anthropic is set as the default provider but no Anthropic configuration is provided".to_string()
+        ));
+    }
+    Ok(())
+}
+
+/// Validation function to check default model consistency
+fn validate_default_model_consistency(config: &Config) -> Result<(), ConfigError> {
+    match config.codegen.ai_model_settings.default_provider.as_str() {
+        "openai" => {
+            if let Some(openai_config) = &config.codegen.ai_model_settings.openai {
+                if config.codegen.ai_model_settings.default_model
+                    != openai_config.default_model
+                {
+                    return Err(ConfigError::ValidationError(
+                        format!(
+                            "The default_model '{}' doesn't match the OpenAI default_model '{}'",
+                            config.codegen.ai_model_settings.default_model,
+                            openai_config.default_model
+                        )
+                    ));
+                }
+            }
+        }
+        "anthropic" => {
+            if let Some(anthropic_config) = &config.codegen.ai_model_settings.anthropic
+            {
+                if config.codegen.ai_model_settings.default_model
+                    != anthropic_config.default_model
+                {
+                    return Err(ConfigError::ValidationError(
+                        format!(
+                            "The default_model '{}' doesn't match the Anthropic default_model '{}'",
+                            config.codegen.ai_model_settings.default_model,
+                            anthropic_config.default_model
+                        )
+                    ));
+                }
+            }
+        }
+        "ollama" => {
+            if let Some(ollama_model) =
+                &config.codegen.ai_model_settings.ollama.default_model
+            {
+                if config.codegen.ai_model_settings.default_model != *ollama_model {
+                    return Err(ConfigError::ValidationError(
+                        format!(
+                            "The default_model '{}' doesn't match the Ollama default_model '{}'",
+                            config.codegen.ai_model_settings.default_model,
+                            ollama_model
+                        )
+                    ));
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 /// Configuration validator with comprehensive validation rules
 pub struct ConfigValidator {
     valid_log_levels: HashSet<String>,
@@ -15,7 +93,7 @@ pub struct ConfigValidator {
     valid_agent_priorities: HashSet<String>,
     valid_shells: HashSet<String>,
     required_keybindings: HashSet<String>,
-    interdependent_validations: Vec<Box<dyn Fn(&Config) -> Result<(), ConfigError>>>,
+    interdependent_validations: Vec<fn(&Config) -> Result<(), ConfigError>>,
 }
 
 impl ConfigValidator {
@@ -77,82 +155,10 @@ impl ConfigValidator {
         required_keybindings.insert("enter".to_string());
 
         // Create interdependent validations that work across configuration sections
-        let interdependent_validations: Vec<Box<dyn Fn(&Config) -> Result<(), ConfigError>>> = vec![
-            Box::new(|config| {
-                // Validate that when OpenAI is the default provider, the OpenAI configuration exists
-                if config.codegen.ai_model_settings.default_provider == "openai"
-                    && config.codegen.ai_model_settings.openai.is_none()
-                {
-                    return Err(ConfigError::ValidationError(
-                        "OpenAI is set as the default provider but no OpenAI configuration is provided".to_string()
-                    ));
-                }
-                Ok(())
-            }),
-            Box::new(|config| {
-                // Validate that when Anthropic is the default provider, the Anthropic configuration exists
-                if config.codegen.ai_model_settings.default_provider == "anthropic"
-                    && config.codegen.ai_model_settings.anthropic.is_none()
-                {
-                    return Err(ConfigError::ValidationError(
-                        "Anthropic is set as the default provider but no Anthropic configuration is provided".to_string()
-                    ));
-                }
-                Ok(())
-            }),
-            Box::new(|config| {
-                // Validate that the default_model matches what's available in the selected provider
-                match config.codegen.ai_model_settings.default_provider.as_str() {
-                    "openai" => {
-                        if let Some(openai_config) = &config.codegen.ai_model_settings.openai {
-                            if config.codegen.ai_model_settings.default_model
-                                != openai_config.default_model
-                            {
-                                return Err(ConfigError::ValidationError(
-                                    format!(
-                                        "The default_model '{}' doesn't match the OpenAI default_model '{}'",
-                                        config.codegen.ai_model_settings.default_model,
-                                        openai_config.default_model
-                                    )
-                                ));
-                            }
-                        }
-                    }
-                    "anthropic" => {
-                        if let Some(anthropic_config) = &config.codegen.ai_model_settings.anthropic
-                        {
-                            if config.codegen.ai_model_settings.default_model
-                                != anthropic_config.default_model
-                            {
-                                return Err(ConfigError::ValidationError(
-                                    format!(
-                                        "The default_model '{}' doesn't match the Anthropic default_model '{}'",
-                                        config.codegen.ai_model_settings.default_model,
-                                        anthropic_config.default_model
-                                    )
-                                ));
-                            }
-                        }
-                    }
-                    "ollama" => {
-                        if let Some(ollama_model) =
-                            &config.codegen.ai_model_settings.ollama.default_model
-                        {
-                            if config.codegen.ai_model_settings.default_model != *ollama_model {
-                                return Err(ConfigError::ValidationError(
-                                    format!(
-                                        "The default_model '{}' doesn't match the Ollama default_model '{}'",
-                                        config.codegen.ai_model_settings.default_model,
-                                        ollama_model
-                                    )
-                                ));
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                Ok(())
-            }),
+        let interdependent_validations: Vec<fn(&Config) -> Result<(), ConfigError>> = vec![
+            validate_openai_provider_config,
+            validate_anthropic_provider_config,
+            validate_default_model_consistency,
         ];
 
         Self {
@@ -615,7 +621,11 @@ impl ConfigValidator {
     }
 }
 
-// Manually implement Debug since we can't derive it due to the closures
+// Manually implement Send and Sync for ConfigValidator
+unsafe impl Send for ConfigValidator {}
+unsafe impl Sync for ConfigValidator {}
+
+// Manually implement Debug since we can't derive it due to the function pointers
 impl std::fmt::Debug for ConfigValidator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConfigValidator")

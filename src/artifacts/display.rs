@@ -541,7 +541,7 @@ impl<'a> ArtifactDisplay<'a> {
     }
 
     fn render_artifact_content(&mut self, f: &mut Frame, area: Rect) {
-        if let Some(artifact) = &self.state.selected_artifact {
+        if let Some(artifact) = &self.state.selected_artifact.clone() {
             let tabs = vec!["Content", "Metadata", "Quality", "History"];
             let titles: Vec<Line> = tabs
                 .iter()
@@ -897,7 +897,7 @@ impl<'a> ArtifactDisplay<'a> {
         }
     }
 
-    fn highlight_rust_code(&self, lines: &[&str]) -> Text {
+    fn highlight_rust_code(&self, lines: &[&str]) -> Text<'static> {
         let mut text_lines = Vec::new();
 
         for line in lines {
@@ -911,12 +911,12 @@ impl<'a> ArtifactDisplay<'a> {
                 }
 
                 let span = match *word {
-                    word if word.starts_with("fn") => Span::styled(word, Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
-                    word if word.starts_with("let") => Span::styled(word, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                    word if word.starts_with("use") => Span::styled(word, Style::default().fg(Color::Magenta)),
-                    word if word.starts_with("pub") => Span::styled(word, Style::default().fg(Color::Yellow)),
-                    word if word.starts_with("//") => Span::styled(word, Style::default().fg(Color::Gray)),
-                    _ => Span::raw(*word),
+                    word if word.starts_with("fn") => Span::styled(word.to_string(), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                    word if word.starts_with("let") => Span::styled(word.to_string(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    word if word.starts_with("use") => Span::styled(word.to_string(), Style::default().fg(Color::Magenta)),
+                    word if word.starts_with("pub") => Span::styled(word.to_string(), Style::default().fg(Color::Yellow)),
+                    word if word.starts_with("//") => Span::styled(word.to_string(), Style::default().fg(Color::Gray)),
+                    _ => Span::raw(word.to_string()),
                 };
                 spans.push(span);
             }
@@ -927,7 +927,7 @@ impl<'a> ArtifactDisplay<'a> {
         Text::from(text_lines)
     }
 
-    fn highlight_python_code(&self, lines: &[&str]) -> Text {
+    fn highlight_python_code(&self, lines: &[&str]) -> Text<'static> {
         let mut text_lines = Vec::new();
 
         for line in lines {
@@ -940,11 +940,11 @@ impl<'a> ArtifactDisplay<'a> {
                 }
 
                 let span = match *word {
-                    word if word.starts_with("def") => Span::styled(word, Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
-                    word if word.starts_with("class") => Span::styled(word, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    word if word.starts_with("import") => Span::styled(word, Style::default().fg(Color::Magenta)),
-                    word if word.starts_with("#") => Span::styled(word, Style::default().fg(Color::Gray)),
-                    _ => Span::raw(*word),
+                    word if word.starts_with("def") => Span::styled(word.to_string(), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                    word if word.starts_with("class") => Span::styled(word.to_string(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    word if word.starts_with("import") => Span::styled(word.to_string(), Style::default().fg(Color::Magenta)),
+                    word if word.starts_with("#") => Span::styled(word.to_string(), Style::default().fg(Color::Gray)),
+                    _ => Span::raw(word.to_string()),
                 };
                 spans.push(span);
             }
@@ -955,7 +955,7 @@ impl<'a> ArtifactDisplay<'a> {
         Text::from(text_lines)
     }
 
-    fn highlight_js_code(&self, lines: &[&str]) -> Text {
+    fn highlight_js_code(&self, lines: &[&str]) -> Text<'static> {
         let mut text_lines = Vec::new();
 
         for line in lines {
@@ -968,12 +968,12 @@ impl<'a> ArtifactDisplay<'a> {
                 }
 
                 let span = match *word {
-                    word if word.starts_with("function") => Span::styled(word, Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                    word if word.starts_with("function") => Span::styled(word.to_string(), Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
                     word if word.starts_with("const") || word.starts_with("let") || word.starts_with("var") => {
-                        Span::styled(word, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                        Span::styled(word.to_string(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
                     }
-                    word if word.starts_with("//") => Span::styled(word, Style::default().fg(Color::Gray)),
-                    _ => Span::raw(*word),
+                    word if word.starts_with("//") => Span::styled(word.to_string(), Style::default().fg(Color::Gray)),
+                    _ => Span::raw(word.to_string()),
                 };
                 spans.push(span);
             }

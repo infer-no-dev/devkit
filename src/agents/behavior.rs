@@ -1075,8 +1075,9 @@ impl BehaviorProfileManager {
         let mut updated_profile = profile;
         updated_profile.updated_at = SystemTime::now();
 
-        self.profiles.insert(updated_profile.id.clone(), updated_profile);
-        debug!("Updated behavior profile: {}", updated_profile.id);
+        let profile_id = updated_profile.id.clone();
+        self.profiles.insert(profile_id.clone(), updated_profile);
+        debug!("Updated behavior profile: {}", profile_id);
         Ok(())
     }
 

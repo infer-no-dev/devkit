@@ -209,7 +209,7 @@ impl BehaviorEditor {
     /// Show the editor for creating a new profile
     pub fn show_new_profile(&mut self) {
         self.original_profile_id = None;
-        self.current_profile = Some(self.create_default_profile());
+        self.current_profile = Some(BehaviorEditor::create_default_profile());
         self.current_section = EditorSection::Overview;
         self.tab_index = 0;
         self.has_changes = false;
@@ -251,11 +251,13 @@ impl BehaviorEditor {
             return EditorAction::None;
         }
 
-        // Handle editing mode
-        if let Some(field) = self.current_fields.get_mut(self.selected_field_index) {
-            if field.editing {
-                return self.handle_field_editing(field, key_event);
-            }
+        // Handle editing mode - check if we're in editing mode first
+        let is_editing = self.current_fields.get(self.selected_field_index)
+            .map(|f| f.editing)
+            .unwrap_or(false);
+        
+        if is_editing {
+            return self.handle_field_editing_at_index(key_event);
         }
 
         // Handle navigation and general commands
@@ -1005,7 +1007,7 @@ impl BehaviorEditor {
         for (key, value) in &profile.custom_parameters {
             let field_type = match value {
                 BehaviorValue::String(_) => FieldType::Text,
-                BehaviorValue::Integer(_, _) => FieldType::Integer(i64::MIN, i64::MAX),
+                BehaviorValue::Integer(_) => FieldType::Integer(i64::MIN, i64::MAX),
                 BehaviorValue::Float(_) => FieldType::Float(f64::NEG_INFINITY, f64::INFINITY),
                 BehaviorValue::Boolean(_) => FieldType::Boolean,
                 BehaviorValue::Duration(_) => FieldType::Duration,
@@ -1026,6 +1028,87 @@ impl BehaviorEditor {
         }
 
         fields
+    }
+
+    fn handle_field_editing_at_index(&mut self, key_event: KeyEvent) -> EditorAction {
+        let selected_index = self.selected_field_index;
+        if selected_index >= self.current_fields.len() {
+            return EditorAction::None;
+        }
+        
+        match key_event.code {
+            KeyCode::Esc => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    field.editing = false;
+                    field.edit_buffer.clear();
+                }
+                EditorAction::CancelEdit
+            }
+            KeyCode::Enter => {
+                if self.apply_field_edit_at_index(selected_index) {
+                    if let Some(field) = self.current_fields.get_mut(selected_index) {
+                        field.editing = false;
+                    }
+                    self.has_changes = true;
+                    EditorAction::ApplyEdit
+                } else {
+                    EditorAction::EditError
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    if field.cursor_position > 0 {
+                        field.edit_buffer.remove(field.cursor_position - 1);
+                        field.cursor_position -= 1;
+                    }
+                }
+                EditorAction::EditUpdate
+            }
+            KeyCode::Delete => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    if field.cursor_position < field.edit_buffer.len() {
+                        field.edit_buffer.remove(field.cursor_position);
+                    }
+                }
+                EditorAction::EditUpdate
+            }
+            KeyCode::Left => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    if field.cursor_position > 0 {
+                        field.cursor_position -= 1;
+                    }
+                }
+                EditorAction::EditUpdate
+            }
+            KeyCode::Right => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    if field.cursor_position < field.edit_buffer.len() {
+                        field.cursor_position += 1;
+                    }
+                }
+                EditorAction::EditUpdate
+            }
+            KeyCode::Home => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    field.cursor_position = 0;
+                }
+                EditorAction::EditUpdate
+            }
+            KeyCode::End => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    field.cursor_position = field.edit_buffer.len();
+                }
+                EditorAction::EditUpdate
+            }
+            KeyCode::Char(c) => {
+                if let Some(field) = self.current_fields.get_mut(selected_index) {
+                    field.edit_buffer.insert(field.cursor_position, c);
+                    field.cursor_position += 1;
+                }
+                EditorAction::EditUpdate
+            }
+            _ => EditorAction::None,
+        }
     }
 
     fn handle_field_editing(&mut self, field: &mut EditableField, key_event: KeyEvent) -> EditorAction {
@@ -1086,6 +1169,110 @@ impl BehaviorEditor {
         }
     }
 
+    fn apply_field_edit_at_index(&mut self, field_index: usize) -> bool {
+        if field_index >= self.current_fields.len() {
+            return false;
+        }
+
+        let field = &self.current_fields[field_index];
+        let profile = match &mut self.current_profile {
+            Some(p) => p,
+            None => return false,
+        };
+
+        match field.field_type {
+            FieldType::Text => {
+                match field.id.as_str() {
+                    "name" => profile.name = field.edit_buffer.clone(),
+                    "description" => profile.description = field.edit_buffer.clone(),
+                    "version" => profile.version = field.edit_buffer.clone(),
+                    "author" => profile.author = Some(field.edit_buffer.clone()),
+                    _ => return false,
+                }
+            }
+            FieldType::Float(min, max) => {
+                if let Ok(value) = field.edit_buffer.parse::<f64>() {
+                    if value >= min && value <= max {
+                        // Apply float field value
+                        match field.id.as_str() {
+                            "proactiveness" => profile.personality.proactiveness = value,
+                            "risk_tolerance" => profile.personality.risk_tolerance = value,
+                            "creativity" => profile.personality.creativity = value,
+                            "sociability" => profile.personality.sociability = value,
+                            "detail_orientation" => profile.personality.detail_orientation = value,
+                            "speed_vs_accuracy" => profile.personality.speed_vs_accuracy = value,
+                            "helpfulness" => profile.personality.helpfulness = value,
+                            "persistence" => profile.personality.persistence = value,
+                            "confidence" => profile.personality.confidence = value,
+                            "autonomy_threshold" => profile.decision_making.autonomy_threshold = value,
+                            "verbosity" => profile.communication.verbosity = value,
+                            "technical_level" => profile.communication.technical_level = value,
+                            "emoji_usage" => profile.communication.emoji_usage = value,
+                            "learning_rate" => profile.learning.learning_rate = value,
+                            "collaboration_willingness" => profile.collaboration.collaboration_willingness = value,
+                            "cpu_limit" => profile.resource_usage.cpu_limit = value,
+                            _ => return false,
+                        }
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            FieldType::Integer(min, max) => {
+                if let Ok(value) = field.edit_buffer.parse::<i64>() {
+                    if value >= min && value <= max {
+                        // Apply integer field value
+                        match field.id.as_str() {
+                            "max_concurrent_tasks" => profile.task_handling.max_concurrent_tasks = value as usize,
+                            "max_retries" => profile.error_handling.max_retries = value as u32,
+                            _ => return false,
+                        }
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            FieldType::Boolean => {
+                let bool_value = match field.edit_buffer.to_lowercase().as_str() {
+                    "true" | "t" | "yes" | "y" | "1" => true,
+                    "false" | "f" | "no" | "n" | "0" => false,
+                    _ => return false,
+                };
+                // Apply boolean field value
+                match field.id.as_str() {
+                    "active" => profile.active = bool_value,
+                    "seek_confirmation" => profile.decision_making.seek_confirmation = bool_value,
+                    "explain_reasoning" => profile.decision_making.explain_reasoning = bool_value,
+                    "provide_explanations" => profile.communication.provide_explanations = bool_value,
+                    "ask_for_clarification" => profile.communication.ask_for_clarification = bool_value,
+                    "summarize_work" => profile.communication.summarize_work = bool_value,
+                    "batch_similar_tasks" => profile.task_handling.batch_similar_tasks = bool_value,
+                    "decompose_complex_tasks" => profile.task_handling.decompose_complex_tasks = bool_value,
+                    "validate_requirements" => profile.task_handling.validate_requirements = bool_value,
+                    "learn_from_interactions" => profile.learning.learn_from_interactions = bool_value,
+                    "adapt_from_outcomes" => profile.learning.adapt_from_outcomes = bool_value,
+                    "remember_preferences" => profile.learning.remember_preferences = bool_value,
+                    "escalate_errors" => profile.error_handling.escalate_errors = bool_value,
+                    "detailed_logging" => profile.error_handling.detailed_logging = bool_value,
+                    "seek_collaboration" => profile.collaboration.seek_collaboration = bool_value,
+                    "share_resources" => profile.collaboration.share_resources = bool_value,
+                    "mentor_others" => profile.collaboration.mentor_others = bool_value,
+                    "yield_when_idle" => profile.resource_usage.yield_when_idle = bool_value,
+                    "optimize_usage" => profile.resource_usage.optimize_usage = bool_value,
+                    "cache_enabled" => profile.resource_usage.cache_behavior.enabled = bool_value,
+                    _ => return false,
+                }
+            }
+            _ => return false,
+        }
+
+        true
+    }
+
     fn apply_field_edit(&mut self, field: &EditableField) -> bool {
         let profile = match &mut self.current_profile {
             Some(p) => p,
@@ -1105,7 +1292,25 @@ impl BehaviorEditor {
             FieldType::Float(min, max) => {
                 if let Ok(value) = field.edit_buffer.parse::<f64>() {
                     if value >= min && value <= max {
-                        self.apply_float_field(profile, &field.id, value);
+                        // Inline the float field application to avoid borrow conflicts
+                        match field.id.as_str() {
+                            "proactiveness" => profile.personality.proactiveness = value,
+                            "risk_tolerance" => profile.personality.risk_tolerance = value,
+                            "creativity" => profile.personality.creativity = value,
+                            "sociability" => profile.personality.sociability = value,
+                            "detail_orientation" => profile.personality.detail_orientation = value,
+                            "speed_vs_accuracy" => profile.personality.speed_vs_accuracy = value,
+                            "helpfulness" => profile.personality.helpfulness = value,
+                            "persistence" => profile.personality.persistence = value,
+                            "confidence" => profile.personality.confidence = value,
+                            "autonomy_threshold" => profile.decision_making.autonomy_threshold = value,
+                            "verbosity" => profile.communication.verbosity = value,
+                            "technical_level" => profile.communication.technical_level = value,
+                            "emoji_usage" => profile.communication.emoji_usage = value,
+                            "learning_rate" => profile.learning.learning_rate = value,
+                            "cpu_limit" => profile.resource_usage.cpu_limit = value,
+                            _ => return false,
+                        }
                     } else {
                         return false;
                     }
@@ -1116,7 +1321,11 @@ impl BehaviorEditor {
             FieldType::Integer(min, max) => {
                 if let Ok(value) = field.edit_buffer.parse::<i64>() {
                     if value >= min && value <= max {
-                        self.apply_integer_field(profile, &field.id, value);
+                        // Inline the integer field application to avoid borrow conflicts
+                        match field.id.as_str() {
+                            "max_retries" => profile.error_handling.max_retries = value as u32,
+                            _ => return false,
+                        }
                     } else {
                         return false;
                     }
@@ -1125,13 +1334,22 @@ impl BehaviorEditor {
                 }
             }
             FieldType::Boolean => {
-                match field.edit_buffer.to_lowercase().as_str() {
-                    "true" | "t" | "yes" | "y" | "1" => {
-                        self.apply_boolean_field(profile, &field.id, true);
-                    }
-                    "false" | "f" | "no" | "n" | "0" => {
-                        self.apply_boolean_field(profile, &field.id, false);
-                    }
+                let bool_value = match field.edit_buffer.to_lowercase().as_str() {
+                    "true" | "t" | "yes" | "y" | "1" => true,
+                    "false" | "f" | "no" | "n" | "0" => false,
+                    _ => return false,
+                };
+                // Inline the boolean field application to avoid borrow conflicts
+                match field.id.as_str() {
+                    "active" => profile.active = bool_value,
+                    "escalate_errors" => profile.error_handling.escalate_errors = bool_value,
+                    "detailed_logging" => profile.error_handling.detailed_logging = bool_value,
+                    "seek_collaboration" => profile.collaboration.seek_collaboration = bool_value,
+                    "share_resources" => profile.collaboration.share_resources = bool_value,
+                    "mentor_others" => profile.collaboration.mentor_others = bool_value,
+                    "yield_when_idle" => profile.resource_usage.yield_when_idle = bool_value,
+                    "optimize_usage" => profile.resource_usage.optimize_usage = bool_value,
+                    "cache_enabled" => profile.resource_usage.cache_behavior.enabled = bool_value,
                     _ => return false,
                 }
             }

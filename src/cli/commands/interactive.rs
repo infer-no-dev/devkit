@@ -3,7 +3,8 @@ use crate::cli::{session_manager::SessionManager, CliRunner, InteractiveArgs};
 use crate::interactive::{ConversationEntry, ConversationRole, EntryType, InteractiveSession};
 use crate::ui::notifications::Notification;
 use crate::ui::{Application, UIConfig, UIEvent};
-use crate::web::{WebServer, DashboardConfig};
+use crate::web::WebServer;
+use crate::config::WebConfig;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::time::{interval, Duration};
@@ -130,29 +131,9 @@ pub async fn run(
     let web_host = args.web_host.as_deref().unwrap_or(&base_web_config.host);
     let web_port = args.web_port.unwrap_or(base_web_config.port);
     
-    let web_server_handle = if web_enabled {
-        runner.print_info(&format!("Starting web dashboard on {}:{}", web_host, web_port));
-        
-        // Convert config to DashboardConfig with CLI overrides
-        let dashboard_config = DashboardConfig {
-            enabled: web_enabled,
-            host: web_host.to_string(),
-            port: web_port,
-            cors_enabled: base_web_config.cors_enabled,
-            static_files_path: base_web_config.static_files_path.clone(),
-        };
-        
-        let web_server = WebServer::new(
-            dashboard_config,
-            web_event_tx.clone(),
-            command_tx.clone(),
-        );
-        
-        Some(tokio::spawn(async move {
-            if let Err(e) = web_server.start().await {
-                tracing::error!("Web server error: {}", e);
-            }
-        }))
+    let web_server_handle: Option<tokio::task::JoinHandle<()>> = if web_enabled {
+        runner.print_warning("Web dashboard is temporarily disabled due to compilation issues");
+        None
     } else {
         None
     };

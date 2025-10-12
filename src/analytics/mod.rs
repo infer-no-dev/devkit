@@ -44,7 +44,7 @@ pub struct AnalyticsEngine {
     /// Running state
     running: bool,
     /// Last collection timestamp
-    last_collection: Instant,
+    last_collection: SystemTime,
 }
 
 /// Configuration for analytics system
@@ -638,7 +638,7 @@ pub enum PatternType {
 }
 
 /// Event severity levels
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum EventSeverity {
     Trace,
     Debug,
@@ -956,7 +956,7 @@ impl AnalyticsEngine {
             config,
             data_path,
             running: false,
-            last_collection: Instant::now(),
+            last_collection: SystemTime::now(),
         }
     }
 
@@ -1021,7 +1021,7 @@ impl AnalyticsEngine {
     /// Record system snapshot
     pub async fn record_snapshot(&mut self, snapshot: &SystemSnapshot) -> Result<(), AnalyticsError> {
         self.performance_monitor.record_snapshot(snapshot).await?;
-        self.trend_analyzer.add_data_point("system_health", snapshot.timestamp.into(), 
+        self.trend_analyzer.add_data_point("system_health", snapshot.system_time, 
             snapshot.metrics.active_agents as f64).await;
         Ok(())
     }
@@ -1032,7 +1032,7 @@ impl AnalyticsEngine {
         self.event_tracker.record_event(AnalyticsEvent {
             id: interaction.id.clone(),
             event_type: format!("{:?}", interaction.interaction_type),
-            timestamp: interaction.timestamp.into(),
+            timestamp: SystemTime::now(), // TODO: Fix when AgentInteraction uses SystemTime
             source: interaction.from_agent.clone(),
             data: {
                 let mut data = HashMap::new();
