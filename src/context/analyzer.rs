@@ -166,8 +166,8 @@ impl CodebaseAnalyzer {
         // Extract symbols (basic implementation)
         let symbols = self.extract_symbols(&content, &language);
 
-        // Determine relationships (basic implementation)
-        let relationships = Vec::new(); // TODO: Implement relationship detection
+        // Determine relationships based on imports/exports and file analysis
+        let relationships = self.detect_relationships(&content, &language, file_path, root_path, &imports);
 
         Ok(FileContext {
             path: file_path.to_path_buf(),
@@ -699,6 +699,387 @@ impl CodebaseAnalyzer {
         }
 
         symbols
+    }
+
+    /// Detect relationships between files based on imports and file content
+    fn detect_relationships(
+        &self,
+        content: &str,
+        language: &str,
+        file_path: &Path,
+        root_path: &PathBuf,
+        imports: &[String],
+    ) -> Vec<super::FileRelationship> {
+        let mut relationships = Vec::new();
+
+        // Analyze import-based relationships
+        for import in imports {
+            if let Some(target_path) = self.resolve_import_to_path(import, file_path, root_path, language) {
+                relationships.push(super::FileRelationship {
+                    target_file: target_path,
+                    relationship_type: super::RelationshipType::Imports,
+                    line_numbers: vec![], // Could be enhanced to track line numbers
+                });
+            }
+        }
+
+        // Analyze content-based relationships
+        match language {
+            "rust" => self.detect_rust_relationships(content, file_path, root_path, &mut relationships),
+            "python" => self.detect_python_relationships(content, file_path, root_path, &mut relationships),
+            "javascript" | "typescript" => self.detect_js_relationships(content, file_path, root_path, &mut relationships),
+            _ => {}
+        }
+
+        // Detect test relationships
+        if self.is_test_file(file_path) {
+            if let Some(main_file) = self.find_main_file_for_test(file_path, root_path, language) {
+                relationships.push(super::FileRelationship {
+                    target_file: main_file,
+                    relationship_type: super::RelationshipType::Tests,
+                    line_numbers: vec![], // Could track which lines contain test references
+                });
+            }
+        }
+
+        // Detect configuration relationships
+        if self.is_config_file(file_path) {
+            // Config files typically relate to documentation or references
+            // Since there's no Configuration type, we'll use Documentation for config files
+            relationships.push(super::FileRelationship {
+                target_file: root_path.clone(),
+                relationship_type: super::RelationshipType::Documentation,
+                line_numbers: vec![], // Config files generally reference the whole project
+            });
+        }
+
+        relationships
+    }
+
+    /// Resolve an import statement to a file path
+    fn resolve_import_to_path(
+        &self,
+        import: &str,
+        current_file: &Path,
+        root_path: &PathBuf,
+        language: &str,
+    ) -> Option<PathBuf> {
+        match language {
+            "rust" => self.resolve_rust_import(import, current_file, root_path),
+            "python" => self.resolve_python_import(import, current_file, root_path),
+            "javascript" | "typescript" => self.resolve_js_import(import, current_file, root_path),
+            _ => None,
+        }
+    }
+
+    /// Resolve Rust imports (use/mod statements)
+    fn resolve_rust_import(&self, import: &str, current_file: &Path, root_path: &PathBuf) -> Option<PathBuf> {
+        // Handle relative imports like "super::module" or "crate::module"
+        if import.starts_with("crate::") {
+            let module_path = import.strip_prefix("crate::")?;
+            let path_parts: Vec<&str> = module_path.split("::").collect();
+            let mut file_path = root_path.join("src");
+            
+            for part in &path_parts {
+                file_path = file_path.join(part);
+            }
+            
+            // Try .rs file first, then mod.rs in directory
+            if file_path.with_extension("rs").exists() {
+                return Some(file_path.with_extension("rs"));
+            } else if file_path.join("mod.rs").exists() {
+                return Some(file_path.join("mod.rs"));
+            }
+        } else if import.starts_with("super::") {
+            // Handle parent module imports
+            if let Some(parent) = current_file.parent() {
+                let module_path = import.strip_prefix("super::")?;
+                let path_parts: Vec<&str> = module_path.split("::").collect();
+                let mut file_path = parent.to_path_buf();
+                
+                for part in &path_parts {
+                    file_path = file_path.join(part);
+                }
+                
+                if file_path.with_extension("rs").exists() {
+                    return Some(file_path.with_extension("rs"));
+                }
+            }
+        } else if !import.contains("::") {
+            // Simple module name - look for sibling file
+            if let Some(parent) = current_file.parent() {
+                let sibling_file = parent.join(format!("{}.rs", import));
+                if sibling_file.exists() {
+                    return Some(sibling_file);
+                }
+            }
+        }
+        
+        None
+    }
+
+    /// Resolve Python imports
+    fn resolve_python_import(&self, import: &str, current_file: &Path, root_path: &PathBuf) -> Option<PathBuf> {
+        // Handle relative imports
+        if import.starts_with(".") {
+            if let Some(parent) = current_file.parent() {
+                let clean_import = import.trim_start_matches('.');
+                let path_parts: Vec<&str> = clean_import.split('.').collect();
+                let mut file_path = parent.to_path_buf();
+                
+                for part in &path_parts {
+                    if !part.is_empty() {
+                        file_path = file_path.join(part);
+                    }
+                }
+                
+                // Try .py file first, then __init__.py in directory
+                if file_path.with_extension("py").exists() {
+                    return Some(file_path.with_extension("py"));
+                } else if file_path.join("__init__.py").exists() {
+                    return Some(file_path.join("__init__.py"));
+                }
+            }
+        } else {
+            // Absolute import from project root
+            let path_parts: Vec<&str> = import.split('.').collect();
+            let mut file_path = root_path.clone();
+            
+            for part in &path_parts {
+                file_path = file_path.join(part);
+            }
+            
+            if file_path.with_extension("py").exists() {
+                return Some(file_path.with_extension("py"));
+            } else if file_path.join("__init__.py").exists() {
+                return Some(file_path.join("__init__.py"));
+            }
+        }
+        
+        None
+    }
+
+    /// Resolve JavaScript/TypeScript imports
+    fn resolve_js_import(&self, import: &str, current_file: &Path, _root_path: &PathBuf) -> Option<PathBuf> {
+        // Handle relative imports
+        if import.starts_with(".") {
+            if let Some(parent) = current_file.parent() {
+                let mut import_path = parent.join(import.trim_start_matches("./"));
+                
+                // Try different extensions
+                for ext in &["js", "ts", "jsx", "tsx"] {
+                    let with_ext = import_path.with_extension(ext);
+                    if with_ext.exists() {
+                        return Some(with_ext);
+                    }
+                }
+                
+                // Try index files
+                for ext in &["js", "ts"] {
+                    let index_file = import_path.join(format!("index.{}", ext));
+                    if index_file.exists() {
+                        return Some(index_file);
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
+    /// Detect Rust-specific relationships
+    fn detect_rust_relationships(
+        &self,
+        content: &str,
+        file_path: &Path,
+        root_path: &PathBuf,
+        relationships: &mut Vec<super::FileRelationship>,
+    ) {
+        // Look for trait implementations
+        if content.contains("impl ") {
+            // This is a simplified detection - in production, use proper parsing
+            for (line_num, line) in content.lines().enumerate() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("impl ") && trimmed.contains(" for ") {
+                    relationships.push(super::FileRelationship {
+                        target_file: file_path.to_path_buf(), // Self-reference for trait impl
+                        relationship_type: super::RelationshipType::Implements,
+                        line_numbers: vec![line_num + 1], // Track line number (1-based)
+                    });
+                }
+            }
+        }
+
+        // Look for macro usage and references
+        if content.contains('!') {
+            let line_numbers: Vec<usize> = content
+                .lines()
+                .enumerate()
+                .filter_map(|(i, line)| {
+                    if line.contains('!') { Some(i + 1) } else { None }
+                })
+                .collect();
+            
+            if !line_numbers.is_empty() {
+                relationships.push(super::FileRelationship {
+                    target_file: file_path.to_path_buf(),
+                    relationship_type: super::RelationshipType::References,
+                    line_numbers,
+                });
+            }
+        }
+    }
+
+    /// Detect Python-specific relationships
+    fn detect_python_relationships(
+        &self,
+        content: &str,
+        file_path: &Path,
+        _root_path: &PathBuf,
+        relationships: &mut Vec<super::FileRelationship>,
+    ) {
+        // Look for class inheritance
+        if content.contains("class ") {
+            for (line_num, line) in content.lines().enumerate() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("class ") && trimmed.contains('(') {
+                    relationships.push(super::FileRelationship {
+                        target_file: file_path.to_path_buf(),
+                        relationship_type: super::RelationshipType::Extends,
+                        line_numbers: vec![line_num + 1],
+                    });
+                }
+            }
+        }
+
+        // Look for decorator usage
+        if content.contains('@') {
+            let line_numbers: Vec<usize> = content
+                .lines()
+                .enumerate()
+                .filter_map(|(i, line)| {
+                    if line.contains('@') { Some(i + 1) } else { None }
+                })
+                .collect();
+            
+            if !line_numbers.is_empty() {
+                relationships.push(super::FileRelationship {
+                    target_file: file_path.to_path_buf(),
+                    relationship_type: super::RelationshipType::References,
+                    line_numbers,
+                });
+            }
+        }
+    }
+
+    /// Detect JavaScript/TypeScript relationships
+    fn detect_js_relationships(
+        &self,
+        content: &str,
+        file_path: &Path,
+        _root_path: &PathBuf,
+        relationships: &mut Vec<super::FileRelationship>,
+    ) {
+        // Look for class extensions
+        if content.contains("extends") {
+            let line_numbers: Vec<usize> = content
+                .lines()
+                .enumerate()
+                .filter_map(|(i, line)| {
+                    if line.contains("extends") { Some(i + 1) } else { None }
+                })
+                .collect();
+            
+            if !line_numbers.is_empty() {
+                relationships.push(super::FileRelationship {
+                    target_file: file_path.to_path_buf(),
+                    relationship_type: super::RelationshipType::Extends,
+                    line_numbers,
+                });
+            }
+        }
+
+        // Look for interface implementations (TypeScript)
+        if content.contains("implements") {
+            let line_numbers: Vec<usize> = content
+                .lines()
+                .enumerate()
+                .filter_map(|(i, line)| {
+                    if line.contains("implements") { Some(i + 1) } else { None }
+                })
+                .collect();
+            
+            if !line_numbers.is_empty() {
+                relationships.push(super::FileRelationship {
+                    target_file: file_path.to_path_buf(),
+                    relationship_type: super::RelationshipType::Implements,
+                    line_numbers,
+                });
+            }
+        }
+    }
+
+    /// Check if a file is a test file
+    fn is_test_file(&self, file_path: &Path) -> bool {
+        let path_str = file_path.to_string_lossy().to_lowercase();
+        path_str.contains("test") || path_str.contains("spec") || 
+        path_str.ends_with("_test.rs") || path_str.ends_with("_test.py") ||
+        path_str.ends_with(".test.js") || path_str.ends_with(".spec.js") ||
+        path_str.ends_with(".test.ts") || path_str.ends_with(".spec.ts")
+    }
+
+    /// Find the main file that a test file is testing
+    fn find_main_file_for_test(&self, test_path: &Path, root_path: &PathBuf, language: &str) -> Option<PathBuf> {
+        if let Some(filename) = test_path.file_stem() {
+            let filename_str = filename.to_string_lossy();
+            let main_filename = filename_str
+                .trim_end_matches("_test")
+                .trim_end_matches("_spec")
+                .trim_end_matches(".test")
+                .trim_end_matches(".spec");
+            
+            if let Some(parent) = test_path.parent() {
+                let extension = match language {
+                    "rust" => "rs",
+                    "python" => "py",
+                    "javascript" => "js",
+                    "typescript" => "ts",
+                    _ => return None,
+                };
+                
+                let main_file = parent.join(format!("{}.{}", main_filename, extension));
+                if main_file.exists() {
+                    return Some(main_file);
+                }
+                
+                // Also check in src directory for Rust
+                if language == "rust" {
+                    let src_main_file = root_path.join("src").join(format!("{}.{}", main_filename, extension));
+                    if src_main_file.exists() {
+                        return Some(src_main_file);
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
+    /// Check if a file is a configuration file
+    fn is_config_file(&self, file_path: &Path) -> bool {
+        if let Some(filename) = file_path.file_name() {
+            let name = filename.to_string_lossy().to_lowercase();
+            matches!(name.as_str(),
+                "cargo.toml" | "package.json" | "requirements.txt" | "go.mod" |
+                "tsconfig.json" | "webpack.config.js" | "babel.config.js" |
+                "eslint.config.js" | ".eslintrc.json" | "jest.config.js" |
+                "pyproject.toml" | "setup.py" | "makefile" | "dockerfile" |
+                ".gitignore" | ".dockerignore" | "readme.md" | "license"
+            ) || name.ends_with(".config.js") || name.ends_with(".config.ts") ||
+               name.ends_with(".toml") || name.ends_with(".yml") || name.ends_with(".yaml")
+        } else {
+            false
+        }
     }
 
     /// Parse Cargo.toml dependencies

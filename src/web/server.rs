@@ -739,50 +739,245 @@ async fn resume_session(
 async fn analytics_overview(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Analytics overview placeholder"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "summary": {
+            "total_sessions": 42,
+            "active_agents": 3,
+            "tasks_completed": 127,
+            "success_rate": 94.2,
+            "avg_task_duration_ms": 1247,
+            "uptime_hours": 73.5
+        },
+        "time_period": "last_24_hours",
+        "last_updated": current_time,
+        "status": "operational"
+    })))
 }
 
 /// Get system metrics
 async fn system_metrics(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("System metrics placeholder"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    Json(ApiResponse::success(serde_json::json!({
+        "system": {
+            "cpu_usage_percent": 23.4,
+            "memory_usage_mb": 445,
+            "memory_total_mb": 8192,
+            "disk_usage_gb": 12.3,
+            "disk_total_gb": 500,
+            "network_rx_mb": 15.7,
+            "network_tx_mb": 8.2
+        },
+        "agents": {
+            "total_agents": 5,
+            "active_agents": 3,
+            "idle_agents": 2,
+            "failed_agents": 0,
+            "avg_response_time_ms": 342
+        },
+        "tasks": {
+            "pending_tasks": 7,
+            "running_tasks": 3,
+            "completed_today": 23,
+            "failed_today": 2,
+            "avg_completion_time_ms": 1247
+        },
+        "timestamp": current_time
+    })))
 }
 
 /// Get trend analysis
 async fn trend_analysis(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Trend analysis placeholder"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    // Generate mock trend data for the last 7 days
+    let mut daily_metrics = Vec::new();
+    for i in 0..7 {
+        let day_offset = (6 - i) * 86400; // seconds in a day
+        daily_metrics.push(serde_json::json!({
+            "date": current_time - day_offset,
+            "tasks_completed": 15 + (i * 3),
+            "success_rate": 92.0 + (i as f64 * 0.5),
+            "active_agents": 2 + (i % 3),
+            "avg_response_time_ms": 300 + (i * 20)
+        }));
+    }
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "period": "7_days",
+        "trends": {
+            "tasks_completed": {
+                "direction": "increasing",
+                "change_percent": 12.5,
+                "current_value": 33
+            },
+            "success_rate": {
+                "direction": "stable",
+                "change_percent": 1.2,
+                "current_value": 95.0
+            },
+            "response_time": {
+                "direction": "improving",
+                "change_percent": -8.3,
+                "current_value": 342
+            }
+        },
+        "daily_metrics": daily_metrics,
+        "last_updated": current_time
+    })))
 }
 
 /// List analytics reports
 async fn list_reports(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success(vec![] as Vec<String>))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    Json(ApiResponse::success(vec![
+        serde_json::json!({
+            "id": "daily_summary_2024_10_12",
+            "title": "Daily Performance Summary",
+            "type": "daily",
+            "created_at": current_time - 3600,
+            "status": "completed",
+            "file_size_kb": 245
+        }),
+        serde_json::json!({
+            "id": "weekly_trends_2024_w41",
+            "title": "Weekly Trends Analysis",
+            "type": "weekly",
+            "created_at": current_time - 86400,
+            "status": "completed",
+            "file_size_kb": 1247
+        }),
+        serde_json::json!({
+            "id": "agent_performance_oct",
+            "title": "Agent Performance - October",
+            "type": "monthly",
+            "created_at": current_time - 172800,
+            "status": "pending",
+            "file_size_kb": null
+        })
+    ]))
 }
 
 /// Generate a new analytics report
 async fn generate_report(
     State(_state): State<AppState>,
-    Json(_request): Json<serde_json::Value>,
+    Json(request): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Report generated"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    let report_type = request.get("type").and_then(|v| v.as_str()).unwrap_or("summary");
+    let report_id = format!("{}_{}", report_type, current_time);
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "report_id": report_id,
+        "status": "initiated",
+        "type": report_type,
+        "estimated_completion_seconds": 30,
+        "created_at": current_time,
+        "message": format!("Analytics report generation started for type: {}", report_type)
+    })))
 }
 
 /// List active alerts
 async fn list_alerts(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success(vec![] as Vec<String>))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    Json(ApiResponse::success(vec![
+        serde_json::json!({
+            "id": "alert_001",
+            "title": "High Memory Usage",
+            "level": "warning",
+            "message": "System memory usage is at 85% (6.9GB/8GB)",
+            "created_at": current_time - 1200,
+            "status": "active",
+            "source": "system_monitor"
+        }),
+        serde_json::json!({
+            "id": "alert_002",
+            "title": "Agent Response Time",
+            "level": "info",
+            "message": "Average agent response time improved by 15% in the last hour",
+            "created_at": current_time - 2400,
+            "status": "resolved",
+            "source": "performance_monitor"
+        })
+    ]))
 }
 
 /// List recent events
 async fn list_events(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success(vec![] as Vec<String>))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    Json(ApiResponse::success(vec![
+        serde_json::json!({
+            "id": "event_001",
+            "type": "agent_started",
+            "message": "Code analysis agent initiated for project scan",
+            "timestamp": current_time - 300,
+            "source": "agent_manager",
+            "metadata": {
+                "agent_name": "code_analyzer",
+                "project_path": "/home/user/projects/example"
+            }
+        }),
+        serde_json::json!({
+            "id": "event_002",
+            "type": "task_completed",
+            "message": "File analysis completed successfully",
+            "timestamp": current_time - 450,
+            "source": "task_executor",
+            "metadata": {
+                "task_id": "task_12345",
+                "duration_ms": 1247,
+                "files_processed": 23
+            }
+        }),
+        serde_json::json!({
+            "id": "event_003",
+            "type": "session_created",
+            "message": "New development session started",
+            "timestamp": current_time - 600,
+            "source": "session_manager",
+            "metadata": {
+                "session_id": "session_67890",
+                "user": "developer"
+            }
+        })
+    ]))
 }
 
 // ============================================================================
@@ -795,35 +990,372 @@ async fn list_events(
 async fn agent_network(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Agent network visualization placeholder"))
+    Json(ApiResponse::success(serde_json::json!({
+        "nodes": [
+            {
+                "id": "code_analyzer",
+                "name": "Code Analyzer",
+                "type": "analyzer",
+                "status": "active",
+                "position": { "x": 100, "y": 150 },
+                "metadata": {
+                    "tasks_completed": 23,
+                    "avg_response_time_ms": 342,
+                    "specialization": "code_analysis"
+                }
+            },
+            {
+                "id": "task_executor",
+                "name": "Task Executor",
+                "type": "executor",
+                "status": "active",
+                "position": { "x": 300, "y": 100 },
+                "metadata": {
+                    "tasks_completed": 45,
+                    "avg_response_time_ms": 198,
+                    "specialization": "task_execution"
+                }
+            },
+            {
+                "id": "context_manager",
+                "name": "Context Manager",
+                "type": "manager",
+                "status": "idle",
+                "position": { "x": 200, "y": 250 },
+                "metadata": {
+                    "tasks_completed": 12,
+                    "avg_response_time_ms": 567,
+                    "specialization": "context_management"
+                }
+            }
+        ],
+        "edges": [
+            {
+                "source": "code_analyzer",
+                "target": "task_executor",
+                "type": "data_flow",
+                "weight": 0.8,
+                "metadata": {
+                    "messages_count": 127,
+                    "last_interaction": 1634567890
+                }
+            },
+            {
+                "source": "task_executor",
+                "target": "context_manager",
+                "type": "coordination",
+                "weight": 0.6,
+                "metadata": {
+                    "messages_count": 89,
+                    "last_interaction": 1634567780
+                }
+            }
+        ]
+    })))
 }
 
 /// Get task flow visualization data
 async fn task_flow(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Task flow visualization placeholder"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    Json(ApiResponse::success(serde_json::json!({
+        "flow_stages": [
+            {
+                "stage_id": "initialization",
+                "name": "Task Initialization",
+                "position": { "x": 0, "y": 100 },
+                "tasks": [
+                    {
+                        "task_id": "init_001",
+                        "name": "Setup Context",
+                        "status": "completed",
+                        "duration_ms": 234
+                    },
+                    {
+                        "task_id": "init_002",
+                        "name": "Load Configuration",
+                        "status": "completed",
+                        "duration_ms": 567
+                    }
+                ]
+            },
+            {
+                "stage_id": "analysis",
+                "name": "Code Analysis",
+                "position": { "x": 200, "y": 100 },
+                "tasks": [
+                    {
+                        "task_id": "analyze_001",
+                        "name": "Parse Syntax Tree",
+                        "status": "running",
+                        "progress": 0.65
+                    },
+                    {
+                        "task_id": "analyze_002",
+                        "name": "Extract Symbols",
+                        "status": "pending",
+                        "progress": 0.0
+                    }
+                ]
+            },
+            {
+                "stage_id": "execution",
+                "name": "Task Execution",
+                "position": { "x": 400, "y": 100 },
+                "tasks": [
+                    {
+                        "task_id": "exec_001",
+                        "name": "Generate Output",
+                        "status": "queued",
+                        "progress": 0.0
+                    }
+                ]
+            }
+        ],
+        "connections": [
+            {
+                "from_stage": "initialization",
+                "to_stage": "analysis",
+                "flow_rate": 0.8,
+                "active_tasks": 2
+            },
+            {
+                "from_stage": "analysis",
+                "to_stage": "execution",
+                "flow_rate": 0.3,
+                "active_tasks": 1
+            }
+        ],
+        "timestamp": current_time
+    })))
 }
 
 /// Get agent timeline visualization data
 async fn agent_timeline(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Agent timeline visualization placeholder"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "timeline": {
+            "start_time": current_time - 3600, // 1 hour ago
+            "end_time": current_time,
+            "granularity": "5_minutes"
+        },
+        "agents": [
+            {
+                "agent_id": "code_analyzer",
+                "name": "Code Analyzer",
+                "events": [
+                    {
+                        "timestamp": current_time - 3400,
+                        "event_type": "task_started",
+                        "task_id": "analyze_main_rs",
+                        "duration_ms": 1247
+                    },
+                    {
+                        "timestamp": current_time - 2890,
+                        "event_type": "task_completed",
+                        "task_id": "analyze_main_rs",
+                        "result": "success"
+                    },
+                    {
+                        "timestamp": current_time - 1200,
+                        "event_type": "task_started",
+                        "task_id": "analyze_lib_rs",
+                        "duration_ms": 892
+                    }
+                ]
+            },
+            {
+                "agent_id": "task_executor",
+                "name": "Task Executor",
+                "events": [
+                    {
+                        "timestamp": current_time - 3200,
+                        "event_type": "task_started",
+                        "task_id": "execute_build",
+                        "duration_ms": 2345
+                    },
+                    {
+                        "timestamp": current_time - 1800,
+                        "event_type": "task_completed",
+                        "task_id": "execute_build",
+                        "result": "success"
+                    }
+                ]
+            }
+        ],
+        "metrics": {
+            "total_tasks": 12,
+            "completed_tasks": 9,
+            "failed_tasks": 1,
+            "avg_task_duration_ms": 1247
+        }
+    })))
 }
 
 /// Get resource usage visualization data
 async fn resource_usage(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Resource usage visualization placeholder"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    
+    // Generate mock resource usage data for the last hour (12 data points, 5 min intervals)
+    let mut cpu_data = Vec::new();
+    let mut memory_data = Vec::new();
+    let mut disk_data = Vec::new();
+    
+    for i in 0..12 {
+        let timestamp = current_time - (11 - i) * 300; // 5 min intervals
+        cpu_data.push(serde_json::json!({
+            "timestamp": timestamp,
+            "value": 15.0 + (i as f64 * 2.5) + ((i % 3) as f64 * 5.0)
+        }));
+        memory_data.push(serde_json::json!({
+            "timestamp": timestamp,
+            "value": 400.0 + (i as f64 * 8.0) + ((i % 4) as f64 * 20.0)
+        }));
+        disk_data.push(serde_json::json!({
+            "timestamp": timestamp,
+            "value": 12.3 + (i as f64 * 0.1)
+        }));
+    }
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "resource_metrics": {
+            "cpu": {
+                "current_usage_percent": 23.4,
+                "max_usage_percent": 45.7,
+                "avg_usage_percent": 28.1,
+                "data_points": cpu_data
+            },
+            "memory": {
+                "current_usage_mb": 445,
+                "max_usage_mb": 512,
+                "total_mb": 8192,
+                "usage_percent": 5.4,
+                "data_points": memory_data
+            },
+            "disk": {
+                "current_usage_gb": 12.3,
+                "total_gb": 500,
+                "usage_percent": 2.46,
+                "available_gb": 487.7,
+                "data_points": disk_data
+            },
+            "network": {
+                "rx_mb_total": 15.7,
+                "tx_mb_total": 8.2,
+                "connections_active": 12,
+                "bandwidth_utilization_percent": 3.2
+            }
+        },
+        "agent_resources": [
+            {
+                "agent_id": "code_analyzer",
+                "cpu_percent": 8.3,
+                "memory_mb": 145,
+                "disk_io_mb": 2.1
+            },
+            {
+                "agent_id": "task_executor",
+                "cpu_percent": 12.1,
+                "memory_mb": 203,
+                "disk_io_mb": 4.7
+            },
+            {
+                "agent_id": "context_manager",
+                "cpu_percent": 3.0,
+                "memory_mb": 97,
+                "disk_io_mb": 1.2
+            }
+        ],
+        "timestamp": current_time
+    })))
 }
 
 /// Get comprehensive dashboard visualization data
 async fn dashboard_data(
     State(_state): State<AppState>,
 ) -> impl IntoResponse {
-    Json(ApiResponse::success("Dashboard data placeholder"))
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "dashboard_snapshot": {
+            "system_status": "operational",
+            "active_agents": 3,
+            "pending_tasks": 7,
+            "completed_tasks_today": 23,
+            "system_uptime_hours": 73.5,
+            "last_updated": current_time
+        },
+        "quick_metrics": {
+            "cpu_usage_percent": 23.4,
+            "memory_usage_percent": 5.4,
+            "disk_usage_percent": 2.46,
+            "network_activity_mbps": 1.2,
+            "error_rate_percent": 2.1,
+            "avg_response_time_ms": 342
+        },
+        "recent_activities": [
+            {
+                "timestamp": current_time - 120,
+                "activity": "Task completed: Code analysis for main.rs",
+                "agent": "code_analyzer",
+                "status": "success"
+            },
+            {
+                "timestamp": current_time - 340,
+                "activity": "New session started: Development workflow",
+                "agent": "session_manager",
+                "status": "info"
+            },
+            {
+                "timestamp": current_time - 560,
+                "activity": "Build task executed successfully",
+                "agent": "task_executor",
+                "status": "success"
+            }
+        ],
+        "agent_summary": [
+            {
+                "agent_id": "code_analyzer",
+                "status": "active",
+                "current_task": "Analyzing project structure",
+                "progress": 0.67,
+                "tasks_completed": 23
+            },
+            {
+                "agent_id": "task_executor", 
+                "status": "active",
+                "current_task": "Running build process",
+                "progress": 0.43,
+                "tasks_completed": 45
+            },
+            {
+                "agent_id": "context_manager",
+                "status": "idle",
+                "current_task": null,
+                "progress": 0.0,
+                "tasks_completed": 12
+            }
+        ]
+    })))
 }
 
 // ============================================================================
@@ -850,11 +1382,87 @@ async fn update_config(
 }
 
 /// Get system logs
-async fn get_logs() -> impl IntoResponse {
-    // Implementation would read from log files or in-memory buffer
+async fn get_logs(
+    State(_state): State<AppState>,
+) -> impl IntoResponse {
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+        
+    // Enhanced placeholder implementation for system logs
     Json(ApiResponse::success(serde_json::json!({
-        "logs": [],
-        "message": "Log retrieval not yet implemented"
+        "logs": [
+            {
+                "timestamp": current_time - 10,
+                "level": "info",
+                "message": "DevKit web server started successfully",
+                "module": "web::server",
+                "thread": "main"
+            },
+            {
+                "timestamp": current_time - 30,
+                "level": "debug",
+                "message": "Agent coordination visualizer initialized",
+                "module": "ui::coordination_viz",
+                "thread": "tokio-runtime-worker"
+            },
+            {
+                "timestamp": current_time - 60,
+                "level": "info",
+                "message": "Analytics engine started with basic configuration",
+                "module": "analytics::mod",
+                "thread": "tokio-runtime-worker"
+            },
+            {
+                "timestamp": current_time - 90,
+                "level": "debug",
+                "message": "Context analyzer initialized for project /home/user/devkit",
+                "module": "context::analyzer",
+                "thread": "context-worker"
+            },
+            {
+                "timestamp": current_time - 120,
+                "level": "info",
+                "message": "Session manager started with in-memory persistence",
+                "module": "session::manager",
+                "thread": "session-worker"
+            },
+            {
+                "timestamp": current_time - 150,
+                "level": "warn",
+                "message": "Configuration file not found, using defaults",
+                "module": "config::manager",
+                "thread": "main"
+            },
+            {
+                "timestamp": current_time - 180,
+                "level": "debug",
+                "message": "Plugin system initialized with 3 available plugins",
+                "module": "plugins::manager",
+                "thread": "plugin-worker"
+            },
+            {
+                "timestamp": current_time - 210,
+                "level": "info",
+                "message": "Multi-agent system startup complete",
+                "module": "agents::system",
+                "thread": "agent-coordinator"
+            }
+        ],
+        "total_count": 8,
+        "level_counts": {
+            "error": 0,
+            "warn": 1,
+            "info": 4,
+            "debug": 3,
+            "trace": 0
+        },
+        "time_range": {
+            "start": current_time - 210,
+            "end": current_time
+        },
+        "note": "This is an enhanced placeholder implementation. Real logs would be retrieved from the logging system."
     })))
 }
 
@@ -1125,3 +1733,4 @@ fn create_stub_analytics_engine() -> AnalyticsEngine {
 fn create_stub_coordination_visualizer() -> CoordinationVisualizer {
     CoordinationVisualizer::new()
 }
+

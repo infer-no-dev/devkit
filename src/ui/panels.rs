@@ -667,6 +667,29 @@ impl PanelManager {
         constraints
     }
 
+    /// Reset to default layout (stub implementation)
+    pub fn reset_to_default_layout(&mut self) {
+        // Reset all panels to default visibility
+        self.layouts.get_mut(&PanelType::Output).map(|l| l.visible = true);
+        self.layouts.get_mut(&PanelType::Input).map(|l| l.visible = true);
+        self.layouts.get_mut(&PanelType::AgentStatus).map(|l| l.visible = false);
+        self.layouts.get_mut(&PanelType::Notifications).map(|l| l.visible = false);
+    }
+
+    /// Hide a specific panel (stub implementation)
+    pub fn hide_panel(&mut self, panel_type: &PanelType) {
+        if let Some(layout) = self.layouts.get_mut(panel_type) {
+            layout.visible = false;
+        }
+    }
+
+    /// Show all panels (stub implementation) 
+    pub fn show_all_panels(&mut self) {
+        for layout in self.layouts.values_mut() {
+            layout.visible = true;
+        }
+    }
+
     /// Render help overlay
     pub fn render_help_overlay(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         if !self.help_visible {

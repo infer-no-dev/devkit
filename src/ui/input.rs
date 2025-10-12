@@ -645,6 +645,22 @@ impl InputHandler {
         vec![]
     }
 
+    /// Set completion candidates from external source
+    pub fn set_completions(&mut self, completions: Vec<String>) {
+        self.completion_candidates = completions;
+        if !self.completion_candidates.is_empty() {
+            self.tab_completion_active = true;
+            self.completion_index = Some(0);
+        } else {
+            self.reset_completion();
+        }
+    }
+
+    /// Clear completion candidates
+    pub fn clear_completions(&mut self) {
+        self.reset_completion();
+    }
+
     /// Get input history
     pub fn get_history(&self) -> &[String] {
         &self.history

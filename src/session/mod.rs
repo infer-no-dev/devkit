@@ -18,8 +18,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
@@ -76,50 +77,236 @@ pub trait SessionPersistence {
     async fn search_sessions(&self, user_id: &str, query: &str, filters: SessionFilters) -> Result<Vec<Session>, Box<dyn std::error::Error + Send + Sync>>;
 }
 
-#[derive(Debug)]
 pub struct RecoveryManager {
-    placeholder: bool,
+    persistence: Arc<dyn SessionPersistence + Send + Sync>,
+    checkpoint_interval: u64,
+    max_snapshots: usize,
+    checkpoints: Arc<RwLock<HashMap<String, Vec<SessionCheckpoint>>>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionCheckpoint {
+    pub id: String,
+    pub session_id: String,
+    pub created_at: DateTime<Utc>,
+    pub session_state: SessionState,
+    pub metadata: HashMap<String, serde_json::Value>,
 }
 
 impl RecoveryManager {
     pub fn new(
-        _persistence: Arc<dyn SessionPersistence + Send + Sync>,
-        _checkpoint_interval: u64,
-        _max_snapshots: usize,
+        persistence: Arc<dyn SessionPersistence + Send + Sync>,
+        checkpoint_interval: u64,
+        max_snapshots: usize,
     ) -> Result<Self, SessionError> {
-        Ok(Self { placeholder: true })
+        Ok(Self {
+            persistence,
+            checkpoint_interval,
+            max_snapshots,
+            checkpoints: Arc::new(RwLock::new(HashMap::new())),
+        })
     }
 
-    pub async fn create_checkpoint(&self, _session_id: &str, _session: &Session) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        Ok("checkpoint_id".to_string())
+    pub async fn create_checkpoint(&self, session_id: &str, session: &Session) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let checkpoint_id = format!("cp_{}_{}", session_id, Utc::now().timestamp());
+        
+        let checkpoint = SessionCheckpoint {
+            id: checkpoint_id.clone(),
+            session_id: session_id.to_string(),
+            created_at: Utc::now(),
+            session_state: session.state.clone(),
+            metadata: HashMap::new(),
+        };
+        
+        // Store checkpoint in memory
+        {
+            let mut checkpoints = self.checkpoints.write().await;
+            let session_checkpoints = checkpoints.entry(session_id.to_string()).or_insert_with(Vec::new);
+            session_checkpoints.push(checkpoint.clone());
+            
+            // Limit number of checkpoints
+            if session_checkpoints.len() > self.max_snapshots {
+                session_checkpoints.remove(0);
+            }
+        }
+        
+        // TODO: In a full implementation, you would also persist this to storage
+        tracing::debug!("Created checkpoint {} for session {}", checkpoint_id, session_id);
+        
+        Ok(checkpoint_id)
     }
 
-    pub async fn cleanup_session(&self, _session_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn restore_checkpoint(&self, session_id: &str, checkpoint_id: &str) -> Result<Option<SessionCheckpoint>, Box<dyn std::error::Error + Send + Sync>> {
+        let checkpoints = self.checkpoints.read().await;
+        if let Some(session_checkpoints) = checkpoints.get(session_id) {
+            let checkpoint = session_checkpoints.iter().find(|cp| cp.id == checkpoint_id).cloned();
+            Ok(checkpoint)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn list_checkpoints(&self, session_id: &str) -> Result<Vec<SessionCheckpoint>, Box<dyn std::error::Error + Send + Sync>> {
+        let checkpoints = self.checkpoints.read().await;
+        if let Some(session_checkpoints) = checkpoints.get(session_id) {
+            Ok(session_checkpoints.clone())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    pub async fn cleanup_session(&self, session_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut checkpoints = self.checkpoints.write().await;
+        checkpoints.remove(session_id);
+        tracing::debug!("Cleaned up checkpoints for session {}", session_id);
+        Ok(())
+    }
+
+    pub async fn cleanup_old_checkpoints(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let cutoff_time = Utc::now() - chrono::Duration::hours(24); // Keep checkpoints for 24 hours
+        let mut checkpoints = self.checkpoints.write().await;
+        
+        for (_session_id, session_checkpoints) in checkpoints.iter_mut() {
+            session_checkpoints.retain(|cp| cp.created_at > cutoff_time);
+        }
+        
+        // Remove empty entries
+        checkpoints.retain(|_, checkpoints| !checkpoints.is_empty());
+        
         Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct CollaborationManager {
-    placeholder: bool,
+    shares: Arc<RwLock<HashMap<String, Vec<SessionShare>>>>, // session_id -> shares
+    active_collaborators: Arc<RwLock<HashMap<String, HashSet<String>>>>, // session_id -> user_ids
+    share_counter: Arc<RwLock<u64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionShare {
     pub id: String,
+    pub session_id: String,
     pub permissions: SharePermissions,
+    pub created_at: DateTime<Utc>,
+    pub created_by: String,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollaborationInfo {
+    pub is_shared: bool,
+    pub shares: Vec<SessionShare>,
+    pub active_collaborators: HashSet<String>,
+    pub owner: String,
 }
 
 impl CollaborationManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(Self { placeholder: true })
+        Ok(Self {
+            shares: Arc::new(RwLock::new(HashMap::new())),
+            active_collaborators: Arc::new(RwLock::new(HashMap::new())),
+            share_counter: Arc::new(RwLock::new(0)),
+        })
     }
 
-    pub async fn create_share(&mut self, _session_id: &str, permissions: SharePermissions) -> Result<SessionShare, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(SessionShare {
-            id: "share_id".to_string(),
+    pub async fn create_share(&mut self, session_id: &str, permissions: SharePermissions) -> Result<SessionShare, Box<dyn std::error::Error + Send + Sync>> {
+        let share_id = {
+            let mut counter = self.share_counter.write().await;
+            *counter += 1;
+            format!("share_{}", *counter)
+        };
+        
+        let share = SessionShare {
+            id: share_id,
+            session_id: session_id.to_string(),
             permissions,
-        })
+            created_at: Utc::now(),
+            created_by: "system".to_string(), // In real implementation, this would be the current user
+            expires_at: None, // Could be configurable
+            is_active: true,
+        };
+        
+        // Store the share
+        {
+            let mut shares = self.shares.write().await;
+            let session_shares = shares.entry(session_id.to_string()).or_insert_with(Vec::new);
+            session_shares.push(share.clone());
+        }
+        
+        tracing::debug!("Created share {} for session {} with permissions: read={}, write={}, admin={}", 
+            share.id, session_id, share.permissions.read, share.permissions.write, share.permissions.admin);
+        
+        Ok(share)
+    }
+
+    pub async fn revoke_share(&mut self, session_id: &str, share_id: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let mut shares = self.shares.write().await;
+        if let Some(session_shares) = shares.get_mut(session_id) {
+            if let Some(share) = session_shares.iter_mut().find(|s| s.id == share_id) {
+                share.is_active = false;
+                tracing::debug!("Revoked share {} for session {}", share_id, session_id);
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub async fn list_shares(&self, session_id: &str) -> Result<Vec<SessionShare>, Box<dyn std::error::Error + Send + Sync>> {
+        let shares = self.shares.read().await;
+        if let Some(session_shares) = shares.get(session_id) {
+            Ok(session_shares.iter().filter(|s| s.is_active).cloned().collect())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    pub async fn add_collaborator(&mut self, session_id: &str, user_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut collaborators = self.active_collaborators.write().await;
+        let session_collaborators = collaborators.entry(session_id.to_string()).or_insert_with(HashSet::new);
+        session_collaborators.insert(user_id.to_string());
+        
+        tracing::debug!("Added collaborator {} to session {}", user_id, session_id);
+        Ok(())
+    }
+
+    pub async fn remove_collaborator(&mut self, session_id: &str, user_id: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let mut collaborators = self.active_collaborators.write().await;
+        if let Some(session_collaborators) = collaborators.get_mut(session_id) {
+            let removed = session_collaborators.remove(user_id);
+            if removed {
+                tracing::debug!("Removed collaborator {} from session {}", user_id, session_id);
+            }
+            Ok(removed)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub async fn get_collaborators(&self, session_id: &str) -> Result<HashSet<String>, Box<dyn std::error::Error + Send + Sync>> {
+        let collaborators = self.active_collaborators.read().await;
+        if let Some(session_collaborators) = collaborators.get(session_id) {
+            Ok(session_collaborators.clone())
+        } else {
+            Ok(HashSet::new())
+        }
+    }
+
+    pub async fn cleanup_session(&mut self, session_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        {
+            let mut shares = self.shares.write().await;
+            shares.remove(session_id);
+        }
+        
+        {
+            let mut collaborators = self.active_collaborators.write().await;
+            collaborators.remove(session_id);
+        }
+        
+        tracing::debug!("Cleaned up collaboration data for session {}", session_id);
+        Ok(())
     }
 }
 
@@ -749,20 +936,6 @@ pub enum ResolutionStrategy {
     Custom,
 }
 
-/// Collaboration information for shared sessions
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CollaborationInfo {
-    /// Whether collaboration is enabled
-    pub enabled: bool,
-    /// Share permissions
-    pub permissions: SharePermissions,
-    /// Active collaborators
-    pub collaborators: Vec<Collaborator>,
-    /// Collaboration settings
-    pub settings: CollaborationSettings,
-    /// Real-time sync status
-    pub sync_status: SyncStatus,
-}
 
 /// Individual collaborator information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1150,7 +1323,7 @@ impl SessionManager {
 
         // Add to active sessions
         {
-            let mut active_sessions = self.active_sessions.write().unwrap();
+            let mut active_sessions = self.active_sessions.write().await;
             active_sessions.insert(session_id.clone(), session.clone());
         }
 
@@ -1173,7 +1346,7 @@ impl SessionManager {
     pub async fn load_session(&mut self, session_id: &str) -> Result<Session, SessionError> {
         // Check if already in memory
         {
-            let active_sessions = self.active_sessions.read().unwrap();
+            let active_sessions = self.active_sessions.read().await;
             if let Some(session) = active_sessions.get(session_id) {
                 let mut session = session.clone();
                 session.accessed_at = Utc::now();
@@ -1190,7 +1363,7 @@ impl SessionManager {
 
         // Add to active sessions
         {
-            let mut active_sessions = self.active_sessions.write().unwrap();
+            let mut active_sessions = self.active_sessions.write().await;
             
             // Check if we need to evict old sessions
             if active_sessions.len() >= self.config.max_active_sessions {
@@ -1211,7 +1384,7 @@ impl SessionManager {
     pub async fn save_session(&self, session: &Session) -> Result<(), SessionError> {
         // Update in memory
         {
-            let mut active_sessions = self.active_sessions.write().unwrap();
+            let mut active_sessions = self.active_sessions.write().await;
             active_sessions.insert(session.id.clone(), session.clone());
         }
 
@@ -1227,7 +1400,7 @@ impl SessionManager {
     pub async fn delete_session(&mut self, session_id: &str) -> Result<(), SessionError> {
         // Remove from memory
         {
-            let mut active_sessions = self.active_sessions.write().unwrap();
+            let mut active_sessions = self.active_sessions.write().await;
             active_sessions.remove(session_id);
         }
 
@@ -1332,22 +1505,10 @@ impl SessionManager {
                 .map_err(|e| SessionError::CollaborationError(e.to_string()))?;
             
             session.collaboration = Some(CollaborationInfo {
-                enabled: true,
-                permissions: share_info.permissions,
-                collaborators: Vec::new(),
-                settings: CollaborationSettings {
-                    real_time_editing: true,
-                    show_cursors: true,
-                    voice_chat: false,
-                    video_chat: false,
-                    notifications: CollaborationNotifications {
-                        user_join_leave: true,
-                        significant_changes: true,
-                        mentions: true,
-                        comments: true,
-                    },
-                },
-                sync_status: SyncStatus::Synchronized,
+                is_shared: true,
+                shares: vec![share_info],
+                active_collaborators: HashSet::new(),
+                owner: self.current_user.id.clone(),
             });
             
             session.updated_at = Utc::now();
@@ -1467,19 +1628,16 @@ impl SessionManager {
                 
                 // Clone the session data to avoid holding the lock across await points
                 let session_data = {
-                    if let Ok(sessions) = active_sessions_clone.read() {
-                        if let Some(session) = sessions.get(&session_id_clone) {
-                            if session.config.auto_save {
-                                Some(session.clone())
-                            } else {
-                                None
-                            }
+                    let sessions = active_sessions_clone.read().await;
+                    if let Some(session) = sessions.get(&session_id_clone) {
+                        if session.config.auto_save {
+                            Some(session.clone())
                         } else {
-                            // Session no longer active, exit task
-                            return;
+                            None
                         }
                     } else {
-                        None
+                        // Session no longer active, exit task
+                        return;
                     }
                 };
                 

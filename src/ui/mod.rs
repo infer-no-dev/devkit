@@ -646,15 +646,70 @@ impl Application {
                 self.panel_manager.toggle_help();
             }
             UIEvent::SetLayout(layout_name) => {
-                // TODO: Implement layout switching
-                tracing::debug!("Layout switching not yet implemented: {}", layout_name);
+                // Stub implementation for layout switching
+                tracing::debug!("Switching to layout: {}", layout_name);
+                
+                match layout_name.as_str() {
+                    "default" => {
+                        // Reset to default panel arrangement
+                        self.panel_manager.reset_to_default_layout();
+                        let notification = Notification::info(
+                            "Layout Changed".to_string(),
+                            "Switched to default layout".to_string(),
+                        );
+                        self.panel_manager.notification_panel().add_notification(notification);
+                    }
+                    "minimal" => {
+                        // Minimal layout with just output and input
+                        self.panel_manager.hide_panel(&PanelType::AgentStatus);
+                        self.panel_manager.hide_panel(&PanelType::Notifications);
+                        let notification = Notification::info(
+                            "Layout Changed".to_string(),
+                            "Switched to minimal layout".to_string(),
+                        );
+                        self.panel_manager.notification_panel().add_notification(notification);
+                    }
+                    "debug" => {
+                        // Debug layout with all panels visible
+                        self.panel_manager.show_all_panels();
+                        let notification = Notification::info(
+                            "Layout Changed".to_string(),
+                            "Switched to debug layout".to_string(),
+                        );
+                        self.panel_manager.notification_panel().add_notification(notification);
+                    }
+                    _ => {
+                        let notification = Notification::warning(
+                            "Layout Error".to_string(),
+                            format!("Unknown layout '{}'", layout_name),
+                        );
+                        self.panel_manager.notification_panel().add_notification(notification);
+                    }
+                }
             }
             UIEvent::ShowCompletions(completions) => {
-                // TODO: Implement completion display
-                tracing::debug!(
-                    "Completion display not yet implemented: {} completions",
-                    completions.len()
-                );
+                // Stub implementation for completion display
+                tracing::debug!("Displaying {} completions", completions.len());
+                
+                if completions.is_empty() {
+                    // Hide completions
+                    self.input_handler.clear_completions();
+                } else {
+                    // Show up to 10 completions
+                    let limited_completions: Vec<String> = completions
+                        .into_iter()
+                        .take(10)
+                        .collect();
+                    
+                    self.input_handler.set_completions(limited_completions.clone());
+                    
+                    // Add notification about completions
+                    let notification = Notification::info(
+                        "Completions Available".to_string(),
+                        format!("{} completions available", limited_completions.len()),
+                    );
+                    self.panel_manager.notification_panel().add_notification(notification);
+                }
             }
             UIEvent::SwitchTheme(theme_name) => {
                 if !self.theme_manager.set_theme(&theme_name) {

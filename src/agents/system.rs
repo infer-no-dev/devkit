@@ -507,36 +507,403 @@ impl AgentSystem {
         task_info
     }
 
-    // Placeholder worker spawn methods (will be implemented in a separate file)
+    // Background worker implementations
     async fn spawn_worker(&self, worker_id: usize) -> tokio::task::JoinHandle<()> {
-        // TODO: Implement actual worker logic
+        let task_queue = Arc::clone(&self.task_queue);
+        let agents = Arc::clone(&self.agents);
+        let active_tasks = Arc::clone(&self.active_tasks);
+        let completed_tasks = Arc::clone(&self.completed_tasks);
+        let failed_tasks = Arc::clone(&self.failed_tasks);
+        let event_sender = self.event_sender.clone();
+        let shutdown_receiver = self.shutdown_receiver.clone();
+        let config = self.config.clone();
+
         tokio::spawn(async move {
-            println!("Worker {} started (placeholder)", worker_id);
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tracing::info!("Agent worker {} started", worker_id);
+            
+            let task_timeout = Duration::from_secs(config.task_timeout_seconds);
+            
+            loop {
+                // Check for shutdown signal
+                if *shutdown_receiver.borrow() {
+                    tracing::info!("Worker {} shutting down", worker_id);
+                    break;
+                }
+
+                // Try to get a task from the queue
+                let prioritized_task = {
+                    let mut queue = task_queue.lock().await;
+                    queue.pop()
+                };
+
+                if let Some(prioritized_task) = prioritized_task {
+                    let task = prioritized_task.task.clone();
+                    let task_id = task.id.clone();
+                    
+                    // Find a suitable agent
+                    let suitable_agent = {
+                        let agents = agents.read().await;
+                        agents.iter()
+                            .find(|(_, agent)| {
+                                agent.can_handle(&task.task_type) && 
+                                agent.status() == AgentStatus::Idle
+                            })
+                            .map(|(id, _)| id.clone())
+                    };
+
+                    if let Some(agent_id) = suitable_agent {
+                        // Mark task as active
+                        let active_task = ActiveTask {
+                            task: task.clone(),
+                            agent_id: agent_id.clone(),
+                            started_at: Instant::now(),
+                            result_sender: None, // Will be set if needed
+                        };
+                        
+                        {
+                            let mut active = active_tasks.write().await;
+                            active.insert(task_id.clone(), active_task);
+                        }
+
+                        // Emit task started event
+                        let _ = event_sender.send(TaskEvent::TaskStarted {
+                            task_id: task_id.clone(),
+                            agent_id: agent_id.clone(),
+                        });
+
+                        tracing::debug!("Worker {} processing task {} with agent {}", worker_id, task_id, agent_id);
+                        
+                        // Execute task with timeout
+                        let task_start = Instant::now();
+                        let task_result = {
+                            let mut agents = agents.write().await;
+                            if let Some(agent) = agents.get_mut(&agent_id) {
+                                tokio::time::timeout(task_timeout, agent.process_task(task.clone())).await
+                            } else {
+                                Ok(Err(super::AgentError::TaskExecutionFailed("Agent not found".to_string())))
+                            }
+                        };
+                        
+                        let processing_duration = task_start.elapsed();
+                        
+                        // Remove from active tasks
+                        {
+                            let mut active = active_tasks.write().await;
+                            active.remove(&task_id);
+                        }
+
+                        // Handle result
+                        match task_result {
+                            Ok(Ok(result)) => {
+                                // Task completed successfully
+                                {
+                                    let mut completed = completed_tasks.write().await;
+                                    completed.insert(task_id.clone(), TaskResult {
+                                        result: result.clone(),
+                                        completed_at: Instant::now(),
+                                        processing_duration,
+                                    });
+                                    
+                                    // Limit completed tasks history
+                                    if completed.len() > config.task_history_limit {
+                                        // Remove oldest entries (this is simplified - in production you'd use a proper LRU)
+                                        let oldest_key = completed.keys().next().cloned();
+                                        if let Some(key) = oldest_key {
+                                            completed.remove(&key);
+                                        }
+                                    }
+                                }
+                                
+                                let _ = event_sender.send(TaskEvent::TaskCompleted {
+                                    task_id: task_id.clone(),
+                                    agent_id: agent_id.clone(),
+                                    success: true,
+                                    duration_ms: processing_duration.as_millis() as u64,
+                                });
+                                
+                                tracing::info!("Task {} completed successfully by agent {} in {}ms", 
+                                    task_id, agent_id, processing_duration.as_millis());
+                            },
+                            Ok(Err(_)) | Err(_) => {
+                                // Task failed
+                                let error_msg = match &task_result {
+                                    Ok(Err(e)) => e.to_string(),
+                                    Err(_) => "Task timeout".to_string(),
+                                    _ => unreachable!(),
+                                };
+                                
+                                let will_retry = config.retry_failed_tasks;
+                                
+                                if will_retry {
+                                    let mut failed = failed_tasks.write().await;
+                                    let retry_count = failed.get(&task_id)
+                                        .map(|f| f.retry_count + 1)
+                                        .unwrap_or(1);
+                                        
+                                    if retry_count <= config.max_retry_attempts {
+                                        let next_retry_at = Some(Instant::now() + Duration::from_secs(60 * retry_count as u64));
+                                        failed.insert(task_id.clone(), FailedTask {
+                                            task: task.clone(),
+                                            error: error_msg.clone(),
+                                            retry_count,
+                                            last_attempt_at: Instant::now(),
+                                            next_retry_at,
+                                        });
+                                    }
+                                }
+                                
+                                let _ = event_sender.send(TaskEvent::TaskFailed {
+                                    task_id: task_id.clone(),
+                                    agent_id: agent_id.clone(),
+                                    error: error_msg.clone(),
+                                    will_retry,
+                                });
+                                
+                                tracing::warn!("Task {} failed on agent {}: {}", task_id, agent_id, error_msg);
+                            }
+                        }
+                    } else {
+                        // No suitable agent available, put task back in queue
+                        // Clone the task to avoid ownership issues
+                        let new_prioritized_task = PrioritizedTask {
+                            task: prioritized_task.task.clone(),
+                            priority_score: prioritized_task.priority_score,
+                            submitted_at: prioritized_task.submitted_at,
+                            deadline_score: prioritized_task.deadline_score,
+                        };
+                        {
+                            let mut queue = task_queue.lock().await;
+                            queue.push(new_prioritized_task);
+                        }
+                        
+                        // Wait a bit before trying again
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                } else {
+                    // No tasks in queue, wait a bit
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            }
+            
+            tracing::info!("Agent worker {} stopped", worker_id);
         })
     }
 
     async fn spawn_retry_handler(&self) -> tokio::task::JoinHandle<()> {
-        // TODO: Implement retry logic
+        let task_queue = Arc::clone(&self.task_queue);
+        let failed_tasks = Arc::clone(&self.failed_tasks);
+        let event_sender = self.event_sender.clone();
+        let mut shutdown_receiver = self.shutdown_receiver.clone();
+        let config = self.config.clone();
+
         tokio::spawn(async move {
-            println!("Retry handler started (placeholder)");
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tracing::info!("Retry handler started");
+            
+            let mut retry_interval = tokio::time::interval(Duration::from_secs(30));
+            
+            loop {
+                tokio::select! {
+                    _ = retry_interval.tick() => {
+                        // Check for tasks ready to retry
+                        let now = Instant::now();
+                        let mut tasks_to_retry = Vec::new();
+                        
+                        {
+                            let mut failed = failed_tasks.write().await;
+                            let mut to_remove = Vec::new();
+                            
+                            for (task_id, failed_task) in failed.iter() {
+                                if let Some(next_retry_at) = failed_task.next_retry_at {
+                                    if now >= next_retry_at && failed_task.retry_count <= config.max_retry_attempts {
+                                        tasks_to_retry.push((task_id.clone(), failed_task.task.clone(), failed_task.retry_count));
+                                        to_remove.push(task_id.clone());
+                                    } else if failed_task.retry_count > config.max_retry_attempts {
+                                        // Max retries exceeded, remove from failed tasks
+                                        to_remove.push(task_id.clone());
+                                        tracing::warn!("Task {} exceeded max retry attempts ({})", task_id, config.max_retry_attempts);
+                                    }
+                                }
+                            }
+                            
+                            for task_id in to_remove {
+                                failed.remove(&task_id);
+                            }
+                        }
+                        
+                        // Re-queue tasks for retry
+                        for (task_id, task, retry_count) in tasks_to_retry {
+                            let prioritized_task = PrioritizedTask {
+                                task,
+                                priority_score: 100, // Higher priority for retries
+                                submitted_at: Instant::now(),
+                                deadline_score: 100,
+                            };
+                            
+                            {
+                                let mut queue = task_queue.lock().await;
+                                queue.push(prioritized_task);
+                            }
+                            
+                            let _ = event_sender.send(TaskEvent::TaskRetried {
+                                task_id: task_id.clone(),
+                                retry_count,
+                            });
+                            
+                            tracing::info!("Retrying task {} (attempt {})", task_id, retry_count + 1);
+                        }
+                    },
+                    _ = shutdown_receiver.changed() => {
+                        if *shutdown_receiver.borrow() {
+                            tracing::info!("Retry handler shutting down");
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            tracing::info!("Retry handler stopped");
         })
     }
 
     async fn spawn_cleanup_handler(&self) -> tokio::task::JoinHandle<()> {
-        // TODO: Implement cleanup logic
+        let completed_tasks = Arc::clone(&self.completed_tasks);
+        let failed_tasks = Arc::clone(&self.failed_tasks);
+        let mut shutdown_receiver = self.shutdown_receiver.clone();
+        let config = self.config.clone();
+
         tokio::spawn(async move {
-            println!("Cleanup handler started (placeholder)");
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tracing::info!("Cleanup handler started");
+            
+            let mut cleanup_interval = tokio::time::interval(Duration::from_secs(300)); // Every 5 minutes
+            
+            loop {
+                tokio::select! {
+                    _ = cleanup_interval.tick() => {
+                        let now = Instant::now();
+                        let retention_period = Duration::from_secs(3600); // Keep completed tasks for 1 hour
+                        
+                        // Clean up old completed tasks
+                        {
+                            let mut completed = completed_tasks.write().await;
+                            let initial_count = completed.len();
+                            
+                            completed.retain(|_, task_result| {
+                                now.duration_since(task_result.completed_at) < retention_period
+                            });
+                            
+                            let cleaned_count = initial_count - completed.len();
+                            if cleaned_count > 0 {
+                                tracing::debug!("Cleaned up {} old completed tasks", cleaned_count);
+                            }
+                        }
+                        
+                        // Clean up very old failed tasks (beyond retry attempts)
+                        {
+                            let mut failed = failed_tasks.write().await;
+                            let initial_count = failed.len();
+                            
+                            failed.retain(|_, failed_task| {
+                                // Keep failed tasks for retry, but remove very old ones
+                                let age = now.duration_since(failed_task.last_attempt_at);
+                                age < Duration::from_secs(7200) && // 2 hours max
+                                failed_task.retry_count <= config.max_retry_attempts
+                            });
+                            
+                            let cleaned_count = initial_count - failed.len();
+                            if cleaned_count > 0 {
+                                tracing::debug!("Cleaned up {} old failed tasks", cleaned_count);
+                            }
+                        }
+                    },
+                    _ = shutdown_receiver.changed() => {
+                        if *shutdown_receiver.borrow() {
+                            tracing::info!("Cleanup handler shutting down");
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            tracing::info!("Cleanup handler stopped");
         })
     }
 
     async fn spawn_heartbeat_monitor(&self) -> tokio::task::JoinHandle<()> {
-        // TODO: Implement heartbeat monitoring
+        let agents = Arc::clone(&self.agents);
+        let active_tasks = Arc::clone(&self.active_tasks);
+        let event_sender = self.event_sender.clone();
+        let mut shutdown_receiver = self.shutdown_receiver.clone();
+        let config = self.config.clone();
+
         tokio::spawn(async move {
-            println!("Heartbeat monitor started (placeholder)");
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tracing::info!("Heartbeat monitor started");
+            
+            let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(config.heartbeat_interval_seconds));
+            
+            loop {
+                tokio::select! {
+                    _ = heartbeat_interval.tick() => {
+                        let now = Instant::now();
+                        let task_timeout = Duration::from_secs(config.task_timeout_seconds);
+                        
+                        // Check for timed out tasks
+                        let timed_out_tasks = {
+                            let active = active_tasks.read().await;
+                            active.iter()
+                                .filter(|(_, task)| now.duration_since(task.started_at) > task_timeout)
+                                .map(|(id, task)| (id.clone(), task.agent_id.clone()))
+                                .collect::<Vec<_>>()
+                        };
+                        
+                        // Handle timed out tasks
+                        for (task_id, agent_id) in timed_out_tasks {
+                            tracing::warn!("Task {} timed out on agent {}", task_id, agent_id);
+                            
+                            // Remove from active tasks
+                            {
+                                let mut active = active_tasks.write().await;
+                                active.remove(&task_id);
+                            }
+                            
+                            // Reset agent status to idle (if possible)
+                            {
+                                let mut agents = agents.write().await;
+                                if let Some(_agent) = agents.get_mut(&agent_id) {
+                                    // Note: We can't directly set status as it's managed by the Agent trait
+                                    // In a real implementation, you'd need a way to signal timeout to agents
+                                }
+                            }
+                            
+                            let _ = event_sender.send(TaskEvent::TaskTimeout {
+                                task_id,
+                                agent_id,
+                            });
+                        }
+                        
+                        // Log system health metrics
+                        let (agent_count, active_task_count) = {
+                            let agents = agents.read().await;
+                            let active = active_tasks.read().await;
+                            (agents.len(), active.len())
+                        };
+                        
+                        if active_task_count > 0 {
+                            tracing::debug!(
+                                "System heartbeat: {} agents registered, {} active tasks",
+                                agent_count, active_task_count
+                            );
+                        }
+                    },
+                    _ = shutdown_receiver.changed() => {
+                        if *shutdown_receiver.borrow() {
+                            tracing::info!("Heartbeat monitor shutting down");
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            tracing::info!("Heartbeat monitor stopped");
         })
     }
 
