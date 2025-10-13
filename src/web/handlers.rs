@@ -1,6 +1,6 @@
 //! HTTP API handlers for the DevKit web dashboard
 
-use super::{server::AppState, WebError};
+use super::server::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,

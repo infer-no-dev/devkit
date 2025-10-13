@@ -3,16 +3,15 @@
 //! This module provides comprehensive progress tracking for agent operations,
 //! integrating with the UI progress indicator system for real-time feedback.
 
-use crate::agents::{Agent, AgentStatus, AgentTask, TaskPriority};
-use crate::ui::progress::{ProgressManager, ProgressStyle, ProgressTracker, ProgressUpdate};
-use serde::{Deserialize, Serialize};
+use crate::agents::{Agent, AgentTask, TaskPriority};
+use crate::ui::progress::{ProgressManager, ProgressStyle, ProgressTracker};
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::{debug, error, info, trace, warn};
+use tokio::sync::{broadcast, RwLock};
+use tracing::{debug, info, trace};
 use uuid::Uuid;
 
 /// Agent progress tracking manager

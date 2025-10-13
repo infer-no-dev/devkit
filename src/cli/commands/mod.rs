@@ -7,6 +7,7 @@
 pub mod agent;
 pub mod analyze;
 pub mod blueprint;
+pub mod chat;
 pub mod config;
 pub mod demo;
 pub mod evolution;

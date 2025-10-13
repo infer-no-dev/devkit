@@ -5,17 +5,16 @@
 //! resource usage, and collaboration patterns. It offers multiple visualization
 //! modes including network graphs, timeline views, and dashboard layouts.
 
-use crate::agents::{Agent, AgentStatus, TaskPriority, AgentMetrics};
+use crate::agents::{AgentStatus, TaskPriority, AgentMetrics};
 // use crate::session::{Session, AgentSessionInfo, TaskInfo}; // Temporarily disabled - unused imports
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    symbols,
-    text::{Line, Span, Text},
+    text::Line,
     widgets::{
-        Axis, Block, BorderType, Borders, Chart, Clear, Dataset, Gauge, 
-        List, ListItem, ListState, Paragraph, ScrollbarState, Tabs, Wrap,
+        Block, BorderType, Borders, Clear, Gauge, 
+        List, ListItem, ListState, Paragraph, ScrollbarState, Tabs,
         canvas::Canvas,
     },
     Frame,

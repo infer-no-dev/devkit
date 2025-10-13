@@ -7,8 +7,6 @@ pub mod server;
 pub mod handlers;
 pub mod websocket;
 
-pub use server::WebServer;
-pub use crate::config::WebConfig;
 
 use crate::ui::UIEvent;
 use tokio::sync::{broadcast, mpsc};

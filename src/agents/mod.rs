@@ -19,9 +19,7 @@ use std::fmt;
 use uuid::Uuid;
 
 // Re-export commonly used types
-pub use behavior::{AgentBehaviorProfile, BehaviorProfileManager, BehaviorValue, PersonalityTraits};
-pub use enhanced_agent::{EnhancedCodeGenAgent, CodeGenConfig};
-pub use progress::{AgentProgressTracker, AgentProgressExtension, AgentProgressUpdate, TaskMetrics};
+pub use progress::{AgentProgressTracker, AgentProgressExtension, TaskMetrics};
 pub use system::{AgentInfo, AgentSystem};
 pub use task::{AgentResult, AgentTask, TaskPriority};
 

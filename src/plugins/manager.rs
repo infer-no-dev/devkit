@@ -4,18 +4,16 @@
 //! and orchestration between different plugins.
 
 use crate::plugins::{
-    Plugin, PluginError, PluginEvent, PluginHandle, PluginInfo, PluginState, PluginSystemConfig,
-    PluginLoader, PluginLoaderFactory, PluginMetadata, PluginDependency, PluginStatus, PluginHealth,
-    PLUGIN_API_VERSION,
+    PluginError, PluginEvent, PluginHandle, PluginInfo, PluginState, PluginSystemConfig,
+    PluginLoader, PluginMetadata, PluginStatus, PluginHealth,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, watch};
 use tokio::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
-use uuid::Uuid;
 
 /// Plugin Manager responsible for plugin lifecycle management
 pub struct PluginManager {

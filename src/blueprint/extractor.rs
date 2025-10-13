@@ -5,12 +5,11 @@
 //! and implementation strategies.
 
 use super::*;
-use crate::context::CodebaseContext;
 use anyhow::{Context as AnyhowContext, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tree_sitter::{Language, Node, Parser, Query, QueryCursor};
+use tree_sitter::{Language, Node, Parser};
 
 /// Blueprint extractor that analyzes codebases
 pub struct BlueprintExtractor {
@@ -677,7 +676,7 @@ impl BlueprintExtractor {
     /// Extract constant information
     fn extract_const_info(&self, node: Node, source: &str) -> Option<ConstantInfo> {
         let mut name = "unknown".to_string();
-        let mut const_type = "unknown".to_string();
+        let const_type = "unknown".to_string();
         let mut visibility = "private".to_string();
 
         let mut cursor = node.walk();

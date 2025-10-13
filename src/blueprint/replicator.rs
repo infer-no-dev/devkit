@@ -6,7 +6,7 @@
 use super::extractor::BlueprintExtractor;
 use super::generator::BlueprintGenerator;
 use super::*;
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 

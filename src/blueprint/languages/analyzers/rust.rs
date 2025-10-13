@@ -7,8 +7,7 @@ use super::super::{
     BuildConfig, Dependency, DependencySource, DocumentationConfig, Language, LanguageAnalyzer,
     LanguageModule, TestConfig,
 };
-use anyhow::{Context, Result};
-use std::collections::HashMap;
+use anyhow::Result;
 use std::path::Path;
 
 pub struct RustAnalyzer;

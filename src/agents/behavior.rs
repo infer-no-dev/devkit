@@ -5,7 +5,7 @@
 //! users to create custom agent profiles, define behavior traits, and configure
 //! how agents operate in different contexts.
 
-use crate::agents::{Agent, AgentError, AgentResult, AgentStatus, AgentTask, TaskPriority};
+use crate::agents::{AgentError, TaskPriority};
 use crate::config::ConfigManager;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -1457,7 +1457,7 @@ mod tests {
     #[tokio::test]
     async fn test_profile_creation() {
         let temp_dir = TempDir::new().unwrap();
-        let config_manager = ConfigManager::new(temp_dir.path().to_path_buf()).unwrap();
+        let config_manager = ConfigManager::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let mut manager = BehaviorProfileManager::new(
             temp_dir.path().join("profiles"),
             config_manager,
@@ -1492,7 +1492,7 @@ mod tests {
     #[tokio::test]
     async fn test_default_profiles() {
         let temp_dir = TempDir::new().unwrap();
-        let config_manager = ConfigManager::new(temp_dir.path().to_path_buf()).unwrap();
+        let config_manager = ConfigManager::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let mut manager = BehaviorProfileManager::new(
             temp_dir.path().join("profiles"),
             config_manager,
@@ -1510,7 +1510,7 @@ mod tests {
     #[test]
     fn test_profile_scoring() {
         let temp_dir = TempDir::new().unwrap();
-        let config_manager = ConfigManager::new(temp_dir.path().to_path_buf()).unwrap();
+        let config_manager = ConfigManager::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let manager = BehaviorProfileManager::new(
             temp_dir.path().join("profiles"),
             config_manager,

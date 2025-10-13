@@ -3,21 +3,18 @@
 //! This module provides comprehensive UI components for displaying and visualizing
 //! code artifacts with syntax highlighting, diff views, and interactive browsing.
 
-use crate::artifacts::manager::{EnhancedArtifact, QualityMetrics, UsageStats, VersionType};
-use crate::ui::syntax::SyntaxHighlighter;
+use crate::artifacts::manager::{EnhancedArtifact, QualityMetrics};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{
-        block::Position, Block, BorderType, Borders, Clear, Gauge, List, ListItem, ListState,
+        Block, BorderType, Borders, Gauge, List, ListItem, ListState,
         Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs, Wrap,
     },
     Frame,
 };
-use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, trace};
 
 /// Artifact display configuration
 #[derive(Debug, Clone)]

@@ -4,9 +4,8 @@ use crate::ui::themes::Theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
-    symbols,
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, Gauge, LineGauge, Paragraph},
+    widgets::{Block, Borders, Gauge, LineGauge, Paragraph},
     Frame,
 };
 use std::{
@@ -15,7 +14,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{mpsc, RwLock};
-use tracing::trace;
 use uuid::Uuid;
 
 /// Progress indicator manager

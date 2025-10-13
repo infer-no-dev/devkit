@@ -4,10 +4,9 @@
 //! the terminal UI with rich browser-based interfaces for session management,
 //! multi-agent coordination visualization, and analytics.
 
-use super::{handlers, websocket, DashboardConfig, WebError};
+use super::{handlers, WebError};
 // Temporarily disable unused imports to fix compilation
 // use crate::analytics::{AnalyticsEngine, MetricsSummary};
-use crate::config::ConfigManager;
 // use crate::session::{Session, SessionManager, SessionFilters};
 use crate::ui::coordination_viz::{CoordinationVisualizer, SystemSnapshot};
 use crate::ui::UIEvent;
@@ -1713,7 +1712,6 @@ async fn serve_static(uri: Uri) -> impl IntoResponse {
 // Temporarily disable unused imports
 // use crate::session::{SessionManagerConfig, SessionUser, SessionPersistence};
 // use crate::analytics::{AnalyticsConfig};
-use std::path::Path as StdPath;
 
 /// Create a stub SessionManager for basic web server functionality
 fn create_stub_session_manager() -> SessionManager {

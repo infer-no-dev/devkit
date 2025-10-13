@@ -1,6 +1,6 @@
 //! Multi-session management for interactive mode
 
-use crate::interactive::{ConversationEntry, InteractiveSession};
+use crate::interactive::InteractiveSession;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use uuid::Uuid;

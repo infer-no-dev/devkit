@@ -3,8 +3,6 @@ use crate::cli::{session_manager::SessionManager, CliRunner, InteractiveArgs};
 use crate::interactive::{ConversationEntry, ConversationRole, EntryType, InteractiveSession};
 use crate::ui::notifications::Notification;
 use crate::ui::{Application, UIConfig, UIEvent};
-use crate::web::WebServer;
-use crate::config::WebConfig;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::time::{interval, Duration};
@@ -1590,7 +1588,7 @@ fn spawn_agent_monitor(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(5)); // Reduced frequency to 5 seconds
-        let mut last_status = String::new();
+        let last_status = String::new();
 
         loop {
             interval.tick().await;

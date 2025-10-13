@@ -347,6 +347,16 @@ impl MockDataFactory {
                     input_panel_height: 3,
                 },
             },
+            web: crate::config::WebConfig {
+                enabled: false,
+                host: "localhost".to_string(),
+                port: 8080,
+                cors_enabled: true,
+                static_files_path: None,
+                auth_enabled: false,
+                auth_token: None,
+                session_timeout_minutes: 30,
+            },
             logging: crate::logging::LogConfig::default(),
             keybindings: HashMap::new(),
         }

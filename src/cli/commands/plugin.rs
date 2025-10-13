@@ -5,7 +5,6 @@
 use crate::cli::{CliRunner, PluginCommands, OutputFormat};
 use crate::plugins::{MarketplaceClient, MarketplaceConfig, PluginSearchQuery};
 use serde_json;
-use std::path::PathBuf;
 
 /// Execute plugin commands
 pub async fn run(

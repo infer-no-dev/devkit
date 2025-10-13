@@ -4,16 +4,15 @@
 //! the DevKit session management system. It includes metrics collection,
 //! performance monitoring, trend analysis, and dashboard visualization.
 
-use crate::agents::{AgentMetrics, AgentStatus, TaskPriority};
-use crate::session::{Session, SessionStatus, AgentSessionInfo, TaskInfo};
-use crate::ui::coordination_viz::{SystemSnapshot, SystemMetrics, ResourceUsage, AgentInteraction};
+use crate::agents::{AgentStatus, TaskPriority};
+use crate::session::{Session, SessionStatus};
+use crate::ui::coordination_viz::{SystemSnapshot, ResourceUsage, AgentInteraction};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
-use tracing::{debug, error, info, trace, warn};
+use std::time::{Duration, SystemTime};
+use tracing::{debug, error, info};
 
 /// Maximum number of metrics data points to keep in memory
 const MAX_METRICS_HISTORY: usize = 10000;

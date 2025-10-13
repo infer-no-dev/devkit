@@ -5,9 +5,9 @@
 
 use super::*;
 use anyhow::{Context as AnyhowContext, Result};
-use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError};
+use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::fs;
 
 /// Blueprint generator that creates projects from blueprints

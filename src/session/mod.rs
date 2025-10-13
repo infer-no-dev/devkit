@@ -11,23 +11,25 @@
 // pub mod recovery; // TODO: Implement recovery submodule
 // pub mod state; // TODO: Implement state submodule
 
-use async_trait::async_trait;
 use crate::agents::{AgentStatus, TaskPriority, AgentResult};
 use crate::config::ConfigManager;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
-// TODO: Re-enable when submodules are implemented
+// Expose persistence module
+pub mod persistence;
+pub use persistence::FileSystemPersistence;
+
+// TODO: Re-enable when other submodules are implemented
 // pub use analytics::{SessionAnalytics, SessionMetrics, PerformanceMetrics};
 // pub use collaboration::{CollaborationManager, SessionShare, SharePermissions};
-// pub use persistence::{SessionPersistence, StorageBackend, CompressionType};
 // pub use recovery::{RecoveryManager, CheckpointManager, SessionSnapshot};
 // pub use state::{SessionState, StateManager, StateTransition};
 

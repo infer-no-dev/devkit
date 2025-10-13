@@ -7,6 +7,7 @@
 pub mod analyzer;
 pub mod generator;
 pub mod language_detection;
+pub mod stubs;
 pub mod templates;
 
 use crate::ai::AIManager;

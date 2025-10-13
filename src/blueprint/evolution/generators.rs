@@ -6,7 +6,6 @@
 use super::migration::*;
 use super::*;
 use anyhow::Result;
-use std::path::PathBuf;
 
 /// Generator for architecture-related changes
 pub struct ArchitectureGenerator;

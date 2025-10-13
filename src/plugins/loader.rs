@@ -4,16 +4,15 @@
 //! native libraries, WebAssembly modules, and scripted plugins.
 
 use crate::plugins::{
-    Plugin, PluginError, PluginMetadata, PluginSystemConfig, PluginCapability, PluginHealth
+    Plugin, PluginError, PluginMetadata, PluginSystemConfig, PluginCapability
 };
 use libloading::{Library, Symbol};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ffi::{CString, OsStr};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::process::Command;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 /// Plugin loader factory that creates appropriate loaders for different plugin types
 pub struct PluginLoaderFactory;

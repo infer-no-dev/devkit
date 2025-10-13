@@ -864,7 +864,7 @@ impl CodebaseAnalyzer {
         // Handle relative imports
         if import.starts_with(".") {
             if let Some(parent) = current_file.parent() {
-                let mut import_path = parent.join(import.trim_start_matches("./"));
+                let import_path = parent.join(import.trim_start_matches("./"));
                 
                 // Try different extensions
                 for ext in &["js", "ts", "jsx", "tsx"] {

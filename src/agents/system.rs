@@ -3,7 +3,6 @@
 use super::task::{AgentResult, AgentTask, TaskPriority};
 use super::{Agent, AgentMetrics, AgentStatus};
 use crate::ai::AIManager;
-use crate::logging::{context, metrics};
 // TODO: Fix circular dependency with error module
 // use crate::error::{DevKitError, DevKitResult, ErrorContext, WithContext};
 
@@ -552,12 +551,20 @@ impl AgentSystem {
                     };
 
                     if let Some(agent_id) = suitable_agent {
-                        // Mark task as active
+                        // Get existing result_sender if the task was submitted with submit_task
+                        let existing_result_sender = {
+                            let mut active = active_tasks.write().await;
+                            active.get_mut(&task_id).and_then(|existing_task| {
+                                existing_task.result_sender.take()
+                            })
+                        };
+                        
+                        // Mark task as active with the correct agent and preserved result_sender
                         let active_task = ActiveTask {
                             task: task.clone(),
                             agent_id: agent_id.clone(),
                             started_at: Instant::now(),
-                            result_sender: None, // Will be set if needed
+                            result_sender: existing_result_sender,
                         };
                         
                         {
@@ -586,11 +593,11 @@ impl AgentSystem {
                         
                         let processing_duration = task_start.elapsed();
                         
-                        // Remove from active tasks
-                        {
+                        // Remove from active tasks and get result_sender
+                        let result_sender = {
                             let mut active = active_tasks.write().await;
-                            active.remove(&task_id);
-                        }
+                            active.remove(&task_id).and_then(|active_task| active_task.result_sender)
+                        };
 
                         // Handle result
                         match task_result {
@@ -614,6 +621,11 @@ impl AgentSystem {
                                     }
                                 }
                                 
+                                // Send result back to caller if they're waiting
+                                if let Some(sender) = result_sender {
+                                    let _ = sender.send(Ok(result.clone()));
+                                }
+                                
                                 let _ = event_sender.send(TaskEvent::TaskCompleted {
                                     task_id: task_id.clone(),
                                     agent_id: agent_id.clone(),
@@ -633,6 +645,14 @@ impl AgentSystem {
                                 };
                                 
                                 let will_retry = config.retry_failed_tasks;
+                                
+                                // Send error back to caller if they're waiting (unless retrying)
+                                if let Some(sender) = result_sender {
+                                    if !will_retry {
+                                        let _ = sender.send(Err(anyhow::anyhow!(error_msg.clone())));
+                                    }
+                                    // If retrying, don't send error yet - let retry succeed or fail
+                                }
                                 
                                 if will_retry {
                                     let mut failed = failed_tasks.write().await;

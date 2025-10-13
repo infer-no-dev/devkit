@@ -3,7 +3,7 @@
 // Temporarily disable import until error module is properly configured
 // use crate::error::{DevKitError, DevKitResult, ErrorHandler, RecoveryStrategy};
 use crate::agents::AgentError as DevKitError; // Temporary stub
-use std::result::Result as DevKitResult; // Temporary stub
+ // Temporary stub
 
 // Temporary stub types
 #[derive(Debug, Default)]
@@ -365,10 +365,7 @@ mod tests {
         let mut handler = UIErrorHandler::new(tx);
 
         // Use an existing AgentError variant for testing
-        let error = DevKitError::TaskFailed {
-            task_id: "test-task".to_string(),
-            reason: "Test error".to_string(),
-        };
+        let error = crate::agents::AgentError::ConfigurationError("Test error".to_string());
 
         let strategy = handler.handle_error(error).await;
         assert!(matches!(strategy, RecoveryStrategy::Ignore));
@@ -381,9 +378,8 @@ mod tests {
         let handler = UIErrorHandler::new(tx);
 
         // Use an existing AgentError variant for testing
-        let error = DevKitError::SerializationError {
-            details: "Test serialization error".to_string(),
-        };
+        let error_json = serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::Other, "test"));
+        let error = crate::agents::AgentError::SerializationError(error_json);
 
         let ui_error = handler.convert_to_ui_error(&error);
         assert_eq!(ui_error.severity, ErrorSeverity::Error);

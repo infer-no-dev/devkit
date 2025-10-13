@@ -8,18 +8,16 @@ use crate::agents::behavior::{
     AgentBehaviorProfile, BehaviorProfileManager, BehaviorValue, 
     PersonalityTraits, DecisionMakingPattern, CommunicationStyle, 
     TaskHandlingBehavior, LearningBehavior, ErrorHandlingBehavior,
-    CollaborationBehavior, ResourceUsageBehavior, DecisionStrategy,
-    UpdateFrequency, PrioritizationStrategy, ErrorHandlingStrategy,
-    ConflictResolutionStrategy, SharingAlgorithm, CacheEvictionPolicy,
+    CollaborationBehavior, ResourceUsageBehavior,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Clear, Gauge, List, ListItem, ListState, 
-        Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs, Wrap,
+        Block, BorderType, Borders, Clear, List, ListItem, ListState, 
+        Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs,
     },
     Frame,
 };

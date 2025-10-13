@@ -3,13 +3,13 @@
 //! Manages plugin configuration, user preferences, and settings persistence.
 //! Provides validation, type safety, and configuration hot-reloading.
 
-use crate::plugins::{PluginError, PluginMetadata};
+use crate::plugins::PluginError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::fs;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use std::sync::Arc;
 
 /// Plugin configuration manager

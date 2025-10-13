@@ -8,7 +8,6 @@ use crossterm::{
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::Widget,
     Frame, Terminal,
 };
 use std::io::{stdout, Stdout};

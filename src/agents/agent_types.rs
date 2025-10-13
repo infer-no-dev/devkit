@@ -8,7 +8,6 @@ use serde_json::json;
 use std::sync::Arc;
 
 // Re-export the review agent
-pub use super::review::CodeReviewAgent;
 
 /// Agent specialized for code generation tasks
 #[derive(Debug)]
@@ -24,6 +23,7 @@ impl CodeGenerationAgent {
             base: BaseAgent::new(
                 "CodeGenerationAgent".to_string(),
                 vec![
+                    "code_generation".to_string(),
                     "generate_function".to_string(),
                     "generate_class".to_string(),
                     "generate_module".to_string(),
@@ -202,7 +202,7 @@ impl Agent for CodeGenerationAgent {
         };
 
         let result = match task.task_type.as_str() {
-            "generate_function" | "generate_class" | "generate_module" | "generate_tests"
+            "code_generation" | "generate_function" | "generate_class" | "generate_module" | "generate_tests"
             | "complete_code" | "refactor_code" => self.generate_code(&task).await,
             _ => Err(AgentError::InvalidTaskType {
                 task_type: task.task_type.clone(),

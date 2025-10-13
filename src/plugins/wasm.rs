@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 // For now, we'll use a mock implementation since wasmtime adds significant dependencies
 // In production, uncomment the wasmtime imports and implementation

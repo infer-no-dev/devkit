@@ -7,11 +7,10 @@ use super::{
     Agent, AgentError, AgentResult, AgentStatus, AgentTask, BaseAgent, 
     AgentProgressTracker, AgentProgressExtension, TaskMetrics
 };
-use crate::ui::progress::ProgressManager;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use async_trait::async_trait;
 
 /// Enhanced code generation agent with progress tracking

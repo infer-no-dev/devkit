@@ -275,6 +275,7 @@ impl CliValidator {
             Commands::Demo(args) => self.validate_demo_args(args, &mut result),
             Commands::Blueprint(args) => self.validate_blueprint_args(args, &mut result),
             Commands::Plugin(args) => self.validate_plugin_args(args, &mut result),
+            Commands::Chat(args) => self.validate_chat_args(args, &mut result),
         }
 
         result.is_valid = result.errors.is_empty();
@@ -688,6 +689,44 @@ impl CliValidator {
     fn validate_shell_args(&self, _args: &ShellArgs, _result: &mut ValidationResult) {}
     fn validate_demo_args(&self, _args: &DemoArgs, _result: &mut ValidationResult) {}
     fn validate_plugin_args(&self, _args: &PluginArgs, _result: &mut ValidationResult) {}
+    
+    /// Validate chat arguments
+    fn validate_chat_args(&self, args: &ChatArgs, result: &mut ValidationResult) {
+        // Validate project directory if provided
+        if let Some(project) = &args.project {
+            self.validate_directory_path(project, "project", result);
+        }
+        
+        // Validate config file if provided
+        if let Some(config) = &args.config {
+            self.validate_file_path(config, "config", result);
+        }
+        
+        // Validate max_turns is reasonable
+        if args.max_turns == 0 {
+            result.errors.push(ValidationError::InvalidRange {
+                field: "max_turns".to_string(),
+                value: args.max_turns.to_string(),
+                min: "1".to_string(),
+                max: "1000".to_string(),
+            });
+        } else if args.max_turns > 1000 {
+            result.warnings.push(ValidationWarning {
+                message: format!("Large max_turns value: {}. This may consume significant resources.", args.max_turns),
+                field: Some("max_turns".to_string()),
+                suggestion: Some("Consider using a smaller value like 50 or 100".to_string()),
+            });
+        }
+        
+        // Warn about conflicting flags
+        if args.resume && args.persist {
+            result.warnings.push(ValidationWarning {
+                message: "Both --resume and --persist flags are set. --persist is implied when using --resume".to_string(),
+                field: None,
+                suggestion: Some("You can remove --persist when using --resume".to_string()),
+            });
+        }
+    }
 
     /// Validate blueprint arguments
     fn validate_blueprint_args(&self, args: &BlueprintArgs, result: &mut ValidationResult) {

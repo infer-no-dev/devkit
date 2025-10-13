@@ -136,6 +136,10 @@ pub enum Commands {
 
     /// Plugin marketplace operations
     Plugin(PluginArgs),
+
+    /// AI-powered chat liaison agent
+    #[command(alias = "c")]
+    Chat(ChatArgs),
 }
 
 /// Project initialization arguments
@@ -567,6 +571,38 @@ pub struct PluginArgs {
     pub command: PluginCommands,
 }
 
+/// AI-powered chat liaison agent arguments
+#[derive(Args)]
+pub struct ChatArgs {
+    /// Project root directory
+    #[arg(short, long)]
+    pub project: Option<PathBuf>,
+
+    /// Configuration file
+    #[arg(short, long)]
+    pub config: Option<PathBuf>,
+
+    /// Enable debug output
+    #[arg(long)]
+    pub debug: bool,
+
+    /// Initial message or question to start the conversation
+    #[arg(short, long)]
+    pub message: Option<String>,
+
+    /// Keep conversation history persistent across sessions
+    #[arg(long)]
+    pub persist: bool,
+
+    /// Continue from previous conversation session
+    #[arg(long)]
+    pub resume: bool,
+
+    /// Maximum number of conversation turns
+    #[arg(long, default_value = "50")]
+    pub max_turns: usize,
+}
+
 #[derive(Subcommand)]
 pub enum BlueprintCommands {
     /// Extract system blueprint from codebase
@@ -827,6 +863,7 @@ impl CliRunner {
             Commands::Demo(args) => self.run_demo(args).await,
             Commands::Blueprint(args) => self.run_blueprint(args.command).await,
             Commands::Plugin(args) => self.run_plugin(args.command).await,
+            Commands::Chat(args) => self.run_chat(args).await,
         }
     }
 
@@ -1044,5 +1081,9 @@ impl CliRunner {
         command: PluginCommands,
     ) -> Result<(), Box<dyn std::error::Error>> {
         commands::plugin::run(self, command).await
+    }
+
+    async fn run_chat(&mut self, args: ChatArgs) -> Result<(), Box<dyn std::error::Error>> {
+        commands::chat::run(self, args).await
     }
 }

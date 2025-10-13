@@ -6,10 +6,9 @@
 use crate::plugins::{PluginError, PluginMetadata, PluginDependency, PluginCapability};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::path::Path;
 use tokio::fs;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 /// Plugin manifest parser
 #[derive(Debug, Clone)]

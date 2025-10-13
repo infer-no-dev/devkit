@@ -6,8 +6,8 @@
 use crate::plugins::{PluginError, PluginPermission};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::PathBuf;
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::process::{Child, Command as AsyncCommand};
 use tokio::sync::{Mutex, RwLock};
@@ -384,7 +384,7 @@ impl PluginSandbox {
         cmd.stdin(Stdio::null());
 
         // Start process
-        let mut child = cmd.spawn()
+        let child = cmd.spawn()
             .map_err(|e| PluginError::ExecutionFailed(format!("Failed to spawn process: {}", e)))?;
 
         // Create sandbox process entry
@@ -427,7 +427,7 @@ impl PluginSandbox {
         
         let output = {
             let mut processes = self.active_processes.lock().await;
-            if let Some(mut sandbox_process) = processes.remove(plugin_id) {
+            if let Some(sandbox_process) = processes.remove(plugin_id) {
                 sandbox_process.process.wait_with_output().await
                     .map_err(|e| PluginError::ExecutionFailed(format!("Process execution failed: {}", e)))?
             } else {

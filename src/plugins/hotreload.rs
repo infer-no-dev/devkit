@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, RwLock};
-use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
 /// Plugin hot reload manager

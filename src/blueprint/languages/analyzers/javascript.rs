@@ -7,7 +7,7 @@ use super::super::{
     BuildConfig, Dependency, DependencySource, DocumentationConfig, Language, LanguageAnalyzer,
     LanguageModule, TestConfig,
 };
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;

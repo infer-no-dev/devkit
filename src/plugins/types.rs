@@ -3,13 +3,10 @@
 //! Core types and traits for the plugin system, defining the plugin lifecycle,
 //! capabilities, and communication interfaces.
 
-use crate::agents::{Agent, AgentError, AgentResult, AgentTask};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::RwLock;
 use tokio::time::Instant;
 
 /// Core plugin trait that all plugins must implement

@@ -1,5 +1,5 @@
 use crate::cli::{CliRunner, InspectCommands};
-use crate::context::{CodebaseContext, RelationshipType};
+use crate::context::RelationshipType;
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
