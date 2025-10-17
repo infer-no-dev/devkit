@@ -283,6 +283,9 @@ devkit config --show
 devkit config --edit
 ```
 
+## 📎 Prompt Cheatsheet
+See docs/PROMPT_CHEATSHEET.md for a one-page guide to writing effective prompts and using templates.
+
 ## ⚙️ Configuration
 
 DevKit uses a hierarchical configuration system. Create `config.toml` in your project:
@@ -384,15 +387,25 @@ devkit shell completion <shell> # Generate completion script
 ### Advanced Usage
 ```bash
 # Analysis with different formats
-devkit analyze . --format json --output analysis.json
-devkit analyze ./src --include-tests --quiet
+DevKit analyze . --format json --output analysis.json
+DevKit analyze ./src --include-tests --quiet
 
 # Code generation with context
-devkit generate "refactor this for better error handling" \
+DevKit generate "refactor this for better error handling" \
     --context ./src/main.rs \
     --language rust \
     --output ./src/main_refactored.rs
 
+# Templates: list, show, apply
+DevKit template list --language rust
+DevKit template show rust_function
+DevKit template apply rust_function \
+    -v name=do_work \
+    -v return_type=Result<()> \
+    -v parameters="path: &str" \
+    -v body="println!(\"{}\", path); Ok(())" \
+    --output src/utils.rs --force
+```
 # System monitoring
 devkit status --detailed --performance
 ```
