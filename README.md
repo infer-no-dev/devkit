@@ -284,7 +284,7 @@ devkit config --edit
 ```
 
 ## 📎 Prompt Cheatsheet
-See docs/PROMPT_CHEATSHEET.md for a one-page guide to writing effective prompts and using templates.
+See docs/PROMPT_CHEATSHEET.md for a one-page guide to writing effective prompts, templates, and scaffolding.
 
 ## ⚙️ Configuration
 
@@ -395,6 +395,24 @@ DevKit generate "refactor this for better error handling" \
     --context ./src/main.rs \
     --language rust \
     --output ./src/main_refactored.rs
+
+# Project scaffolding (multi-file)
+# Rust Axum API
+DevKit generate "todo api" --language rust --stack rust-axum --root ./api
+# Rust Axum + SQLx (Postgres)
+DevKit generate "service" --language rust --stack rust-axum-sqlx --root ./svc
+# Node NestJS API (TypeScript)
+DevKit generate "auth api" --language typescript --stack node-nest --root ./auth
+# Next.js app
+DevKit generate "marketing site" --language typescript --stack nextjs --root ./web --dry-run
+# Python FastAPI + SQLAlchemy
+DevKit generate "catalog api" --language python --stack python-fastapi-sqlalchemy --root ./catalog
+
+# Control behavior
+#   --dry-run      print plan only
+#   --force        overwrite existing files
+#   --no-scaffold  disable multi-file output
+#   --single-file  always generate one file
 
 # Templates: list, show, apply
 DevKit template list --language rust

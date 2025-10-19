@@ -230,7 +230,7 @@ pub struct GenerateArgs {
     /// Natural language prompt
     pub prompt: String,
 
-    /// Target file or directory
+    /// Target file or directory (if directory and scaffolding is enabled, a project is created here)
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
@@ -257,6 +257,34 @@ pub struct GenerateArgs {
     /// Preview mode (don't write files)
     #[arg(short, long)]
     pub preview: bool,
+
+    /// Enable automatic project scaffolding (multi-file). Disabled if --single-file or --no-scaffold is set.
+    #[arg(long, default_value_t = true)]
+    pub scaffold: bool,
+
+    /// Disable scaffolding (alias for --scaffold=false)
+    #[arg(long)]
+    pub no_scaffold: bool,
+
+    /// Force single-file output (disables scaffolding)
+    #[arg(long)]
+    pub single_file: bool,
+
+    /// Root directory to scaffold into (overrides detection from --output)
+    #[arg(long)]
+    pub root: Option<PathBuf>,
+
+    /// Stack preset (e.g. rust-axum, rust-actix, node-express, nextjs, python-fastapi)
+    #[arg(long)]
+    pub stack: Option<String>,
+
+    /// Dry run scaffolding (print plan, do not write)
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Overwrite existing files/directories during scaffolding
+    #[arg(long)]
+    pub force: bool,
 }
 
 /// Agent management arguments
@@ -503,6 +531,20 @@ pub enum TemplateCommands {
     Show {
         /// Template name
         name: String,
+    },
+    /// Apply a template with variables
+    Apply {
+        /// Template name
+        name: String,
+        /// Variables as key=value (repeatable)
+        #[arg(short = 'v', long = "var")]
+        vars: Vec<String>,
+        /// Output file path (prints to stdout if omitted)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Overwrite output file if it exists
+        #[arg(long, default_value_t = false)]
+        force: bool,
     },
     /// Create new template
     Create {
