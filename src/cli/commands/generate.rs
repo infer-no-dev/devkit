@@ -6,6 +6,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
+const VALID_STACKS: &[&str] = &[
+    "rust-axum",
+    "rust-actix",
+    "rust-axum-sqlx",
+    "node-express",
+    "node-nest",
+    "nextjs",
+    "python-fastapi",
+    "python-fastapi-sqlalchemy",
+];
+
 pub async fn run(
     runner: &mut CliRunner,
     args: GenerateArgs,
@@ -25,6 +36,13 @@ pub async fn run(
         ));
     }
 
+    // List stacks and exit
+    if args.list_stacks {
+        runner.print_info("Available stacks:");
+        for s in VALID_STACKS { runner.print_output(&format!("  - {}\n", s), None); }
+        return Ok(());
+    }
+
     // Show progress for generation  
     if !runner.quiet() {
         print!("🔄 Generating code...");
@@ -41,6 +59,19 @@ pub async fn run(
     // Decide scaffolding
     let mut scaffold = args.scaffold;
     if args.single_file || args.no_scaffold { scaffold = false; }
+
+    // Validate stack preset if provided
+    if let Some(stack) = &args.stack {
+        if !VALID_STACKS.contains(&stack.as_str()) {
+            let sugg = suggest_stacks(stack);
+            let mut msg = format!("Unknown --stack '{}'\nValid options: {}", stack, VALID_STACKS.join(", "));
+            if !sugg.is_empty() {
+                msg.push_str(&format!("\nDid you mean: {}?", sugg.join(", ")));
+            }
+            runner.print_error(&msg);
+            return Err("invalid --stack".into());
+        }
+    }
 
     if scaffold && !args.preview {
         scaffold_project(runner, &args, language.as_deref()).await?;
@@ -78,6 +109,23 @@ pub async fn run(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PlanEntry { path: String, content: String }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suggest_stack_close_match() {
+        let got = suggest_stacks("nxtjs");
+        assert!(got.iter().any(|s| s == "nextjs"));
+    }
+
+    #[test]
+    fn valid_stacks_list_contains_common() {
+        assert!(VALID_STACKS.contains(&"nextjs"));
+        assert!(VALID_STACKS.contains(&"rust-axum"));
+    }
+}
 
 async fn scaffold_project(
     runner: &CliRunner,
@@ -446,6 +494,31 @@ fn generate_code_with_stubs(args: &GenerateArgs, language: Option<&str>) -> Stri
     };
 
     stubs::generate_code_stub(&enhanced_prompt, language)
+}
+
+fn suggest_stacks(input: &str) -> Vec<String> {
+    // Simple edit-distance based suggestion (Levenshtein)
+    fn dist(a: &str, b: &str) -> usize {
+        let mut dp = vec![vec![0; b.len() + 1]; a.len() + 1];
+        for i in 0..=a.len() { dp[i][0] = i; }
+        for j in 0..=b.len() { dp[0][j] = j; }
+        for (i, ca) in a.chars().enumerate() {
+            for (j, cb) in b.chars().enumerate() {
+                let cost = if ca == cb { 0 } else { 1 };
+                dp[i + 1][j + 1] = std::cmp::min(
+                    std::cmp::min(dp[i][j + 1] + 1, dp[i + 1][j] + 1),
+                    dp[i][j] + cost,
+                );
+            }
+        }
+        dp[a.len()][b.len()]
+    }
+    let mut items: Vec<(usize, &str)> = VALID_STACKS
+        .iter()
+        .map(|s| (dist(&input.to_lowercase(), s), *s))
+        .collect();
+    items.sort_by_key(|(d, _)| *d);
+    items.into_iter().take(3).map(|(_, s)| s.to_string()).collect()
 }
 
 fn display_generated_code(

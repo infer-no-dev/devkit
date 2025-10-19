@@ -274,7 +274,7 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub root: Option<PathBuf>,
 
-    /// Stack preset (e.g. rust-axum, rust-actix, node-express, nextjs, python-fastapi)
+    /// Stack preset (e.g. rust-axum, rust-actix, rust-axum-sqlx, node-express, node-nest, nextjs, python-fastapi, python-fastapi-sqlalchemy)
     #[arg(long)]
     pub stack: Option<String>,
 
@@ -285,6 +285,10 @@ pub struct GenerateArgs {
     /// Overwrite existing files/directories during scaffolding
     #[arg(long)]
     pub force: bool,
+
+    /// List available --stack presets and exit
+    #[arg(long)]
+    pub list_stacks: bool,
 
     /// Export planned file map to JSON (planning only)
     #[arg(long)]

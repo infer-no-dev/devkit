@@ -409,10 +409,11 @@ DevKit generate "marketing site" --language typescript --stack nextjs --root ./w
 DevKit generate "catalog api" --language python --stack python-fastapi-sqlalchemy --root ./catalog
 
 # Control behavior
-#   --dry-run      print plan only
-#   --force        overwrite existing files
-#   --no-scaffold  disable multi-file output
-#   --single-file  always generate one file
+#   --dry-run        print plan only
+#   --force          overwrite existing files
+#   --no-scaffold    disable multi-file output
+#   --single-file    always generate one file
+#   --list-stacks    show available stack presets
 
 # Templates: list, show, apply
 DevKit template list --language rust
