@@ -286,6 +286,9 @@ devkit config --edit
 ## 📎 Prompt Cheatsheet
 See docs/PROMPT_CHEATSHEET.md for a one-page guide to writing effective prompts, templates, and scaffolding.
 
+## ✅ Continuous Integration
+This repo includes a CI workflow that runs formatting, clippy (no warnings), and unit tests on pushes and PRs to main.
+
 ## ⚙️ Configuration
 
 DevKit uses a hierarchical configuration system. Create `config.toml` in your project:
@@ -414,6 +417,12 @@ DevKit generate "catalog api" --language python --stack python-fastapi-sqlalchem
 #   --no-scaffold    disable multi-file output
 #   --single-file    always generate one file
 #   --list-stacks    show available stack presets
+
+# Planning / plans
+# Export a plan
+DevKit generate "web app" --language typescript --stack nextjs --root ./web --dry-run --export-plan web-plan.json
+# Apply a plan
+DevKit generate --apply-plan web-plan.json --force
 
 # Templates: list, show, apply
 DevKit template list --language rust

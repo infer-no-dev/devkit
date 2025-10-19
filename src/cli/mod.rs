@@ -105,6 +105,10 @@ pub enum Commands {
     Analyze(AnalyzeArgs),
 
     /// Generate code using AI agents
+    #[command(
+        about = "Generate code or scaffold a project from a prompt",
+        long_about = "Generate code or scaffold a multi-file project from a natural language prompt.\n\nExamples:\n  devkit generate \"todo api\" --language rust --stack rust-axum --root ./api\n  devkit generate \"marketing site\" --language typescript --stack nextjs --root ./web --dry-run\n  devkit generate --list-stacks\n  devkit generate --apply-plan plan.json --force\n\nFlags:\n  --stack, --dry-run, --force, --no-scaffold, --single-file, --root, --export-plan, --apply-plan, --list-stacks"
+    )]
     Generate(GenerateArgs),
 
     /// Manage AI agents
