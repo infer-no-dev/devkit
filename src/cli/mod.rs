@@ -285,6 +285,14 @@ pub struct GenerateArgs {
     /// Overwrite existing files/directories during scaffolding
     #[arg(long)]
     pub force: bool,
+
+    /// Export planned file map to JSON (planning only)
+    #[arg(long)]
+    pub export_plan: Option<PathBuf>,
+
+    /// Apply a previously exported plan JSON instead of generating
+    #[arg(long)]
+    pub apply_plan: Option<PathBuf>,
 }
 
 /// Agent management arguments

@@ -4,6 +4,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 
 pub async fn run(
     runner: &mut CliRunner,
@@ -28,6 +29,13 @@ pub async fn run(
     if !runner.quiet() {
         print!("🔄 Generating code...");
         io::stdout().flush()?;
+    }
+
+    // If applying a plan, bypass generation
+    if let Some(plan_path) = &args.apply_plan {
+        apply_plan_file(runner, plan_path, args.force).await?;
+        runner.print_success("Plan applied successfully!");
+        return Ok(());
     }
 
     // Decide scaffolding
@@ -68,6 +76,9 @@ pub async fn run(
     Ok(())
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PlanEntry { path: String, content: String }
+
 async fn scaffold_project(
     runner: &CliRunner,
     args: &GenerateArgs,
@@ -105,6 +116,16 @@ async fn scaffold_project(
 
     let lang = language.unwrap_or("rust").to_lowercase();
     let stack = args.stack.as_deref().unwrap_or("").to_lowercase();
+
+    // Add .gitignore depending on stack/lang
+    let mut gitignore = String::new();
+    match lang.as_str() {
+        "rust" | "rs" => { gitignore.push_str("target\n**/*.rs.bk\n"); }
+        "typescript" | "javascript" | "ts" | "js" => { gitignore.push_str("node_modules\n.next\ndist\n"); }
+        "python" | "py" => { gitignore.push_str(".venv\n__pycache__\n*.pyc\n"); }
+        _ => {}
+    }
+    if !gitignore.is_empty() { plan.push((root.join(".gitignore"), gitignore)); }
 
     match (lang.as_str(), stack.as_str()) {
         ("rust", s) if s == "rust-axum" => {
@@ -272,18 +293,78 @@ def root():
         for (path, _) in &plan {
             runner.print_output(&format!("  - {}\n", path.display()), None);
         }
+        if let Some(export) = &args.export_plan {
+            // Export plan
+            let entries: Vec<PlanEntry> = plan
+                .iter()
+                .map(|(p, c)| PlanEntry { path: p.display().to_string(), content: c.clone() })
+                .collect();
+            let json = serde_json::to_string_pretty(&entries)?;
+            fs::write(export, json)?;
+            runner.print_success(&format!("Plan exported to {}", export.display()));
+        }
         return Ok(());
     }
 
-    // Write plan to disk
-    for (path, content) in plan {
-        if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
-        if path.exists() && !args.force { return Err(format!("Refusing to overwrite {} (use --force)", path.display()).into()); }
-        fs::write(path, content)?;
+    if let Some(export) = &args.export_plan {
+        let entries: Vec<PlanEntry> = plan
+            .iter()
+            .map(|(p, c)| PlanEntry { path: p.display().to_string(), content: c.clone() })
+            .collect();
+        let json = serde_json::to_string_pretty(&entries)?;
+        fs::write(export, json)?;
+        runner.print_success(&format!("Plan exported to {}", export.display()));
+        return Ok(());
     }
+
+    // Write plan to disk with rollback
+    let mut written: Vec<PathBuf> = Vec::new();
+    let mut files_count = 0usize;
+    if let Err(e) = (|| -> Result<(), Box<dyn std::error::Error>> {
+        for (path, content) in &plan {
+            if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
+            if path.exists() && !args.force { return Err(format!("Refusing to overwrite {} (use --force)", path.display()).into()); }
+            fs::write(path, content)?;
+            written.push(path.clone());
+            files_count += 1;
+        }
+        Ok(())
+    })() {
+        // rollback
+        for p in written.into_iter().rev() { let _ = fs::remove_file(p); }
+        return Err(e);
+    }
+
+    runner.print_info(&format!("Created {} files under {}", files_count, root.display()));
 
     Ok(())
 }
+
+async fn apply_plan_file(
+    runner: &CliRunner,
+    plan_path: &PathBuf,
+    force: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let data = fs::read_to_string(plan_path)?;
+    let entries: Vec<PlanEntry> = serde_json::from_str(&data)?;
+    let mut written: Vec<PathBuf> = Vec::new();
+    if let Err(e) = (|| -> Result<(), Box<dyn std::error::Error>> {
+        for entry in &entries {
+            let path = PathBuf::from(&entry.path);
+            if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
+            if path.exists() && !force { return Err(format!("Refusing to overwrite {} (use --force)", path.display()).into()); }
+            fs::write(&path, &entry.content)?;
+            written.push(path);
+        }
+        Ok(())
+    })() {
+        for p in written.into_iter().rev() { let _ = fs::remove_file(p); }
+        return Err(e);
+    }
+    runner.print_success(&format!("Applied plan entries: {}", entries.len()));
+    Ok(())
+}
+
 /// Determine the language to use for code generation
 fn determine_language(args: &GenerateArgs) -> Option<String> {
     // First, check if language was explicitly specified
