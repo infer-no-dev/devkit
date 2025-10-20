@@ -1,6 +1,6 @@
-//! Chat liaison agent command implementation
+//! Chat project manager command implementation
 //!
-//! This module implements a conversational AI agent that serves as a liaison
+//! This module implements a conversational AI agent that serves as a project manager
 //! between natural language user requests and the DevKit code generation system.
 //! It provides an interactive chat experience while using the robust `generate`
 //! command under the hood for actual code generation.
@@ -10,8 +10,9 @@ use crate::codegen::stubs;
 use crossterm::style::Color;
 use std::io::{self, Write, Read, IsTerminal};
 use std::path::PathBuf;
+use std::sync::Arc;
 
-/// Conversation state for the chat liaison agent
+/// Conversation state for the chat project manager
 #[derive(Debug, Clone)]
 struct ConversationState {
     turn_count: usize,
@@ -61,7 +62,7 @@ impl ConversationState {
     }
 }
 
-/// Run the chat liaison agent
+/// Run the chat project manager
 pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn std::error::Error>> {
     let mut state = ConversationState::new(args.project.clone());
     
@@ -70,7 +71,7 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
     
     if is_interactive {
         // Print welcome message only in interactive mode
-        runner.print_info("🤖 DevKit AI Chat Liaison Agent");
+runner.print_info("🤖 DevKit AI Project Manager");
         runner.print_info("Type 'help' for commands, 'exit' or 'quit' to end the session");
     }
     
@@ -340,8 +341,11 @@ async fn execute_generate_command(
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_verbose("Analyzing generation request...");
     
-    // Create a realistic simulation of code generation
-    let generated_code = simulate_code_generation(analysis, prompt);
+    // Try real code generation; fall back to stub if unavailable
+    let generated_code = match generate_real_code(runner, analysis, prompt).await {
+        Ok(code) => code,
+        Err(_) => simulate_code_generation(analysis, prompt),
+    };
     let output_path = determine_output_path(analysis, prompt, state);
     
     // Show what we're generating
@@ -466,6 +470,38 @@ fn show_status(runner: &CliRunner, state: &ConversationState) {
 fn simulate_code_generation(analysis: &IntentAnalysis, prompt: &str) -> String {
     let language = analysis.inferred_language.as_deref();
     stubs::generate_code_stub(prompt, language)
+}
+
+/// Attempt real code generation via CodeGenerator + AI
+async fn generate_real_code(
+    runner: &CliRunner,
+    analysis: &IntentAnalysis,
+    prompt: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    use crate::ai::AIManager;
+    use crate::codegen::{CodeGenerator, GenerationConfig, GenerationRequest};
+    use crate::context::CodebaseContext;
+
+    let mut generator = CodeGenerator::new()?;
+
+    let cfg = runner.config_manager().config().clone();
+    if let Ok(ai) = AIManager::from_config(&cfg).await {
+        generator.set_ai_manager(Arc::new(ai));
+    }
+
+    let mut gen_cfg = GenerationConfig::default();
+    gen_cfg.target_language = analysis.inferred_language.clone();
+
+    let request = GenerationRequest {
+        prompt: prompt.to_string(),
+        file_path: None,
+        context: CodebaseContext::default(),
+        config: gen_cfg,
+        constraints: vec![],
+    };
+
+    let result = generator.generate_from_prompt(request).await?;
+    Ok(result.generated_code)
 }
 
 

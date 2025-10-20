@@ -141,7 +141,7 @@ pub enum Commands {
     /// Plugin marketplace operations
     Plugin(PluginArgs),
 
-    /// AI-powered chat liaison agent
+/// AI-powered project manager agent
     #[command(alias = "c")]
     Chat(ChatArgs),
 }
@@ -629,7 +629,7 @@ pub struct PluginArgs {
     pub command: PluginCommands,
 }
 
-/// AI-powered chat liaison agent arguments
+/// AI-powered project manager arguments
 #[derive(Args)]
 pub struct ChatArgs {
     /// Project root directory
