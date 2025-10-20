@@ -76,8 +76,8 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             runner.print_output("\nQuickstart (30s):\n", Some(Color::Cyan));
             runner.print_output("  • Ask for code: 'Generate a Rust Axum API with /health'\n", None);
             runner.print_output("  • Scaffold: devkit generate \"todo api\" --language rust --stack rust-axum --root ./api\n", None);
-            runner.print_output("  • Key commands: help | status | quickstart | clear | exit\n", None);
-            runner.print_output("  • Tips: use --list-stacks to see scaffolds\n", Some(Color::DarkGrey));
+            runner.print_output("  • Key commands: help | status | stacks | quickstart | clear | exit\n", None);
+            runner.print_output("  • Tip: type 'stacks' here to see presets (CLI flag is --list-stacks)\n", Some(Color::DarkGrey));
         } else {
             runner.print_info("Type 'help' for commands, 'exit' or 'quit' to end the session");
         }
@@ -144,6 +144,10 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
                 show_status(runner, &state);
                 continue;
             }
+            "stacks" | "list stacks" | "stack presets" => {
+                show_stacks(runner);
+                continue;
+            }
             "clear" => {
                 // Clear conversation history
                 state.conversation_history.clear();
@@ -155,7 +159,13 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             _ => {}
         }
         
-        // Handle the user input
+    // Handle user input
+        // If user typed CLI flags, guide them
+        if input.starts_with('-') {
+            runner.print_output("\nTip: Flags like --list-stacks are for CLI. In chat, type 'stacks' to see presets or 'quickstart'.\n", Some(Color::DarkGrey));
+            continue;
+        }
+
         if let Err(e) = handle_user_input(runner, &mut state, input, &args).await {
             runner.print_error(&format!("Error processing request: {}", e));
         }
@@ -462,9 +472,26 @@ fn show_quickstart(runner: &CliRunner) {
     runner.print_output("\n🚀 Quickstart\n", Some(Color::Cyan));
     runner.print_output("1) Ask for code in plain English.\n", None);
     runner.print_output("   e.g., 'Create a Next.js app with / and /about'\n", Some(Color::DarkGrey));
-    runner.print_output("2) Generate/scaffold via CLI when needed.\n", None);
+    runner.print_output("2) See scaffolds (in chat): type 'stacks'\n", None);
+    runner.print_output("3) Generate/scaffold via CLI when needed.\n", None);
     runner.print_output("   devkit generate \"web app\" --language typescript --stack nextjs --root ./web\n", Some(Color::DarkGrey));
-    runner.print_output("3) Useful commands: help, status, quickstart, clear, exit.\n", None);
+    runner.print_output("4) Useful commands: help, status, stacks, quickstart, clear, exit.\n", None);
+}
+
+fn show_stacks(runner: &CliRunner) {
+    runner.print_output("\nAvailable stack presets:\n", Some(Color::Cyan));
+    let stacks = [
+        "rust-axum",
+        "rust-actix",
+        "rust-axum-sqlx",
+        "node-express",
+        "node-nest",
+        "nextjs",
+        "python-fastapi",
+        "python-fastapi-sqlalchemy",
+    ];
+    for s in stacks { runner.print_output(&format!("  • {}\n", s), None); }
+    runner.print_output("Use `devkit generate \"...\" --language <lang> --stack <preset> --root <dir>`\n", Some(Color::DarkGrey));
 }
 
 /// Show current session status
