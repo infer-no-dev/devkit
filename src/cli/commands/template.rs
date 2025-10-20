@@ -1,6 +1,7 @@
 use crate::cli::{CliRunner, TemplateCommands};
 use crate::codegen::templates::{Template, TemplateManager, TemplateVariable};
 use serde_json::json;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -15,6 +16,9 @@ pub async fn run(
             list_templates(runner, &template_manager, language).await?
         }
         TemplateCommands::Show { name } => show_template(runner, &template_manager, &name).await?,
+        TemplateCommands::Apply { name, vars, output, force } => {
+            apply_template(runner, &template_manager, &name, vars, output, force).await?
+        }
         TemplateCommands::Create {
             name,
             language,
@@ -343,4 +347,69 @@ fn extract_template_variables(template_content: &str) -> Vec<TemplateVariable> {
     }
 
     variables
+}
+
+async fn apply_template(
+    runner: &CliRunner,
+    template_manager: &TemplateManager,
+    name: &str,
+    vars: Vec<String>,
+    output: Option<PathBuf>,
+    force: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Fetch template
+    let template = template_manager
+        .get_template(name)
+        .ok_or_else(|| format!("Template '{}' not found", name))?;
+
+    // Parse provided vars into a map
+    let mut var_map: HashMap<String, String> = HashMap::new();
+    for kv in vars {
+        let mut parts = kv.splitn(2, '=');
+        let k = parts
+            .next()
+            .ok_or("Invalid --var format; expected key=value")?
+            .trim();
+        let v = parts
+            .next()
+            .ok_or("Invalid --var format; expected key=value")?
+            .to_string();
+        if k.is_empty() {
+            return Err("Variable key cannot be empty".into());
+        }
+        var_map.insert(k.to_string(), v);
+    }
+
+    // Check required variables
+    for req in template.required_variables() {
+        if !var_map.contains_key(&req.name) && req.default_value.is_none() {
+            return Err(format!("Missing required variable: {}", req.name).into());
+        }
+    }
+
+    // Apply the template
+    let rendered = template_manager.apply_template(name, &var_map)?;
+
+    // Output handling
+    if let Some(path) = output {
+        if path.exists() && !force {
+            return Err(format!(
+                "Output file exists: {} (use --force to overwrite)",
+                path.display()
+            )
+            .into());
+        }
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+        fs::write(&path, rendered)?;
+        runner.print_success(&format!("Template '{}' applied to {}", name, path.display()));
+    } else {
+        runner.print_info(&format!("📝 Rendered output for template '{}':", name));
+        runner.print_code(&rendered);
+    }
+
+    Ok(())
 }

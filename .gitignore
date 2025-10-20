@@ -31,3 +31,10 @@ temp/
 
 # Documentation builds
 /docs/build/
+
+# Generated artifacts (top-level only)
+/*.rs
+/plan.json
+/*-plan.json
+/spec.md
+/cheatsheet.txt
