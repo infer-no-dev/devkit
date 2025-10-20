@@ -284,7 +284,23 @@ devkit config --edit
 ```
 
 ## 📎 Prompt Cheatsheet
-See docs/PROMPT_CHEATSHEET.md for a one-page guide to writing effective prompts, templates, and scaffolding.
+See docs/PROMPT_CHEATSHEET.md for a one-page guide to writing effective prompts, templates, scaffolding, and quoting tips.
+
+### CLI quoting tips (bash)
+- Safest: single-quoted heredoc so nothing needs escaping
+  ```bash
+  ./target/release/devkit generate "$(cat <<'EOF'
+  Build a production-ready, responsive site for "Acme Home & IT" …
+  (paste your full prompt here; quotes, $vars, & symbols are safe)
+  EOF
+  )" --language typescript --stack nextjs --root ./site --dry-run
+  ```
+- Or store the spec in a file and pass with --context
+  ```bash
+  echo "Full spec…" > spec.md
+  ./target/release/devkit generate "Build per spec" --language typescript --stack nextjs --root ./site --context spec.md
+  ```
+- Inline single quotes? Escape as: 'Acme'\''s Bakery'. Avoid smart quotes.
 
 ## ✅ Continuous Integration
 This repo includes a CI workflow that runs formatting, clippy (no warnings), and unit tests on pushes and PRs to main.

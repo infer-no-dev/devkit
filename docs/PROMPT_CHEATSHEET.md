@@ -51,3 +51,22 @@ Return only code/files; no extraneous text.
 - Add small example inputs/outputs
 - Use `--preview` first; then save
 - Iterate: follow up with focused refine prompts
+
+## CLI quoting tips (bash)
+- Safest: single-quoted heredoc so nothing needs escaping
+  ```
+  ./target/release/devkit generate "$(cat <<'EOF'
+  Build a production-ready, responsive site for "Acme Home & IT" …
+  (paste your full prompt here; quotes, $vars, & symbols are safe)
+  EOF
+  )" --language typescript --stack nextjs --root ./site --dry-run
+  ```
+- Put long specs in a file and pass as context
+  ```
+  echo "Full spec…" > spec.md
+  ./target/release/devkit generate "Build the site per spec" \
+    --language typescript --stack nextjs --root ./site --context spec.md
+  ```
+- Inline single quotes? Escape as: 'Acme'\''s Bakery'
+- Avoid smart quotes; prefer ASCII ' and ".
+- Single-quoted heredoc ('EOF') prevents $VAR expansion and backslash escapes.
