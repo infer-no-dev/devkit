@@ -71,8 +71,16 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
     
     if is_interactive {
         // Print welcome message only in interactive mode
-runner.print_info("🤖 DevKit AI Project Manager");
-        runner.print_info("Type 'help' for commands, 'exit' or 'quit' to end the session");
+        runner.print_info("🤖 DevKit AI Project Manager");
+        if args.onboarding {
+            runner.print_output("\nQuickstart (30s):\n", Some(Color::Cyan));
+            runner.print_output("  • Ask for code: 'Generate a Rust Axum API with /health'\n", None);
+            runner.print_output("  • Scaffold: devkit generate \"todo api\" --language rust --stack rust-axum --root ./api\n", None);
+            runner.print_output("  • Key commands: help | status | quickstart | clear | exit\n", None);
+            runner.print_output("  • Tips: use --list-stacks to see scaffolds\n", Some(Color::DarkGrey));
+        } else {
+            runner.print_info("Type 'help' for commands, 'exit' or 'quit' to end the session");
+        }
     }
     
     // Handle initial message if provided
@@ -126,6 +134,10 @@ runner.print_info("🤖 DevKit AI Project Manager");
             }
             "help" | "h" => {
                 show_help(runner);
+                continue;
+            }
+            "quickstart" | "qs" => {
+                show_quickstart(runner);
                 continue;
             }
             "status" => {
@@ -443,6 +455,16 @@ fn show_help(runner: &CliRunner) {
     runner.print_output("  'Create a function to calculate fibonacci numbers'\n", Some(Color::Green));
     runner.print_output("  'Generate a REST API endpoint for user management'\n", Some(Color::Green));
     runner.print_output("  'Write unit tests for my parser module'\n", Some(Color::Green));
+    runner.print_output("\nType 'quickstart' for a short guided intro.\n", Some(Color::DarkGrey));
+}
+
+fn show_quickstart(runner: &CliRunner) {
+    runner.print_output("\n🚀 Quickstart\n", Some(Color::Cyan));
+    runner.print_output("1) Ask for code in plain English.\n", None);
+    runner.print_output("   e.g., 'Create a Next.js app with / and /about'\n", Some(Color::DarkGrey));
+    runner.print_output("2) Generate/scaffold via CLI when needed.\n", None);
+    runner.print_output("   devkit generate \"web app\" --language typescript --stack nextjs --root ./web\n", Some(Color::DarkGrey));
+    runner.print_output("3) Useful commands: help, status, quickstart, clear, exit.\n", None);
 }
 
 /// Show current session status

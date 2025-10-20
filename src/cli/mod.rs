@@ -656,6 +656,10 @@ pub struct ChatArgs {
     #[arg(long)]
     pub resume: bool,
 
+    /// Show onboarding greeting (disable with --no-onboarding)
+    #[arg(long, default_value_t = true)]
+    pub onboarding: bool,
+
     /// Maximum number of conversation turns
     #[arg(long, default_value = "50")]
     pub max_turns: usize,
