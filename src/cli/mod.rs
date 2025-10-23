@@ -701,7 +701,7 @@ pub struct StatusArgs {
     pub detailed: bool,
 
     /// Check specific components
-    #[arg(short, long)]
+    #[arg(long)]
     pub components: Vec<String>,
 
     /// Include performance metrics
@@ -977,7 +977,7 @@ pub enum SessionBranchCommands {
 #[derive(Args)]
 pub struct VisualizeArgs {
     /// Visualization type (network, timeline, resource, overview)
-    #[arg(short, long, default_value = "network")]
+    #[arg(short = 'V', long, default_value = "network")]
     pub view: String,
     /// Auto-refresh interval in seconds
     #[arg(long, default_value = "5")]
@@ -1080,7 +1080,7 @@ pub enum BehaviorCommands {
 #[derive(Args)]
 pub struct DiagnoseArgs {
     /// Run specific diagnostic (config, agents, context, all)
-    #[arg(short, long, default_value = "all")]
+    #[arg(long, default_value = "all")]
     pub check: String,
     /// Fix issues automatically where possible
     #[arg(long)]
