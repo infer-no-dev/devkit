@@ -13,6 +13,12 @@ keywords = ["ai", "agent", "development", "code-generation", "cli"]
 categories = ["development-tools", "command-line-utilities"]
 rust-version = "1.70.0"
 
+[features]
+default = ["local-embeddings"]
+local-embeddings = []
+faiss-vector-db = ["faiss"]
+openai-embeddings = ["openai-api-rs"]
+
 [profile.release]
 opt-level = 3
 codegen-units = 1
@@ -29,6 +35,7 @@ opt-level = 1
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = "0.1"
+tokio-util = "0.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
@@ -54,7 +61,7 @@ indexmap = "2.0"
 anyhow = "1.0"
 thiserror = "1.0"
 async-trait = "0.1"
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 dirs = "5.0"
 chrono = { version = "0.4", features = ["serde"] }
 md5 = "0.7"
@@ -74,6 +81,17 @@ axum = { version = "0.7", features = ["ws", "macros"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["fs", "cors"] }
 futures-util = "0.3"
+# Embedding dependencies removed due to version conflicts
+# candle-core = { version = "0.4", optional = true }
+# hf-hub = { version = "0.3", optional = true }
+faiss = { version = "0.11", optional = true }
+# Alternative embedding provider
+openai-api-rs = { version = "5.0", optional = true }
+rust-embed = "8.0"
+base64 = "0.22"
+libc = "0.2"
+tokio-tungstenite = "0.20"
+tungstenite = "0.20"
 
 # Main binary
 [[bin]]

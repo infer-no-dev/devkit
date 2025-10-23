@@ -5,6 +5,7 @@
 
 pub mod client;
 pub mod manager;
+pub mod routing;
 #[cfg(test)]
 mod tests;
 
@@ -65,7 +66,7 @@ pub struct ChatMessage {
 }
 
 /// Role of a message in a conversation
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MessageRole {
     System,
     User,

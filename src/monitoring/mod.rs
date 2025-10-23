@@ -91,7 +91,7 @@ pub struct MetricsCollector {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricValue {
     pub value: f64,
-    pub timestamp: Instant,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
     pub tags: HashMap<String, String>,
     pub count: u64,
     pub sum: f64,
@@ -119,7 +119,7 @@ impl MetricsCollector {
         let mut metrics = self.metrics.lock().unwrap();
         let entry = metrics.entry(name.to_string()).or_insert_with(|| MetricValue {
             value,
-            timestamp: Instant::now(),
+            timestamp: chrono::Utc::now(),
             tags: tags.clone(),
             count: 0,
             sum: 0.0,
@@ -130,7 +130,7 @@ impl MetricsCollector {
         entry.count += 1;
         entry.sum += value;
         entry.value = value;
-        entry.timestamp = Instant::now();
+        entry.timestamp = chrono::Utc::now();
         entry.min = entry.min.min(value);
         entry.max = entry.max.max(value);
         entry.tags.extend(tags);

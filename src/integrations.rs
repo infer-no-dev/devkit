@@ -13,7 +13,6 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 
 /// Integrated system that connects all components via the system bus
-#[derive(Debug)]
 pub struct IntegratedSystem {
     pub system_bus: Arc<SystemBus>,
     pub agent_adapter: Arc<AgentSystemAdapter>,
@@ -56,7 +55,6 @@ pub struct CodeGeneratorAdapter {
 }
 
 /// Context manager adapter that integrates ContextManager with the system bus
-#[derive(Debug)]
 pub struct ContextManagerAdapter {
     context_manager: Arc<ContextManager>,
     bus_handle: SystemBusHandle,

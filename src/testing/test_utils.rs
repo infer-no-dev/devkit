@@ -358,6 +358,15 @@ impl MockDataFactory {
                 session_timeout_minutes: 30,
             },
             logging: crate::logging::LogConfig::default(),
+            orchestrator: crate::config::OrchestratorConfig {
+                task_timeout_seconds: 300,
+                retry_failed_tasks: true,
+                max_retry_attempts: 3,
+                backoff: "exponential".to_string(),
+                backoff_base_secs: 1,
+                backoff_factor: 2,
+                backoff_max_secs: 60,
+            },
             keybindings: HashMap::new(),
         }
     }

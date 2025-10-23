@@ -5,6 +5,7 @@
 //! suggestions based on codebase context.
 
 pub mod analyzer;
+pub mod diff_apply;
 pub mod generator;
 pub mod language_detection;
 pub mod stubs;
@@ -73,6 +74,16 @@ pub struct GenerationRequest {
     pub context: CodebaseContext,
     pub config: GenerationConfig,
     pub constraints: Vec<String>,
+}
+
+/// Generated code with metadata
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GeneratedCode {
+    pub content: String,
+    pub language: String,
+    pub file_path: Option<String>,
+    pub dependencies: Vec<String>,
+    pub metadata: HashMap<String, String>,
 }
 
 /// Result of code generation

@@ -3,6 +3,7 @@
 use super::task::{AgentResult, AgentTask, TaskPriority};
 use super::{Agent, AgentMetrics, AgentStatus};
 use crate::ai::AIManager;
+use crate::agents::orchestrator::{FileTaskSnapshotStore, RetryPolicy, TaskSnapshot, TaskSnapshotStatus};
 // TODO: Fix circular dependency with error module
 // use crate::error::{DevKitError, DevKitResult, ErrorContext, WithContext};
 
@@ -10,6 +11,7 @@ use std::collections::{BinaryHeap, HashMap};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, oneshot, watch, Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 
 /// Central system for managing multiple agents and task distribution
 #[derive(Debug)]
@@ -29,11 +31,20 @@ pub struct AgentSystem {
     /// Failed tasks with retry information
     failed_tasks: Arc<RwLock<HashMap<String, FailedTask>>>,
 
+    /// Cancellation tokens per task
+    cancellations: Arc<RwLock<HashMap<String, CancellationToken>>>,
+
     /// AI manager for agents that need AI capabilities
     ai_manager: Option<Arc<AIManager>>,
 
     /// System configuration
     config: AgentSystemConfig,
+
+    /// Deterministic retry policy
+    retry_policy: RetryPolicy,
+
+    /// Snapshot store (initialized on start)
+    snapshot_store: Arc<RwLock<Option<Arc<FileTaskSnapshotStore>>>>,
 
     /// Task event broadcaster
     event_sender: broadcast::Sender<TaskEvent>,
@@ -47,6 +58,77 @@ pub struct AgentSystem {
 
     /// System running state
     running: Arc<RwLock<bool>>,
+}
+
+impl AgentSystem {
+    /// Cancel a running or queued task. Returns true if a running task was signaled for cancellation.
+    pub async fn cancel_task(&self, task_id: &str) -> Result<bool, anyhow::Error> {
+        // Cancel running task via token if present
+        let did_cancel = {
+            let cancels = self.cancellations.read().await;
+            if let Some(token) = cancels.get(task_id) {
+                token.cancel();
+                true
+            } else {
+                false
+            }
+        };
+
+        // Update snapshot to Canceled
+        if let Some(store) = self.snapshot_store.read().await.clone() {
+            if let Ok(Some(mut snap)) = store.load(task_id).await {
+                snap.status = TaskSnapshotStatus::Canceled;
+                snap.updated_at = chrono::Utc::now();
+                let _ = store.save(&snap).await;
+            }
+        }
+        Ok(did_cancel)
+    }
+
+    /// Resume tasks from persisted snapshots
+    pub async fn resume_from_snapshots(&self) -> Result<usize, anyhow::Error> {
+        let store_opt = self.snapshot_store.read().await.clone();
+        if store_opt.is_none() { return Ok(0); }
+        let store = store_opt.unwrap();
+        let snaps = store.list().await.unwrap_or_default();
+        let mut resumed = 0usize;
+        for snap in snaps {
+            match snap.status {
+                TaskSnapshotStatus::Pending | TaskSnapshotStatus::Running => {
+                    let prioritized_task = PrioritizedTask {
+                        task: snap.task.clone(),
+                        priority_score: self.calculate_priority_score(&snap.task),
+                        submitted_at: Instant::now(),
+                        deadline_score: self.calculate_deadline_score(&snap.task),
+                    };
+                    let mut queue = self.task_queue.lock().await;
+                    queue.push(prioritized_task);
+                    resumed += 1;
+                }
+                TaskSnapshotStatus::Failed => {
+                    // If policy allows retry and next_retry_at has passed and attempts < max, requeue
+                    let attempts = snap.attempt;
+                    if attempts < self.config.max_retry_attempts {
+                        if let Some(next_at) = snap.next_retry_at { if next_at <= chrono::Utc::now() {
+                            let prioritized_task = PrioritizedTask {
+                                task: snap.task.clone(),
+                                priority_score: 100,
+                                submitted_at: Instant::now(),
+                                deadline_score: 100,
+                            };
+                            let mut queue = self.task_queue.lock().await;
+                            queue.push(prioritized_task);
+                            resumed += 1;
+                        }}
+                    }
+                }
+                TaskSnapshotStatus::Completed | TaskSnapshotStatus::Canceled => {
+                    // Nothing to resume; optionally clean up
+                }
+            }
+        }
+        Ok(resumed)
+    }
 }
 
 /// Agent system configuration
@@ -192,14 +274,17 @@ impl AgentSystem {
         let (event_sender, _) = broadcast::channel(1000);
         let (shutdown_sender, shutdown_receiver) = watch::channel(false);
 
-        Self {
+Self {
             agents: Arc::new(RwLock::new(HashMap::new())),
             task_queue: Arc::new(Mutex::new(BinaryHeap::new())),
             active_tasks: Arc::new(RwLock::new(HashMap::new())),
             completed_tasks: Arc::new(RwLock::new(HashMap::new())),
             failed_tasks: Arc::new(RwLock::new(HashMap::new())),
+            cancellations: Arc::new(RwLock::new(HashMap::new())),
             ai_manager: None,
             config: AgentSystemConfig::default(),
+            retry_policy: RetryPolicy::default(),
+            snapshot_store: Arc::new(RwLock::new(None)),
             event_sender,
             shutdown_sender,
             shutdown_receiver,
@@ -218,12 +303,20 @@ impl AgentSystem {
     /// Create a new agent system with custom configuration
     pub fn with_config(config: AgentSystemConfig) -> Self {
         let mut system = Self::new();
+        system.config = config.clone();
+        system
+    }
+
+    /// Create a new agent system with custom configuration and retry policy
+    pub fn with_config_and_policy(config: AgentSystemConfig, retry_policy: RetryPolicy) -> Self {
+        let mut system = Self::new();
         system.config = config;
+        system.retry_policy = retry_policy;
         system
     }
 
     /// Start the agent system workers
-    pub async fn start(&self) -> Result<(), anyhow::Error> {
+pub async fn start(&self) -> Result<(), anyhow::Error> {
         let start_time = std::time::Instant::now();
 
         let mut running = self.running.write().await;
@@ -233,6 +326,19 @@ impl AgentSystem {
 
         *running = true;
         drop(running);
+
+        // Initialize snapshot store
+        {
+            let mut store_guard = self.snapshot_store.write().await;
+            if store_guard.is_none() {
+                let root = std::path::PathBuf::from(".devkit/task_snapshots");
+                let store = Arc::new(FileTaskSnapshotStore::new(root).await?);
+                *store_guard = Some(store);
+            }
+        }
+
+        // Resume any pending/running tasks from snapshots
+        self.resume_from_snapshots().await.ok();
 
         // Log system startup
         println!(
@@ -507,12 +613,15 @@ impl AgentSystem {
     }
 
     // Background worker implementations
-    async fn spawn_worker(&self, worker_id: usize) -> tokio::task::JoinHandle<()> {
+async fn spawn_worker(&self, worker_id: usize) -> tokio::task::JoinHandle<()> {
         let task_queue = Arc::clone(&self.task_queue);
         let agents = Arc::clone(&self.agents);
         let active_tasks = Arc::clone(&self.active_tasks);
         let completed_tasks = Arc::clone(&self.completed_tasks);
         let failed_tasks = Arc::clone(&self.failed_tasks);
+        let cancellations = Arc::clone(&self.cancellations);
+        let snapshot_store = Arc::clone(&self.snapshot_store);
+        let retry_policy = self.retry_policy.clone();
         let event_sender = self.event_sender.clone();
         let shutdown_receiver = self.shutdown_receiver.clone();
         let config = self.config.clone();
@@ -580,29 +689,61 @@ impl AgentSystem {
 
                         tracing::debug!("Worker {} processing task {} with agent {}", worker_id, task_id, agent_id);
                         
-                        // Execute task with timeout
+// Prepare cancellation token and snapshot transition
+                        let cancel_token = CancellationToken::new();
+                        {
+                            let mut cancels = cancellations.write().await;
+                            cancels.insert(task_id.clone(), cancel_token.clone());
+                        }
+
+                        // Update snapshot to Running and increment attempt
+                        if let Some(store) = snapshot_store.read().await.clone() {
+                            let mut snap = store.load(&task_id).await.ok().flatten()
+                                .unwrap_or_else(|| TaskSnapshot { task_id: task_id.clone(), task: task.clone(), status: TaskSnapshotStatus::Pending, attempt: 0, last_error: None, next_retry_at: None, created_at: chrono::Utc::now(), updated_at: chrono::Utc::now() });
+                            snap.status = TaskSnapshotStatus::Running;
+                            snap.attempt = snap.attempt.saturating_add(1);
+                            snap.updated_at = chrono::Utc::now();
+                            let _ = store.save(&snap).await;
+                        }
+
+                        // Execute task with timeout and cancellation
                         let task_start = Instant::now();
                         let task_result = {
                             let mut agents = agents.write().await;
                             if let Some(agent) = agents.get_mut(&agent_id) {
-                                tokio::time::timeout(task_timeout, agent.process_task(task.clone())).await
+                                tokio::select! {
+                                    _ = cancel_token.cancelled() => {
+                                        Err(super::AgentError::TaskExecutionFailed("Task cancelled".to_string()))
+                                    }
+                                    res = tokio::time::timeout(task_timeout, agent.process_task(task.clone())) => {
+                                        match res {
+                                            Ok(r) => r,
+                                            Err(_) => Err(super::AgentError::TaskTimeout { timeout_seconds: task_timeout.as_secs() })
+                                        }
+                                    }
+                                }
                             } else {
-                                Ok(Err(super::AgentError::TaskExecutionFailed("Agent not found".to_string())))
+                                Err(super::AgentError::TaskExecutionFailed("Agent not found".to_string()))
                             }
                         };
                         
                         let processing_duration = task_start.elapsed();
                         
-                        // Remove from active tasks and get result_sender
+// Remove from active tasks and get result_sender
                         let result_sender = {
                             let mut active = active_tasks.write().await;
                             active.remove(&task_id).and_then(|active_task| active_task.result_sender)
                         };
+                        // Remove cancellation token
+                        {
+                            let mut cancels = cancellations.write().await;
+                            cancels.remove(&task_id);
+                        };
 
                         // Handle result
-                        match task_result {
-                            Ok(Ok(result)) => {
-                                // Task completed successfully
+match task_result {
+                            Ok(result) => {
+// Task completed successfully
                                 {
                                     let mut completed = completed_tasks.write().await;
                                     completed.insert(task_id.clone(), TaskResult {
@@ -621,6 +762,11 @@ impl AgentSystem {
                                     }
                                 }
                                 
+                                // Update snapshot -> Completed and remove file
+                                if let Some(store) = snapshot_store.read().await.clone() {
+                                    let _ = store.delete(&task_id).await;
+                                }
+                                
                                 // Send result back to caller if they're waiting
                                 if let Some(sender) = result_sender {
                                     let _ = sender.send(Ok(result.clone()));
@@ -635,40 +781,48 @@ impl AgentSystem {
                                 
                                 tracing::info!("Task {} completed successfully by agent {} in {}ms", 
                                     task_id, agent_id, processing_duration.as_millis());
-                            },
-                            Ok(Err(_)) | Err(_) => {
-                                // Task failed
-                                let error_msg = match &task_result {
-                                    Ok(Err(e)) => e.to_string(),
-                                    Err(_) => "Task timeout".to_string(),
-                                    _ => unreachable!(),
-                                };
+},
+                            Err(e) => {
+                                // Task failed (includes cancellation/timeout)
+                                let error_msg = e.to_string();
                                 
-                                let will_retry = config.retry_failed_tasks;
+                                // Determine retry using deterministic policy
+                                let (will_retry, retry_count, next_retry_at_dt) = {
+                                    let mut failed = failed_tasks.write().await;
+                                    let current_retry = failed.get(&task_id).map(|f| f.retry_count).unwrap_or(0);
+                                    let attempt = current_retry + 1;
+                                    let mut will = config.retry_failed_tasks;
+                                    let delay_opt = retry_policy.next_delay(current_retry);
+                                    if delay_opt.is_none() || attempt > config.max_retry_attempts { will = false; }
+                                    let next_at = delay_opt.map(|d| Instant::now() + d);
+                                    if will {
+                                        failed.insert(task_id.clone(), FailedTask {
+                                            task: task.clone(),
+                                            error: error_msg.clone(),
+                                            retry_count: attempt,
+                                            last_attempt_at: Instant::now(),
+                                            next_retry_at: next_at,
+                                        });
+                                    }
+                                    (will, attempt, next_at.map(|i| chrono::Utc::now() + chrono::Duration::from_std(i.duration_since(Instant::now())).unwrap_or_else(|_| chrono::Duration::seconds(0))))
+                                };
+
+                                // Update snapshot -> Failed (and next_retry_at if any)
+                                if let Some(store) = snapshot_store.read().await.clone() {
+                                    let mut snap = store.load(&task_id).await.ok().flatten()
+                                        .unwrap_or_else(|| TaskSnapshot { task_id: task_id.clone(), task: task.clone(), status: TaskSnapshotStatus::Failed, attempt: retry_count, last_error: None, next_retry_at: None, created_at: chrono::Utc::now(), updated_at: chrono::Utc::now() });
+                                    snap.status = if will_retry { TaskSnapshotStatus::Pending } else { TaskSnapshotStatus::Failed };
+                                    snap.attempt = retry_count;
+                                    snap.last_error = Some(error_msg.clone());
+                                    snap.next_retry_at = if will_retry { next_retry_at_dt } else { None };
+                                    snap.updated_at = chrono::Utc::now();
+                                    let _ = store.save(&snap).await;
+                                }
                                 
                                 // Send error back to caller if they're waiting (unless retrying)
                                 if let Some(sender) = result_sender {
                                     if !will_retry {
                                         let _ = sender.send(Err(anyhow::anyhow!(error_msg.clone())));
-                                    }
-                                    // If retrying, don't send error yet - let retry succeed or fail
-                                }
-                                
-                                if will_retry {
-                                    let mut failed = failed_tasks.write().await;
-                                    let retry_count = failed.get(&task_id)
-                                        .map(|f| f.retry_count + 1)
-                                        .unwrap_or(1);
-                                        
-                                    if retry_count <= config.max_retry_attempts {
-                                        let next_retry_at = Some(Instant::now() + Duration::from_secs(60 * retry_count as u64));
-                                        failed.insert(task_id.clone(), FailedTask {
-                                            task: task.clone(),
-                                            error: error_msg.clone(),
-                                            retry_count,
-                                            last_attempt_at: Instant::now(),
-                                            next_retry_at,
-                                        });
                                     }
                                 }
                                 
@@ -709,9 +863,10 @@ impl AgentSystem {
         })
     }
 
-    async fn spawn_retry_handler(&self) -> tokio::task::JoinHandle<()> {
+async fn spawn_retry_handler(&self) -> tokio::task::JoinHandle<()> {
         let task_queue = Arc::clone(&self.task_queue);
         let failed_tasks = Arc::clone(&self.failed_tasks);
+        let snapshot_store = Arc::clone(&self.snapshot_store);
         let event_sender = self.event_sender.clone();
         let mut shutdown_receiver = self.shutdown_receiver.clone();
         let config = self.config.clone();
@@ -750,10 +905,10 @@ impl AgentSystem {
                             }
                         }
                         
-                        // Re-queue tasks for retry
+// Re-queue tasks for retry
                         for (task_id, task, retry_count) in tasks_to_retry {
                             let prioritized_task = PrioritizedTask {
-                                task,
+                                task: task.clone(),
                                 priority_score: 100, // Higher priority for retries
                                 submitted_at: Instant::now(),
                                 deadline_score: 100,
@@ -762,6 +917,15 @@ impl AgentSystem {
                             {
                                 let mut queue = task_queue.lock().await;
                                 queue.push(prioritized_task);
+                            }
+
+                            // Update snapshot to Pending for retry
+                            if let Some(store) = snapshot_store.read().await.clone() {
+                                if let Ok(Some(mut snap)) = store.load(&task_id).await {
+                                    snap.status = TaskSnapshotStatus::Pending;
+                                    snap.updated_at = chrono::Utc::now();
+                                    let _ = store.save(&snap).await;
+                                }
                             }
                             
                             let _ = event_sender.send(TaskEvent::TaskRetried {
@@ -996,10 +1160,20 @@ impl AgentSystem {
             deadline_score,
         };
 
-        // Add to queue
+// Add to queue
         {
             let mut queue = self.task_queue.lock().await;
             queue.push(prioritized_task);
+        }
+
+        // Persist snapshot as Pending
+        if let Some(store) = self.snapshot_store.read().await.clone() {
+            let mut snap = TaskSnapshot::new_pending(task.clone());
+            // ensure attempt aligns with previous snapshot if exists
+            if let Ok(Some(prev)) = store.load(&task_id).await {
+                snap.attempt = prev.attempt;
+            }
+            let _ = store.save(&snap).await;
         }
 
         // Store result sender if provided

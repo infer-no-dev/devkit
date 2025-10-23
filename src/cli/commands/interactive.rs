@@ -52,6 +52,7 @@ pub async fn run(
                 follow_symlinks: false,
                 analyze_dependencies: true,
                 deep_analysis: false, // Disable for faster startup
+                generate_embeddings: false, // Disable for faster startup
                 cache_results: true,
             };
             

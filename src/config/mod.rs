@@ -5,6 +5,7 @@
 
 pub mod defaults;
 pub mod loader;
+pub mod rules;
 pub mod settings;
 pub mod validation;
 
@@ -22,6 +23,7 @@ pub struct Config {
     pub ui: UIConfig,
     pub web: WebConfig,
     pub logging: crate::logging::LogConfig,
+    pub orchestrator: OrchestratorConfig,
     pub keybindings: HashMap<String, String>,
 }
 
@@ -176,6 +178,18 @@ pub struct WebConfig {
     pub session_timeout_minutes: u32,
 }
 
+/// Orchestrator configuration persisted in config
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrchestratorConfig {
+    pub task_timeout_seconds: u64,
+    pub retry_failed_tasks: bool,
+    pub max_retry_attempts: usize,
+    pub backoff: String, // "fixed" or "exponential"
+    pub backoff_base_secs: u64,
+    pub backoff_factor: u32,
+    pub backoff_max_secs: u64,
+}
+
 /// Configuration manager with enhanced features
 #[derive(Debug)]
 pub struct ConfigManager {
@@ -183,6 +197,7 @@ pub struct ConfigManager {
     config_path: PathBuf,
     loader: loader::ConfigLoader,
     validator: validation::ConfigValidator,
+    rules_manager: rules::RulesManager,
     environment: String,
     watch_enabled: bool,
     config_cache: Option<Config>,
@@ -244,6 +259,7 @@ impl ConfigManager {
             config_path: config_path.clone(),
             loader,
             validator,
+            rules_manager: rules::RulesManager::new(),
             environment: "default".to_string(),
             watch_enabled: false,
             config_cache: None,
@@ -285,6 +301,7 @@ impl ConfigManager {
             config_path: config_path.clone(),
             loader,
             validator,
+            rules_manager: rules::RulesManager::new(),
             environment: environment.to_string(),
             watch_enabled: false,
             config_cache: None,
@@ -738,6 +755,52 @@ impl ConfigManager {
 
         Ok(())
     }
+    
+    // Rules management methods
+    
+    /// Load rules hierarchy for the given project directory
+    pub async fn load_rules(&mut self, project_dir: &std::path::Path) -> Result<(), rules::RuleError> {
+        self.rules_manager.load_rules_hierarchy(project_dir).await
+    }
+    
+    /// Get effective rules for the current context
+    pub fn get_effective_rules(&self, context: &rules::RuleContext) -> Vec<rules::Rule> {
+        self.rules_manager.get_effective_rules(context)
+    }
+    
+    /// Format rules for AI consumption
+    pub fn format_rules_for_ai(&self, context: &rules::RuleContext) -> String {
+        self.rules_manager.format_rules_for_ai(context)
+    }
+    
+    /// Get summary of loaded rules
+    pub fn get_rules_summary(&self) -> rules::RulesSummary {
+        self.rules_manager.get_rules_summary()
+    }
+    
+    /// Reload rules if any source files have changed
+    pub async fn reload_rules_if_changed(&mut self, project_dir: &std::path::Path) -> Result<bool, rules::RuleError> {
+        self.rules_manager.reload_if_changed(project_dir).await
+    }
+    
+    /// Create a rule context from current environment
+    pub fn create_rule_context(
+        &self,
+        current_directory: std::path::PathBuf,
+        file_path: Option<std::path::PathBuf>,
+        language: Option<String>,
+        agent_type: Option<String>,
+        task_type: Option<String>,
+    ) -> rules::RuleContext {
+        rules::RuleContext {
+            current_directory,
+            file_path,
+            language,
+            agent_type,
+            task_type,
+            environment_vars: std::env::vars().collect(),
+        }
+    }
 }
 
 impl Default for Config {
@@ -750,6 +813,7 @@ impl Default for Config {
             ui: UIConfig::default(),
             web: WebConfig::default(),
             logging: crate::logging::LogConfig::default(),
+            orchestrator: OrchestratorConfig::default(),
             keybindings: default_keybindings(),
         }
     }
@@ -888,6 +952,20 @@ impl Default for WebConfig {
             auth_enabled: false,
             auth_token: None,
             session_timeout_minutes: 60,
+        }
+    }
+}
+
+impl Default for OrchestratorConfig {
+    fn default() -> Self {
+        Self {
+            task_timeout_seconds: 300,
+            retry_failed_tasks: true,
+            max_retry_attempts: 3,
+            backoff: "exponential".to_string(),
+            backoff_base_secs: 10,
+            backoff_factor: 2,
+            backoff_max_secs: 300,
         }
     }
 }

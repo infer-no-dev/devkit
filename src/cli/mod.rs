@@ -88,6 +88,35 @@ pub struct Cli {
     /// Enable colored output
     #[arg(long, global = true, default_value = "auto")]
     pub color: ColorMode,
+
+    // Global orchestrator defaults
+    /// Task timeout in seconds (orchestrator)
+    #[arg(long = "orchestrator-task-timeout-seconds", global = true)]
+    pub orchestrator_task_timeout_seconds: Option<u64>,
+
+    /// Enable retries (orchestrator)
+    #[arg(long = "orchestrator-retry-failed-tasks", global = true)]
+    pub orchestrator_retry_failed_tasks: Option<bool>,
+
+    /// Max retry attempts (orchestrator)
+    #[arg(long = "orchestrator-max-retry-attempts", global = true)]
+    pub orchestrator_max_retry_attempts: Option<usize>,
+
+    /// Backoff strategy: fixed|exponential (orchestrator)
+    #[arg(long = "orchestrator-backoff", global = true)]
+    pub orchestrator_backoff: Option<String>,
+
+    /// Base/backoff seconds (orchestrator)
+    #[arg(long = "orchestrator-backoff-base-secs", global = true)]
+    pub orchestrator_backoff_base_secs: Option<u64>,
+
+    /// Backoff factor (orchestrator, exponential only)
+    #[arg(long = "orchestrator-backoff-factor", global = true)]
+    pub orchestrator_backoff_factor: Option<u32>,
+
+    /// Backoff max seconds (orchestrator, exponential only)
+    #[arg(long = "orchestrator-backoff-max-secs", global = true)]
+    pub orchestrator_backoff_max_secs: Option<u64>,
 }
 
 /// Available CLI commands
@@ -362,6 +391,48 @@ pub enum AgentCommands {
         #[arg(short, long)]
         follow: bool,
     },
+    /// Cancel a running or queued task by ID
+    CancelTask {
+        /// Task ID to cancel
+        task_id: String,
+    },
+    /// Resume pending/running tasks from snapshots
+    Resume,
+
+    /// Configure or view orchestrator settings (timeouts, retries, backoff)
+    Orchestrator(OrchestratorArgs),
+}
+
+/// Orchestrator settings arguments
+#[derive(Args, Clone, Debug)]
+pub struct OrchestratorArgs {
+    /// Task timeout in seconds
+    #[arg(long)]
+    pub task_timeout_seconds: Option<u64>,
+
+    /// Enable/disable retries for failed tasks
+    #[arg(long)]
+    pub retry_failed_tasks: Option<bool>,
+
+    /// Maximum retry attempts
+    #[arg(long)]
+    pub max_retry_attempts: Option<usize>,
+
+    /// Backoff strategy: fixed or exponential
+    #[arg(long, default_value = "exponential")]
+    pub backoff: String,
+
+    /// For fixed/exponential: base delay seconds (fixed uses this as the constant delay)
+    #[arg(long, default_value_t = 10)]
+    pub backoff_base_secs: u64,
+
+    /// For exponential strategy: growth factor
+    #[arg(long, default_value_t = 2)]
+    pub backoff_factor: u32,
+
+    /// For exponential: maximum delay seconds
+    #[arg(long, default_value_t = 300)]
+    pub backoff_max_secs: u64,
 }
 
 /// Configuration management arguments
@@ -869,17 +940,18 @@ impl std::str::FromStr for ColorMode {
 /// Main CLI application runner
 pub struct CliRunner {
     config_manager: ConfigManager,
-    context_manager: Option<ContextManager>,
+    pub(crate) context_manager: Option<ContextManager>,
     agent_system: Option<AgentSystem>,
     verbose: bool,
     quiet: bool,
     format: OutputFormat,
     color_enabled: bool,
+    orchestrator_defaults: OrchestratorArgs,
 }
 
 impl CliRunner {
     /// Create a new CLI runner
-    pub fn new(cli: &Cli) -> Result<Self, Box<dyn std::error::Error>> {
+pub fn new(cli: &Cli) -> Result<Self, Box<dyn std::error::Error>> {
         // Initialize configuration manager
         let config_manager = ConfigManager::new(cli.config.clone())?;
 
@@ -897,6 +969,7 @@ impl CliRunner {
             std::env::set_current_dir(dir)?;
         }
 
+let oc_snapshot = config_manager.config().orchestrator.clone();
         Ok(Self {
             config_manager,
             context_manager: None,
@@ -905,6 +978,27 @@ impl CliRunner {
             quiet: cli.quiet,
             format: cli.format.clone(),
             color_enabled,
+            orchestrator_defaults: {
+                // Start with config values (snapshot taken before moving config_manager)
+                let mut args = OrchestratorArgs {
+                    task_timeout_seconds: Some(oc_snapshot.task_timeout_seconds),
+                    retry_failed_tasks: Some(oc_snapshot.retry_failed_tasks),
+                    max_retry_attempts: Some(oc_snapshot.max_retry_attempts),
+                    backoff: oc_snapshot.backoff,
+                    backoff_base_secs: oc_snapshot.backoff_base_secs,
+                    backoff_factor: oc_snapshot.backoff_factor,
+                    backoff_max_secs: oc_snapshot.backoff_max_secs,
+                };
+                // Override with CLI when provided
+                if let Some(v) = cli.orchestrator_task_timeout_seconds { args.task_timeout_seconds = Some(v); }
+                if let Some(v) = cli.orchestrator_retry_failed_tasks { args.retry_failed_tasks = Some(v); }
+                if let Some(v) = cli.orchestrator_max_retry_attempts { args.max_retry_attempts = Some(v); }
+                if let Some(v) = &cli.orchestrator_backoff { args.backoff = v.clone(); }
+                if let Some(v) = cli.orchestrator_backoff_base_secs { args.backoff_base_secs = v; }
+                if let Some(v) = cli.orchestrator_backoff_factor { args.backoff_factor = v; }
+                if let Some(v) = cli.orchestrator_backoff_max_secs { args.backoff_max_secs = v; }
+                args
+            },
         })
     }
 
@@ -1037,6 +1131,11 @@ impl CliRunner {
         &self.format
     }
 
+    /// Get orchestrator defaults
+    pub fn orchestrator_defaults(&self) -> &OrchestratorArgs {
+        &self.orchestrator_defaults
+    }
+
     /// Get config manager
     pub fn config_manager(&self) -> &ConfigManager {
         &self.config_manager
@@ -1048,15 +1147,26 @@ impl CliRunner {
     }
 
     /// Initialize agent system if not already done
-    pub async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.agent_system.is_none() {
             self.ensure_context_manager().await?;
 
-            let _config = self.config_manager.config();
+            // Build AgentSystem from global orchestrator defaults
+            let mut sys_cfg = crate::agents::system::AgentSystemConfig::default();
+            if let Some(t) = self.orchestrator_defaults.task_timeout_seconds { sys_cfg.task_timeout_seconds = t; }
+            if let Some(r) = self.orchestrator_defaults.retry_failed_tasks { sys_cfg.retry_failed_tasks = r; }
+            if let Some(m) = self.orchestrator_defaults.max_retry_attempts { sys_cfg.max_retry_attempts = m; }
 
-            // For now, just initialize with default AgentSystem
-            self.agent_system = Some(AgentSystem::new());
-            self.print_verbose("Agent system initialized");
+            let retry_policy = match self.orchestrator_defaults.backoff.to_lowercase().as_str() {
+                "fixed" => crate::agents::orchestrator::RetryPolicy { max_retries: sys_cfg.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Fixed { delay_secs: self.orchestrator_defaults.backoff_base_secs } },
+                _ => crate::agents::orchestrator::RetryPolicy { max_retries: sys_cfg.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Exponential { base_secs: self.orchestrator_defaults.backoff_base_secs, factor: self.orchestrator_defaults.backoff_factor, max_secs: self.orchestrator_defaults.backoff_max_secs } },
+            };
+
+            let system = AgentSystem::with_config_and_policy(sys_cfg, retry_policy);
+            system.initialize().await?;
+            system.start().await?;
+            self.agent_system = Some(system);
+            self.print_verbose("Agent system initialized and started with orchestrator defaults");
         }
         Ok(())
     }

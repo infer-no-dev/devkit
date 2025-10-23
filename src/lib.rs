@@ -21,18 +21,24 @@ pub mod cli;
 pub mod codegen;
 pub mod config;
 pub mod context;
+pub mod evaluation;
 pub mod error;
 pub mod integration;
 pub mod integrations;
 pub mod interactive;
 pub mod logging;
+pub mod monitoring;
 pub mod plugins;
+pub mod sandbox;
 pub mod services;
 pub mod session;
+pub mod telemetry;
+pub mod tools;
+pub mod secrets;
 pub mod shell;
 pub mod system_bus;
-pub mod ui;
 pub mod web;
+pub mod ui;
 
 #[cfg(test)]
 pub mod testing;
@@ -50,7 +56,7 @@ pub use agents::{Agent, AgentError, AgentResult, AgentStatus, AgentTask, TaskPri
 pub use artifacts::{
     ArtifactManager, EnhancedArtifact, ArtifactDisplay, ArtifactViewerState, ViewMode,
 };
-pub use codegen::{CodeGenError as CodegenError, CodeGenerator, GenerationConfig};
+pub use codegen::{CodeGenError as CodegenError, CodeGenerator, GenerationConfig, GeneratedCode};
 pub use config::{Config, ConfigError, ConfigManager};
 pub use context::{CodebaseContext, ContextError, FileContext};
 pub use error::{
@@ -60,6 +66,10 @@ pub use logging::{
     LogConfig, LogContext, LogEntry, LogFormat, LogLevel, LoggingError, LoggingSystem,
 };
 pub use shell::{ShellConfig, ShellError};
+pub use evaluation::{
+    EvaluationFramework, EvaluationConfig, EvaluationResult, EvaluationError,
+    EvaluationContext, EvaluationEnvironment, BuildProfile,
+};
 
 // Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -1,5 +1,5 @@
 use crate::agents::{AgentInfo, AgentSystem};
-use crate::cli::{AgentCommands, CliRunner};
+use crate::cli::{AgentCommands, CliRunner, OrchestratorArgs};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -43,19 +43,93 @@ pub async fn run(
             lines,
             follow,
         } => show_agent_logs(runner, &agent_system, Some(&agent), Some(lines), follow).await?,
+        AgentCommands::CancelTask { task_id } => {
+            cancel_task(runner, &agent_system, &task_id).await?;
+        }
+        AgentCommands::Resume => {
+            resume_tasks(runner, &agent_system).await?;
+        }
+        AgentCommands::Orchestrator(args) => {
+            configure_orchestrator(runner, args).await?;
+        }
     }
 
     Ok(())
 }
 
 async fn get_or_create_agent_system(
-    _runner: &mut CliRunner,
+    runner: &mut CliRunner,
 ) -> Result<Arc<AgentSystem>, Box<dyn std::error::Error>> {
-    // For now, create a new agent system each time
-    // In a real implementation, this would be managed by the CliRunner
-    let agent_system = Arc::new(AgentSystem::new());
-    let _ = agent_system.initialize().await;
-    Ok(agent_system)
+    // Build from runner orchestrator defaults to ensure global flags apply
+    let defaults = runner.orchestrator_defaults().clone();
+    let mut cfg = crate::agents::system::AgentSystemConfig::default();
+    if let Some(t) = defaults.task_timeout_seconds { cfg.task_timeout_seconds = t; }
+    if let Some(r) = defaults.retry_failed_tasks { cfg.retry_failed_tasks = r; }
+    if let Some(m) = defaults.max_retry_attempts { cfg.max_retry_attempts = m; }
+    let retry_policy = match defaults.backoff.to_lowercase().as_str() {
+        "fixed" => crate::agents::orchestrator::RetryPolicy { max_retries: cfg.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Fixed { delay_secs: defaults.backoff_base_secs } },
+        _ => crate::agents::orchestrator::RetryPolicy { max_retries: cfg.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Exponential { base_secs: defaults.backoff_base_secs, factor: defaults.backoff_factor, max_secs: defaults.backoff_max_secs } },
+    };
+    let system = Arc::new(AgentSystem::with_config_and_policy(cfg, retry_policy));
+    system.initialize().await?;
+    system.start().await?;
+    Ok(system)
+}
+
+async fn cancel_task(
+    runner: &CliRunner,
+    agent_system: &AgentSystem,
+    task_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let did_cancel = agent_system.cancel_task(task_id).await?;
+    if did_cancel {
+        runner.print_success(&format!("Cancellation signaled for task {}", task_id));
+    } else {
+        runner.print_warning(&format!("No running task with id {} (if queued, it will be skipped if picked)", task_id));
+    }
+    Ok(())
+}
+
+async fn resume_tasks(
+    runner: &CliRunner,
+    agent_system: &AgentSystem,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let count = agent_system.resume_from_snapshots().await?;
+    runner.print_info(&format!("Queued {} task(s) from snapshots", count));
+    Ok(())
+}
+
+async fn configure_orchestrator(
+    runner: &CliRunner,
+    args: OrchestratorArgs,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Build config
+    let mut config = crate::agents::system::AgentSystemConfig::default();
+    if let Some(t) = args.task_timeout_seconds { config.task_timeout_seconds = t; }
+    if let Some(r) = args.retry_failed_tasks { config.retry_failed_tasks = r; }
+    if let Some(m) = args.max_retry_attempts { config.max_retry_attempts = m; }
+
+    // Build retry policy
+    let retry_policy = match args.backoff.to_lowercase().as_str() {
+        "fixed" => crate::agents::orchestrator::RetryPolicy { max_retries: config.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Fixed { delay_secs: args.backoff_base_secs } },
+        _ => crate::agents::orchestrator::RetryPolicy { max_retries: config.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Exponential { base_secs: args.backoff_base_secs, factor: args.backoff_factor, max_secs: args.backoff_max_secs } },
+    };
+
+    // Create a system with these settings and start it
+    let system = Arc::new(AgentSystem::with_config_and_policy(config.clone(), retry_policy.clone()));
+    system.initialize().await?;
+    system.start().await?;
+
+    runner.print_success("Orchestrator configured and system started");
+    runner.print_info(&format!(
+        "timeout={}s, retry={}, max_retries={}, backoff={}",
+        config.task_timeout_seconds,
+        config.retry_failed_tasks,
+        config.max_retry_attempts,
+        match retry_policy.strategy { crate::agents::orchestrator::BackoffStrategy::Fixed {..} => "fixed".to_string(), _ => "exponential".to_string() }
+    ));
+
+    Ok(())
 }
 
 async fn list_agents(

@@ -12,6 +12,8 @@ pub mod progress;
 pub mod review;
 pub mod system;
 pub mod task;
+pub mod orchestrator;
+pub mod state_machine;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

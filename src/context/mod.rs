@@ -4,6 +4,7 @@
 //! symbol definitions, dependencies, and semantic relationships within codebases.
 
 pub mod analyzer;
+pub mod embeddings;
 pub mod indexer;
 pub mod repository;
 pub mod semantic;
@@ -14,6 +15,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use semantic::{SemanticAnalysis, SemanticAnalyzer};
+use embeddings::{VectorStore, EmbeddingConfig, EmbeddingProvider, CodeChunker};
+
+// LocalEmbeddingProvider import removed - not currently used
 
 /// Complete context information about a codebase
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +28,7 @@ pub struct CodebaseContext {
     pub dependencies: Vec<Dependency>,
     pub repository_info: Option<repository::RepositoryInfo>,
     pub semantic_analysis: Option<SemanticAnalysis>,
+    pub embeddings: Option<VectorStore>,
     pub metadata: ContextMetadata,
 }
 
@@ -129,18 +134,20 @@ impl Default for CodebaseContext {
             dependencies: Vec::new(),
             repository_info: None,
             semantic_analysis: None,
+            embeddings: None,
             metadata: ContextMetadata::default(),
         }
     }
 }
 
 /// Context manager for analyzing and maintaining codebase context
-#[derive(Debug)]
 pub struct ContextManager {
     analyzer: analyzer::CodebaseAnalyzer,
     indexer: indexer::SymbolIndexer,
     repository: repository::RepositoryAnalyzer,
     semantic_analyzer: SemanticAnalyzer,
+    embedding_provider: Option<Box<dyn EmbeddingProvider>>,
+    code_chunker: CodeChunker,
     cache: HashMap<PathBuf, CodebaseContext>,
     semantic_cache: HashMap<PathBuf, SemanticAnalysis>,
 }
@@ -154,6 +161,7 @@ pub struct AnalysisConfig {
     pub follow_symlinks: bool,
     pub analyze_dependencies: bool,
     pub deep_analysis: bool,
+    pub generate_embeddings: bool,
     pub cache_results: bool,
 }
 
@@ -187,6 +195,8 @@ impl ContextManager {
             indexer: indexer::SymbolIndexer::new(),
             repository: repository::RepositoryAnalyzer::new()?,
             semantic_analyzer: SemanticAnalyzer::new(),
+            embedding_provider: None,
+            code_chunker: CodeChunker::new(EmbeddingConfig::default()),
             cache: HashMap::new(),
             semantic_cache: HashMap::new(),
         })
@@ -272,6 +282,7 @@ impl ContextManager {
                 dependencies: dependencies.clone(),
                 repository_info: repository_info.clone(),
                 semantic_analysis: None,
+                embeddings: None, // Will be filled later
                 metadata: ContextMetadata::default(), // Temporary metadata
             };
 
@@ -314,6 +325,35 @@ impl ContextManager {
             None
         };
 
+        // Generate embeddings if enabled
+        let embeddings = if config.generate_embeddings && self.embedding_provider.is_some() {
+            println!("Generating code embeddings for: {}", path_str);
+            let embeddings_start = std::time::Instant::now();
+            
+            match self.generate_embeddings_for_files(&files).await {
+                Ok(vector_store) => {
+                    let embeddings_duration = embeddings_start.elapsed();
+                    println!(
+                        "Embeddings generated in {}ms with {} vectors",
+                        embeddings_duration.as_millis(),
+                        vector_store.len()
+                    );
+                    Some(vector_store)
+                }
+                Err(e) => {
+                    println!(
+                        "Embeddings generation failed for {}: {} (took {}ms)",
+                        path_str,
+                        e,
+                        embeddings_start.elapsed().as_millis()
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         let analysis_duration = start_time.elapsed();
         let total_lines: usize = files.iter().map(|f| f.line_count).sum();
         let total_size_bytes: u64 = files.iter().map(|f| f.size_bytes).sum();
@@ -349,6 +389,7 @@ impl ContextManager {
             dependencies,
             repository_info,
             semantic_analysis,
+            embeddings,
             metadata,
         };
 
@@ -563,6 +604,106 @@ impl ContextManager {
         self.semantic_cache.clear();
     }
 
+    /// Set embedding provider
+    pub fn set_embedding_provider(&mut self, provider: Box<dyn EmbeddingProvider>) {
+        self.embedding_provider = Some(provider);
+    }
+
+    /// Generate embeddings for a set of files
+    async fn generate_embeddings_for_files(
+        &self,
+        files: &[FileContext],
+    ) -> Result<VectorStore, ContextError> {
+        let provider = self.embedding_provider.as_ref()
+            .ok_or_else(|| ContextError::AnalysisFailed("No embedding provider configured".to_string()))?;
+            
+        let mut vector_store = VectorStore::new(EmbeddingConfig::default());
+        
+        for file in files {
+            // Only process text files that can be chunked
+            if Self::is_text_file(&file.path) {
+                // Read file content - in production, you'd want to read from the filesystem
+                // For now, we'll create a mock content based on the file context
+                let content = format!(
+                    "// File: {}\n// Language: {}\n// Symbols: {:?}\n// Imports: {:?}\n",
+                    file.path.display(),
+                    file.language,
+                    file.symbols,
+                    file.imports
+                );
+                
+                // Chunk the file
+                let chunks = self.code_chunker.chunk_file(&file.path, &content, &file.language);
+                
+                // Generate embeddings for each chunk
+                for chunk in chunks {
+                    match provider.embed_text(&chunk.content).await {
+                        Ok(vector) => {
+                            let embedding = embeddings::CodeEmbedding {
+                                chunk_id: chunk.id.clone(),
+                                vector,
+                                metadata: embeddings::EmbeddingMetadata {
+                                    file_path: chunk.file_path.clone(),
+                                    language: chunk.language.clone(),
+                                    chunk_type: chunk.chunk_type.clone(),
+                                    symbols: chunk.symbols.clone(),
+                                    content_hash: md5::compute(chunk.content.as_bytes())
+                                        .iter()
+                                        .map(|b| format!("{:02x}", b))
+                                        .collect::<Vec<_>>()
+                                        .join(""),
+                                },
+                                created_at: chrono::Utc::now(),
+                            };
+                            
+                            vector_store.add_embedding(chunk, embedding);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to generate embedding for chunk {}: {}", chunk.id, e);
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(vector_store)
+    }
+    
+    /// Check if a file is a text file suitable for embedding
+    fn is_text_file(path: &PathBuf) -> bool {
+        if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
+            matches!(
+                extension,
+                "rs" | "py" | "js" | "ts" | "go" | "java" | "cpp" | "c" | "h" | "hpp"
+                | "rb" | "php" | "swift" | "kt" | "scala" | "clj" | "hs" | "elm"
+                | "md" | "txt" | "json" | "yaml" | "yml" | "toml" | "xml"
+            )
+        } else {
+            false
+        }
+    }
+    
+    /// Search for similar code using embeddings
+    pub async fn search_similar_code(
+        &self,
+        query: &str,
+        context: &CodebaseContext,
+        max_results: Option<usize>,
+    ) -> Result<Vec<embeddings::SimilarityResult>, ContextError> {
+        let provider = self.embedding_provider.as_ref()
+            .ok_or_else(|| ContextError::AnalysisFailed("No embedding provider configured".to_string()))?;
+            
+        let embeddings = context.embeddings.as_ref()
+            .ok_or_else(|| ContextError::AnalysisFailed("No embeddings available in context".to_string()))?;
+            
+        // Generate embedding for the query
+        let query_embedding = provider.embed_text(query).await
+            .map_err(|e| ContextError::AnalysisFailed(format!("Query embedding failed: {}", e)))?;
+            
+        // Search for similar chunks
+        Ok(embeddings.find_similar(&query_embedding, max_results))
+    }
+
     /// Analyze directory with optional breakdown for profiling
     pub async fn analyze_directory(
         &mut self,
@@ -617,6 +758,7 @@ impl Default for AnalysisConfig {
             follow_symlinks: false,
             analyze_dependencies: true,
             deep_analysis: false, // Changed to false for better performance
+            generate_embeddings: false, // Disabled by default for performance
             cache_results: true,
         }
     }

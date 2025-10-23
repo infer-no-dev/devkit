@@ -348,6 +348,7 @@ impl MockCodebaseAnalyzer {
             dependencies: Vec::new(),
             repository_info: None,
             semantic_analysis: None,
+            embeddings: None,
             metadata: crate::context::ContextMetadata {
                 analysis_timestamp: std::time::SystemTime::now(),
                 total_files: 0,
@@ -576,6 +577,7 @@ mod tests {
             dependencies: Vec::new(),
             repository_info: None,
             semantic_analysis: None,
+            embeddings: None,
             metadata: crate::context::ContextMetadata {
                 analysis_timestamp: std::time::SystemTime::now(),
                 total_files: 0,
