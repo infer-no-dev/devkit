@@ -276,6 +276,15 @@ impl CliValidator {
             Commands::Blueprint(args) => self.validate_blueprint_args(args, &mut result),
             Commands::Plugin(args) => self.validate_plugin_args(args, &mut result),
             Commands::Chat(args) => self.validate_chat_args(args, &mut result),
+            // New commands - basic validation for now
+            Commands::Session(_) => { /* Session validation placeholder */ },
+            Commands::Visualize(_) => { /* Visualize validation placeholder */ },
+            Commands::Dashboard(_) => { /* Dashboard validation placeholder */ },
+            Commands::Analytics(_) => { /* Analytics validation placeholder */ },
+            Commands::Monitor(_) => { /* Monitor validation placeholder */ },
+            Commands::Export(_) => { /* Export validation placeholder */ },
+            Commands::Behavior(_) => { /* Behavior validation placeholder */ },
+            Commands::Diagnose(_) => { /* Diagnose validation placeholder */ },
         }
 
         result.is_valid = result.errors.is_empty();
