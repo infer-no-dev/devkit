@@ -396,6 +396,63 @@ devkit status                   # Check system health
 devkit config                   # Manage configuration
 ```
 
+### Advanced Commands
+```bash
+# Code Analysis & Inspection
+devkit inspect symbols [pattern]   # Inspect symbols in codebase
+devkit inspect file <path>          # Show file context information
+devkit inspect dependencies        # Analyze project dependencies
+devkit inspect relationships       # Show code relationships
+devkit inspect quality             # Code quality metrics
+
+# Performance & Diagnostics
+devkit profile system              # Profile system performance
+devkit profile agents              # Profile agent performance
+devkit profile context             # Profile context analysis
+devkit diagnose                    # Run project diagnostics
+
+# Templates & Blueprints
+devkit template list               # List available templates
+devkit template show <name>        # Show template details
+devkit template apply <name>       # Apply template with variables
+devkit blueprint extract           # Extract system blueprint
+devkit blueprint generate          # Generate from blueprint
+devkit blueprint replicate         # Replicate current system
+
+# Agent Management
+devkit agent list                  # List available agents
+devkit agent status                # Show agent status
+devkit agent start <agents>        # Start specific agents
+devkit agent stop <agents>         # Stop specific agents
+
+# Session Management
+devkit session list               # List all sessions
+devkit session create <name>      # Create new session
+devkit session switch <name>      # Switch to session
+devkit session branch create      # Create session branch
+
+# Monitoring & Analytics
+devkit visualize                  # Open coordination visualizer
+devkit dashboard                  # View system dashboard
+devkit analytics report           # Generate analytics reports
+devkit monitor agents             # Monitor agent performance
+devkit export --session <name>    # Export session data
+
+# AI Chat & Behavior
+devkit chat                       # AI-powered project manager
+devkit behavior edit              # Open behavior editor
+devkit behavior list              # List behavior profiles
+
+# Plugin System
+devkit plugin search <query>      # Search plugin marketplace
+devkit plugin install <id>        # Install plugin
+devkit plugin list                # List installed plugins
+
+# Development & Testing
+devkit demo                       # Run end-to-end demo workflow
+devkit interactive                # Start interactive mode
+```
+
 ### Shell Integration
 ```bash
 devkit shell install [shell]    # Install shell integration
