@@ -962,8 +962,8 @@ pub struct CliRunner {
 impl CliRunner {
     /// Create a new CLI runner
 pub fn new(cli: &Cli) -> Result<Self, Box<dyn std::error::Error>> {
-        // Initialize configuration manager
-        let config_manager = ConfigManager::new(cli.config.clone())?;
+        // Initialize configuration manager with fallback support
+        let config_manager = ConfigManager::new_with_smart_defaults(cli.config.clone())?;
 
         // Configuration is already loaded by the constructor
 

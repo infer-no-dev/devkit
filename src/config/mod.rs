@@ -241,22 +241,32 @@ impl ConfigManager {
         Self::with_environment(config_path, "default")
     }
 
-    /// Create a new configuration manager with smart defaults
+    /// Create a new configuration manager with smart defaults and fallback support
     pub fn new_with_smart_defaults(config_path: Option<PathBuf>) -> Result<Self, ConfigError> {
-        let system_defaults = defaults::SystemDefaults::detect();
-        let config_path = config_path.unwrap_or_else(|| {
-            dirs::config_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("devkit-env")
-                .join("config.toml")
-        });
-
-        let loader = loader::ConfigLoader::new();
+        let mut loader = loader::ConfigLoader::new_with_search_paths();
+        
+        // Add explicit config path if provided
+        if let Some(path) = config_path.clone() {
+            loader.add_search_path(path);
+        }
+        
         let validator = validation::ConfigValidator::new();
-
+        
+        // Load configuration with fallback
+        let load_result = loader.load_and_validate_with_fallback(&validator)?;
+        
+        if load_result.fallback_used {
+            tracing::warn!("Configuration fallback was used. Some configs failed to load:");
+            for (path, error) in &load_result.errors {
+                tracing::warn!("  {}: {}", path.display(), error);
+            }
+        }
+        
+        tracing::info!("Configuration loaded from: {}", load_result.loaded_from.display());
+        
         let mut manager = Self {
-            config: system_defaults.generate_config(),
-            config_path: config_path.clone(),
+            config: load_result.config,
+            config_path: load_result.loaded_from,
             loader,
             validator,
             rules_manager: rules::RulesManager::new(),
@@ -266,15 +276,7 @@ impl ConfigManager {
             last_modified: None,
         };
 
-        // Load existing config if it exists and merge with smart defaults
-        if config_path.exists() {
-            let existing_config = manager.loader.load_from_file(&config_path)?;
-            manager.merge_configs(existing_config)?;
-        }
-
-        manager.validator.validate(&manager.config)?;
-
-        if manager.config_path.exists() {
+        if manager.config_path.exists() && manager.config_path.to_string_lossy() != "<default>" {
             manager.update_last_modified()?;
         }
 

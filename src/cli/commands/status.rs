@@ -193,6 +193,27 @@ async fn check_configuration_status(
                 config_path.to_string_lossy().to_string(),
             );
             details.insert("file_exists".to_string(), config_path.exists().to_string());
+            
+            // Check for other potential config locations to show fallback info
+            let user_config = dirs::config_dir()
+                .map(|d| d.join("devkit-env").join("config.toml"));
+            let project_config = std::path::PathBuf::from("config.toml");
+            
+            if let Some(user_config_path) = user_config {
+                if user_config_path != *config_path {
+                    details.insert(
+                        "user_config_available".to_string(),
+                        user_config_path.exists().to_string()
+                    );
+                }
+            }
+            
+            if project_config != *config_path {
+                details.insert(
+                    "project_config_available".to_string(),
+                    project_config.exists().to_string()
+                );
+            }
 
             // Check environment
             details.insert(
