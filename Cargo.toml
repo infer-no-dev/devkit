@@ -114,6 +114,9 @@ path = "test_integration_fixed.rs"
 name = "test_system_bus"
 path = "test_system_bus.rs"
 
+[build-dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+
 [dev-dependencies]
 env_logger = "0.11"
 tracing-test = "0.2"

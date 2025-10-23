@@ -591,11 +591,16 @@ fn get_disk_usage(path: &std::path::Path) -> Result<u64, Box<dyn std::error::Err
 
 /// Get system information
 fn get_system_info() -> SystemInfo {
+    let version = env!("CARGO_PKG_VERSION");
+    let git_hash = env!("BUILD_GIT_HASH");
+    let build_time = env!("BUILD_TIMESTAMP");
+    let enhanced_version = format!("{} (git:{}, built:{})", version, git_hash, build_time);
+    
     SystemInfo {
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),
         rust_version: env!("CARGO_PKG_RUST_VERSION").to_string(),
-        agentic_version: env!("CARGO_PKG_VERSION").to_string(),
+        agentic_version: enhanced_version,
         working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from("unknown")),
         config_file: std::env::var("AGENTIC_CONFIG").ok().map(PathBuf::from),
     }

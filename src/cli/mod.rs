@@ -39,12 +39,22 @@ fn supports_color() -> bool {
                 .unwrap_or(false))
 }
 
+/// Version string with build metadata
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (git:",
+    env!("BUILD_GIT_HASH"),
+    ", built:",
+    env!("BUILD_TIMESTAMP"),
+    ")"
+);
+
 /// Main CLI application structure
 #[derive(Parser)]
 #[command(
     name = "devkit",
     about = "Agentic Development Environment - AI-powered code generation and analysis",
-    version = env!("CARGO_PKG_VERSION"),
+    version = VERSION,
     long_about = "
 🤖 Agentic Development Environment
 
