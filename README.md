@@ -439,9 +439,21 @@ devkit monitor agents             # Monitor agent performance
 devkit export --session <name>    # Export session data
 
 # AI Chat & Behavior
-devkit chat                       # AI-powered project manager
-devkit behavior edit              # Open behavior editor
-devkit behavior list              # List behavior profiles
+ devkit chat                       # AI-powered project manager
+ devkit behavior edit              # Open behavior editor
+ devkit behavior list              # List behavior profiles
+
+# Chat flags and in-chat commands
+# Flags
+#   --force-generate    always treat input as codegen
+#   --no-codegen        disable code generation
+# Examples
+#   devkit chat --force-generate
+#   devkit chat --no-codegen
+# In-chat toggles
+#   force on/off
+#   no-codegen on/off
+#   mode (show toggles)
 
 # Plugin System
 devkit plugin search <query>      # Search plugin marketplace
@@ -556,7 +568,7 @@ dk-status            # Quick status check
 - **✅ Secrets Management**: Secure credential storage with encryption and access control
 - **🚀 Live Demo**: `devkit generate "create a hello world function" --language rust` works out of the box!
 
-**Recent Achievements (November 2024):**
+**Recent Achievements:**
 - **🔧 Complete Compilation Fix**: Resolved all build errors across 15+ complex modules
 - **🏗️ Advanced Tool Ecosystem**: Implemented MCP protocol support, tool providers, and execution framework
 - **🔐 Secrets Management**: Added secure credential storage with vault integration

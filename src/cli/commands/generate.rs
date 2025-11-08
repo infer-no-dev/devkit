@@ -1,10 +1,10 @@
 use crate::cli::{CliRunner, GenerateArgs};
 use crate::codegen::stubs;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 
 const VALID_STACKS: &[&str] = &[
     "rust-axum",
@@ -28,10 +28,10 @@ pub async fn run(
 
     // Analyze the prompt and infer language
     let language = determine_language(&args);
-    
+
     if runner.verbose() {
         runner.print_verbose(&format!(
-            "Language: {:?}, Strategy: {}", 
+            "Language: {:?}, Strategy: {}",
             language, args.strategy
         ));
     }
@@ -39,11 +39,13 @@ pub async fn run(
     // List stacks and exit
     if args.list_stacks {
         runner.print_info("Available stacks:");
-        for s in VALID_STACKS { runner.print_output(&format!("  - {}\n", s), None); }
+        for s in VALID_STACKS {
+            runner.print_output(&format!("  - {}\n", s), None);
+        }
         return Ok(());
     }
 
-    // Show progress for generation  
+    // Show progress for generation
     if !runner.quiet() {
         print!("🔄 Generating code...");
         io::stdout().flush()?;
@@ -58,13 +60,19 @@ pub async fn run(
 
     // Decide scaffolding
     let mut scaffold = args.scaffold;
-    if args.single_file || args.no_scaffold { scaffold = false; }
+    if args.single_file || args.no_scaffold {
+        scaffold = false;
+    }
 
     // Validate stack preset if provided
     if let Some(stack) = &args.stack {
         if !VALID_STACKS.contains(&stack.as_str()) {
             let sugg = suggest_stacks(stack);
-            let mut msg = format!("Unknown --stack '{}'\nValid options: {}", stack, VALID_STACKS.join(", "));
+            let mut msg = format!(
+                "Unknown --stack '{}'\nValid options: {}",
+                stack,
+                VALID_STACKS.join(", ")
+            );
             if !sugg.is_empty() {
                 msg.push_str(&format!("\nDid you mean: {}?", sugg.join(", ")));
             }
@@ -75,7 +83,9 @@ pub async fn run(
 
     if scaffold && !args.preview {
         scaffold_project(runner, &args, language.as_deref()).await?;
-        if !runner.quiet() { println!(" ✅"); }
+        if !runner.quiet() {
+            println!(" ✅");
+        }
         runner.print_success("Project scaffolded successfully!");
         return Ok(());
     }
@@ -91,7 +101,7 @@ pub async fn run(
             generate_code_with_stubs(&args, language.as_deref())
         }
     };
-    
+
     if !runner.quiet() {
         println!(" ✅");
     }
@@ -108,7 +118,10 @@ pub async fn run(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PlanEntry { path: String, content: String }
+struct PlanEntry {
+    path: String,
+    content: String,
+}
 
 #[cfg(test)]
 mod tests {
@@ -138,7 +151,9 @@ async fn scaffold_project(
     } else if let Some(out) = &args.output {
         // If output looks like a file (has extension), use its parent; else use as dir
         if out.extension().is_some() {
-            out.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
+            out.parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("."))
         } else {
             out.clone()
         }
@@ -168,30 +183,81 @@ async fn scaffold_project(
     // Add .gitignore depending on stack/lang
     let mut gitignore = String::new();
     match lang.as_str() {
-        "rust" | "rs" => { gitignore.push_str("target\n**/*.rs.bk\n"); }
-        "typescript" | "javascript" | "ts" | "js" => { gitignore.push_str("node_modules\n.next\ndist\n"); }
-        "python" | "py" => { gitignore.push_str(".venv\n__pycache__\n*.pyc\n"); }
+        "rust" | "rs" => {
+            gitignore.push_str("target\n**/*.rs.bk\n");
+        }
+        "typescript" | "javascript" | "ts" | "js" => {
+            gitignore.push_str("node_modules\n.next\ndist\n");
+        }
+        "python" | "py" => {
+            gitignore.push_str(".venv\n__pycache__\n*.pyc\n");
+        }
         _ => {}
     }
-    if !gitignore.is_empty() { plan.push((root.join(".gitignore"), gitignore)); }
+    if !gitignore.is_empty() {
+        plan.push((root.join(".gitignore"), gitignore));
+    }
 
     match (lang.as_str(), stack.as_str()) {
         ("rust", s) if s == "rust-axum" => {
             let pkg = root.file_name().and_then(|s| s.to_str()).unwrap_or("app");
-let cargo = format!("[package]\nname=\"{}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n\n[dependencies]\naxum=\"0.7\"\ntokio={{ version=\"1\", features=[\"full\"] }}\ntracing=\"0.1\"\n", pkg);
-            let main_rs = r#"use axum::{routing::get, Router};
-use std::net::SocketAddr;
+            let cargo = format!("[package]\nname=\"{}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n\n[dependencies]\naxum=\"0.7\"\ntokio={{ version=\"1\", features=[\"full\"] }}\ntracing=\"0.1\"\ntracing-subscriber=\"0.3\"\ntower=\"0.4\"\ntower-http={{ version=\"0.5\", features=[\"trace\"] }}\n", pkg);
+            let main_rs = r#"use axum::{routing::get, Json, Router};
+use serde_json::json;
+use tokio::net::TcpListener;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
+use tracing::info;
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/", get(|| async { "ok" }));
-    let addr: SocketAddr = "127.0.0.1:3000".parse().unwrap();
-    axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
+    tracing_subscriber::fmt::init();
+    
+    let app = Router::new()
+        .route("/", get(|| async { "ok" }))
+        .route("/health", get(|| async { Json(json!({"status": "ok"})) }))
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
+    
+    let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    info!(\"Server starting on http://127.0.0.1:3000\");
+    
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
 }
-"#.to_string();
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.expect(\"failed to install Ctrl+C handler\");
+    };
+    
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect(\"failed to install signal handler\")
+            .recv()
+            .await;
+    };
+    
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+    
+    info!(\"Signal received, starting graceful shutdown\");
+}
+"#
+            .to_string();
             plan.push((root.join("Cargo.toml"), cargo));
             plan.push((root.join("src/main.rs"), main_rs));
-            plan.push((root.join("README.md"), format!("# {}\nGenerated by DevKit (axum)", pkg)));
+            plan.push((
+                root.join("README.md"),
+                format!("# {}\nGenerated by DevKit (axum)", pkg),
+            ));
         }
         ("rust", s) if s == "rust-actix" => {
             let pkg = root.file_name().and_then(|s| s.to_str()).unwrap_or("app");
@@ -203,31 +269,86 @@ async fn index() -> impl Responder { "ok" }
 async fn main() -> std::io::Result<()> {
     HttpServer::new(|| App::new().service(index)).bind(("127.0.0.1", 3000))?.run().await
 }
-"#.to_string();
+"#
+            .to_string();
             plan.push((root.join("Cargo.toml"), cargo));
             plan.push((root.join("src/main.rs"), main_rs));
-            plan.push((root.join("README.md"), format!("# {}\nGenerated by DevKit (actix)", pkg)));
+            plan.push((
+                root.join("README.md"),
+                format!("# {}\nGenerated by DevKit (actix)", pkg),
+            ));
         }
         ("rust", s) if s == "rust-axum-sqlx" => {
             let pkg = root.file_name().and_then(|s| s.to_str()).unwrap_or("app");
-            let cargo = format!("[package]\nname=\"{}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n\n[dependencies]\naxum=\"0.7\"\ntokio={{ version=\"1\", features=[\"full\"] }}\ntracing=\"0.1\"\nsqlx={{ version=\"0.7\", features=[\"runtime-tokio\", \"postgres\"] }}\n", pkg);
-            let main_rs = r#"use axum::{routing::get, Router};
+            let cargo = format!("[package]\nname=\"{}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n\n[dependencies]\naxum=\"0.7\"\ntokio={{ version=\"1\", features=[\"full\"] }}\ntracing=\"0.1\"\ntracing-subscriber=\"0.3\"\ntower=\"0.4\"\ntower-http={{ version=\"0.5\", features=[\"trace\"] }}\nsqlx={{ version=\"0.7\", features=[\"runtime-tokio\", \"postgres\"] }}\n", pkg);
+            let main_rs = r#"use axum::{routing::get, Json, Router};
+use serde_json::json;
 use sqlx::PgPool;
-use std::net::SocketAddr;
+use tokio::net::TcpListener;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
+use tracing::info;
 
 #[tokio::main]
 async fn main() {
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:postgres@localhost/app".into());
-    let pool = PgPool::connect(&database_url).await.expect("db");
+    tracing_subscriber::fmt::init();
+    
+    let database_url = std::env::var(\"DATABASE_URL\")
+        .unwrap_or_else(|_| \"postgres://postgres:postgres@localhost/app\".into());
+    let pool = PgPool::connect(&database_url).await.expect(\"Failed to connect to database\");
+    
+    let app = Router::new()
+        .route(\"/\", get(|| async { \"ok\" }))
+        .route(\"/health\", get(health_check))
+        .with_state(pool)
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
+    
+    let listener = TcpListener::bind(\"127.0.0.1:3000\").await.unwrap();
+    info!(\"Server starting on http://127.0.0.1:3000\");
+    
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+}
 
-    let app = Router::new().route("/", get(|| async { "ok" })).with_state(pool);
-    let addr: SocketAddr = "127.0.0.1:3000".parse().unwrap();
-    axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
+async fn health_check(pool: axum::extract::State<PgPool>) -> Json<serde_json::Value> {
+    match sqlx::query(\"SELECT 1\").execute(&*pool).await {
+        Ok(_) => Json(json!({\"status\": \"ok\", \"database\": \"connected\"})),
+        Err(_) => Json(json!({\"status\": \"degraded\", \"database\": \"disconnected\"})),
+    }
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.expect(\"failed to install Ctrl+C handler\");
+    };
+    
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect(\"failed to install signal handler\")
+            .recv()
+            .await;
+    };
+    
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+    
+    info!(\"Signal received, starting graceful shutdown\");
 }
 "#.to_string();
             plan.push((root.join("Cargo.toml"), cargo));
             plan.push((root.join("src/main.rs"), main_rs));
-            plan.push((root.join("README.md"), format!("# {}\nGenerated by DevKit (axum+sqlx)", pkg)));
+            plan.push((
+                root.join("README.md"),
+                format!("# {}\nGenerated by DevKit (axum+sqlx)", pkg),
+            ));
         }
         ("javascript", s) if s == "node-express" || s.is_empty() => {
             let pkg = root.file_name().and_then(|s| s.to_str()).unwrap_or("app");
@@ -236,10 +357,14 @@ async fn main() {
 const app = express();
 app.get('/', (req,res)=>res.send('ok'));
 app.listen(3000, ()=>console.log('http://localhost:3000'));
-"#.to_string();
+"#
+            .to_string();
             plan.push((root.join("package.json"), package_json));
             plan.push((root.join("src/index.js"), index_js));
-            plan.push((root.join("README.md"), format!("# {}\nGenerated by DevKit (express)", pkg)));
+            plan.push((
+                root.join("README.md"),
+                format!("# {}\nGenerated by DevKit (express)", pkg),
+            ));
         }
         ("typescript", s) if s == "nextjs" => {
             let pkg = root.file_name().and_then(|s| s.to_str()).unwrap_or("web");
@@ -247,8 +372,14 @@ app.listen(3000, ()=>console.log('http://localhost:3000'));
             let tsconfig = "{\n  \"compilerOptions\": { \"strict\": true }\n}\n".to_string();
             plan.push((root.join("package.json"), package_json));
             plan.push((root.join("tsconfig.json"), tsconfig));
-            plan.push((root.join("app/page.tsx"), "export default function Page(){return <>ok</>}\n".to_string()));
-            plan.push((root.join("README.md"), format!("# {}\nGenerated by DevKit (nextjs)", pkg)));
+            plan.push((
+                root.join("app/page.tsx"),
+                "export default function Page(){return <>ok</>}\n".to_string(),
+            ));
+            plan.push((
+                root.join("README.md"),
+                format!("# {}\nGenerated by DevKit (nextjs)", pkg),
+            ));
         }
         ("typescript", s) if s == "node-nest" => {
             let pkg = root.file_name().and_then(|s| s.to_str()).unwrap_or("api");
@@ -269,7 +400,10 @@ bootstrap();
             plan.push((root.join("package.json"), package_json));
             plan.push((root.join("tsconfig.json"), tsconfig));
             plan.push((root.join("src/main.ts"), main_ts));
-            plan.push((root.join("README.md"), format!("# {}\nGenerated by DevKit (NestJS)", pkg)));
+            plan.push((
+                root.join("README.md"),
+                format!("# {}\nGenerated by DevKit (NestJS)", pkg),
+            ));
         }
         ("python", s) if s == "python-fastapi" || s.is_empty() => {
             let main_py = r#"from fastapi import FastAPI
@@ -277,10 +411,17 @@ app = FastAPI()
 @app.get('/')
 def root():
     return {\"status\":\"ok\"}
-"#.to_string();
-            plan.push((root.join("requirements.txt"), "fastapi\nuvicorn\n".to_string()));
+"#
+            .to_string();
+            plan.push((
+                root.join("requirements.txt"),
+                "fastapi\nuvicorn\n".to_string(),
+            ));
             plan.push((root.join("src/main.py"), main_py));
-            plan.push((root.join("README.md"), "# FastAPI app\nGenerated by DevKit\n".to_string()));
+            plan.push((
+                root.join("README.md"),
+                "# FastAPI app\nGenerated by DevKit\n".to_string(),
+            ));
         }
         ("python", s) if s == "python-fastapi-sqlalchemy" => {
             let main_py = r#"from fastapi import FastAPI
@@ -296,10 +437,17 @@ app = FastAPI()
 @app.get('/')
 def root():
     return {\"status\": \"ok\"}
-"#.to_string();
-            plan.push((root.join("requirements.txt"), "fastapi\nuvicorn\nsqlalchemy\n".to_string()));
+"#
+            .to_string();
+            plan.push((
+                root.join("requirements.txt"),
+                "fastapi\nuvicorn\nsqlalchemy\n".to_string(),
+            ));
             plan.push((root.join("src/main.py"), main_py));
-            plan.push((root.join("README.md"), "# FastAPI + SQLAlchemy app\nGenerated by DevKit\n".to_string()));
+            plan.push((
+                root.join("README.md"),
+                "# FastAPI + SQLAlchemy app\nGenerated by DevKit\n".to_string(),
+            ));
         }
         _ => {
             // Default to previous simple per-language scaffolds
@@ -307,28 +455,64 @@ def root():
             match lang.as_str() {
                 "rust" | "rs" => {
                     let pkg_name = root.file_name().and_then(|s| s.to_str()).unwrap_or("app");
-                    let cargo = format!("[package]\nname=\"{}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n", pkg_name);
+                    let cargo = format!(
+                        "[package]\nname=\"{}\"\nversion=\"0.1.0\"\nedition=\"2021\"\n",
+                        pkg_name
+                    );
                     plan.push((root.join("Cargo.toml"), cargo));
-                    let code = match generate_with_engine(runner, args, Some("rust".to_string())).await { Ok(c)=>c, Err(_)=> stubs::generate_code_stub(&args.prompt, Some("rust")) };
+                    let code =
+                        match generate_with_engine(runner, args, Some("rust".to_string())).await {
+                            Ok(c) => c,
+                            Err(_) => stubs::generate_code_stub(&args.prompt, Some("rust")),
+                        };
                     plan.push((root.join("src/main.rs"), code));
                 }
                 "typescript" | "ts" => {
-                    plan.push((root.join("package.json"), "{\n  \"name\": \"app\", \"version\": \"0.1.0\"\n}\n".to_string()));
-                    let code = match generate_with_engine(runner, args, Some("typescript".to_string())).await { Ok(c)=>c, Err(_)=> stubs::generate_code_stub(&args.prompt, Some("typescript")) };
+                    plan.push((
+                        root.join("package.json"),
+                        "{\n  \"name\": \"app\", \"version\": \"0.1.0\"\n}\n".to_string(),
+                    ));
+                    let code =
+                        match generate_with_engine(runner, args, Some("typescript".to_string()))
+                            .await
+                        {
+                            Ok(c) => c,
+                            Err(_) => stubs::generate_code_stub(&args.prompt, Some("typescript")),
+                        };
                     plan.push((root.join("src/index.ts"), code));
                 }
                 "javascript" | "js" => {
-                    plan.push((root.join("package.json"), "{\n  \"name\": \"app\", \"version\": \"0.1.0\"\n}\n".to_string()));
-                    let code = match generate_with_engine(runner, args, Some("javascript".to_string())).await { Ok(c)=>c, Err(_)=> stubs::generate_code_stub(&args.prompt, Some("javascript")) };
+                    plan.push((
+                        root.join("package.json"),
+                        "{\n  \"name\": \"app\", \"version\": \"0.1.0\"\n}\n".to_string(),
+                    ));
+                    let code =
+                        match generate_with_engine(runner, args, Some("javascript".to_string()))
+                            .await
+                        {
+                            Ok(c) => c,
+                            Err(_) => stubs::generate_code_stub(&args.prompt, Some("javascript")),
+                        };
                     plan.push((root.join("src/index.js"), code));
                 }
                 "python" | "py" => {
                     plan.push((root.join("requirements.txt"), String::new()));
-                    let code = match generate_with_engine(runner, args, Some("python".to_string())).await { Ok(c)=>c, Err(_)=> stubs::generate_code_stub(&args.prompt, Some("python")) };
+                    let code = match generate_with_engine(runner, args, Some("python".to_string()))
+                        .await
+                    {
+                        Ok(c) => c,
+                        Err(_) => stubs::generate_code_stub(&args.prompt, Some("python")),
+                    };
                     plan.push((root.join("src/main.py"), code));
                 }
                 _ => {
-                    let code = match generate_with_engine(runner, args, language.map(|s| s.to_string())).await { Ok(c)=>c, Err(_)=> stubs::generate_code_stub(&args.prompt, language) };
+                    let code =
+                        match generate_with_engine(runner, args, language.map(|s| s.to_string()))
+                            .await
+                        {
+                            Ok(c) => c,
+                            Err(_) => stubs::generate_code_stub(&args.prompt, language),
+                        };
                     plan.push((root.join("src/main.txt"), code));
                 }
             }
@@ -345,7 +529,10 @@ def root():
             // Export plan
             let entries: Vec<PlanEntry> = plan
                 .iter()
-                .map(|(p, c)| PlanEntry { path: p.display().to_string(), content: c.clone() })
+                .map(|(p, c)| PlanEntry {
+                    path: p.display().to_string(),
+                    content: c.clone(),
+                })
                 .collect();
             let json = serde_json::to_string_pretty(&entries)?;
             fs::write(export, json)?;
@@ -357,7 +544,10 @@ def root():
     if let Some(export) = &args.export_plan {
         let entries: Vec<PlanEntry> = plan
             .iter()
-            .map(|(p, c)| PlanEntry { path: p.display().to_string(), content: c.clone() })
+            .map(|(p, c)| PlanEntry {
+                path: p.display().to_string(),
+                content: c.clone(),
+            })
             .collect();
         let json = serde_json::to_string_pretty(&entries)?;
         fs::write(export, json)?;
@@ -370,8 +560,14 @@ def root():
     let mut files_count = 0usize;
     if let Err(e) = (|| -> Result<(), Box<dyn std::error::Error>> {
         for (path, content) in &plan {
-            if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
-            if path.exists() && !args.force { return Err(format!("Refusing to overwrite {} (use --force)", path.display()).into()); }
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            if path.exists() && !args.force {
+                return Err(
+                    format!("Refusing to overwrite {} (use --force)", path.display()).into(),
+                );
+            }
             fs::write(path, content)?;
             written.push(path.clone());
             files_count += 1;
@@ -379,11 +575,17 @@ def root():
         Ok(())
     })() {
         // rollback
-        for p in written.into_iter().rev() { let _ = fs::remove_file(p); }
+        for p in written.into_iter().rev() {
+            let _ = fs::remove_file(p);
+        }
         return Err(e);
     }
 
-    runner.print_info(&format!("Created {} files under {}", files_count, root.display()));
+    runner.print_info(&format!(
+        "Created {} files under {}",
+        files_count,
+        root.display()
+    ));
 
     Ok(())
 }
@@ -399,14 +601,22 @@ async fn apply_plan_file(
     if let Err(e) = (|| -> Result<(), Box<dyn std::error::Error>> {
         for entry in &entries {
             let path = PathBuf::from(&entry.path);
-            if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
-            if path.exists() && !force { return Err(format!("Refusing to overwrite {} (use --force)", path.display()).into()); }
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            if path.exists() && !force {
+                return Err(
+                    format!("Refusing to overwrite {} (use --force)", path.display()).into(),
+                );
+            }
             fs::write(&path, &entry.content)?;
             written.push(path);
         }
         Ok(())
     })() {
-        for p in written.into_iter().rev() { let _ = fs::remove_file(p); }
+        for p in written.into_iter().rev() {
+            let _ = fs::remove_file(p);
+        }
         return Err(e);
     }
     runner.print_success(&format!("Applied plan entries: {}", entries.len()));
@@ -451,8 +661,12 @@ async fn generate_with_engine(
     // Build request
     let mut gen_cfg = GenerationConfig::default();
     gen_cfg.target_language = language.clone();
-    if let Some(t) = args.temperature { gen_cfg.temperature = Some(t as f64); }
-    if let Some(mt) = args.max_tokens { gen_cfg.max_tokens = Some(mt); }
+    if let Some(t) = args.temperature {
+        gen_cfg.temperature = Some(t as f64);
+    }
+    if let Some(mt) = args.max_tokens {
+        gen_cfg.max_tokens = Some(mt);
+    }
 
     let request = GenerationRequest {
         prompt: args.prompt.clone(),
@@ -482,10 +696,7 @@ fn generate_code_with_stubs(args: &GenerateArgs, language: Option<&str>) -> Stri
         }
 
         if !context_content.is_empty() {
-            format!(
-                "{}\n\nContext:\n{}",
-                args.prompt, context_content
-            )
+            format!("{}\n\nContext:\n{}", args.prompt, context_content)
         } else {
             args.prompt.clone()
         }
@@ -500,8 +711,12 @@ fn suggest_stacks(input: &str) -> Vec<String> {
     // Simple edit-distance based suggestion (Levenshtein)
     fn dist(a: &str, b: &str) -> usize {
         let mut dp = vec![vec![0; b.len() + 1]; a.len() + 1];
-        for i in 0..=a.len() { dp[i][0] = i; }
-        for j in 0..=b.len() { dp[0][j] = j; }
+        for i in 0..=a.len() {
+            dp[i][0] = i;
+        }
+        for j in 0..=b.len() {
+            dp[0][j] = j;
+        }
         for (i, ca) in a.chars().enumerate() {
             for (j, cb) in b.chars().enumerate() {
                 let cost = if ca == cb { 0 } else { 1 };
@@ -518,7 +733,11 @@ fn suggest_stacks(input: &str) -> Vec<String> {
         .map(|s| (dist(&input.to_lowercase(), s), *s))
         .collect();
     items.sort_by_key(|(d, _)| *d);
-    items.into_iter().take(3).map(|(_, s)| s.to_string()).collect()
+    items
+        .into_iter()
+        .take(3)
+        .map(|(_, s)| s.to_string())
+        .collect()
 }
 
 fn display_generated_code(
@@ -528,7 +747,7 @@ fn display_generated_code(
     language: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("📝 Generated Code (Preview Mode):");
-    
+
     // Use the enhanced code display from chat command
     runner.print_code(code);
 

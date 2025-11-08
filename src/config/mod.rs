@@ -19,6 +19,8 @@ pub struct Config {
     pub general: GeneralConfig,
     pub agents: AgentConfig,
     pub codegen: CodegenConfig,
+    #[serde(default)]
+    pub chat: ChatConfig,
     pub shell: ShellConfig,
     pub ui: UIConfig,
     pub web: WebConfig,
@@ -73,6 +75,16 @@ pub struct CodegenConfig {
     pub language_preferences: HashMap<String, LanguageConfig>,
     pub template_directories: Vec<PathBuf>,
     pub ai_model_settings: AIModelConfig,
+}
+
+/// Chat/interactive thresholds and behavior
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatConfig {
+    pub require_action_keyword: bool,
+    pub min_code_score: f32,
+    pub min_margin: f32,
+    pub entity_weight: f32,
+    pub language_hint_weight: f32,
 }
 
 /// Code style configuration
@@ -244,26 +256,29 @@ impl ConfigManager {
     /// Create a new configuration manager with smart defaults and fallback support
     pub fn new_with_smart_defaults(config_path: Option<PathBuf>) -> Result<Self, ConfigError> {
         let mut loader = loader::ConfigLoader::new_with_search_paths();
-        
+
         // Add explicit config path if provided
         if let Some(path) = config_path.clone() {
             loader.add_search_path(path);
         }
-        
+
         let validator = validation::ConfigValidator::new();
-        
+
         // Load configuration with fallback
         let load_result = loader.load_and_validate_with_fallback(&validator)?;
-        
+
         if load_result.fallback_used {
             tracing::warn!("Configuration fallback was used. Some configs failed to load:");
             for (path, error) in &load_result.errors {
                 tracing::warn!("  {}: {}", path.display(), error);
             }
         }
-        
-        tracing::info!("Configuration loaded from: {}", load_result.loaded_from.display());
-        
+
+        tracing::info!(
+            "Configuration loaded from: {}",
+            load_result.loaded_from.display()
+        );
+
         let mut manager = Self {
             config: load_result.config,
             config_path: load_result.loaded_from,
@@ -757,34 +772,40 @@ impl ConfigManager {
 
         Ok(())
     }
-    
+
     // Rules management methods
-    
+
     /// Load rules hierarchy for the given project directory
-    pub async fn load_rules(&mut self, project_dir: &std::path::Path) -> Result<(), rules::RuleError> {
+    pub async fn load_rules(
+        &mut self,
+        project_dir: &std::path::Path,
+    ) -> Result<(), rules::RuleError> {
         self.rules_manager.load_rules_hierarchy(project_dir).await
     }
-    
+
     /// Get effective rules for the current context
     pub fn get_effective_rules(&self, context: &rules::RuleContext) -> Vec<rules::Rule> {
         self.rules_manager.get_effective_rules(context)
     }
-    
+
     /// Format rules for AI consumption
     pub fn format_rules_for_ai(&self, context: &rules::RuleContext) -> String {
         self.rules_manager.format_rules_for_ai(context)
     }
-    
+
     /// Get summary of loaded rules
     pub fn get_rules_summary(&self) -> rules::RulesSummary {
         self.rules_manager.get_rules_summary()
     }
-    
+
     /// Reload rules if any source files have changed
-    pub async fn reload_rules_if_changed(&mut self, project_dir: &std::path::Path) -> Result<bool, rules::RuleError> {
+    pub async fn reload_rules_if_changed(
+        &mut self,
+        project_dir: &std::path::Path,
+    ) -> Result<bool, rules::RuleError> {
         self.rules_manager.reload_if_changed(project_dir).await
     }
-    
+
     /// Create a rule context from current environment
     pub fn create_rule_context(
         &self,
@@ -811,6 +832,7 @@ impl Default for Config {
             general: GeneralConfig::default(),
             agents: AgentConfig::default(),
             codegen: CodegenConfig::default(),
+            chat: ChatConfig::default(),
             shell: ShellConfig::default(),
             ui: UIConfig::default(),
             web: WebConfig::default(),
@@ -863,6 +885,18 @@ impl Default for CodegenConfig {
             language_preferences: HashMap::new(),
             template_directories: Vec::new(),
             ai_model_settings: AIModelConfig::default(),
+        }
+    }
+}
+
+impl Default for ChatConfig {
+    fn default() -> Self {
+        Self {
+            require_action_keyword: true,
+            min_code_score: 2.0,
+            min_margin: 1.0,
+            entity_weight: 0.25,
+            language_hint_weight: 0.25,
         }
     }
 }

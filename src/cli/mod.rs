@@ -26,6 +26,7 @@ pub mod session_manager;
 pub mod validation;
 
 use crate::agents::AgentSystem;
+use crate::cli::session_manager::SessionManager;
 use crate::config::ConfigManager;
 use crate::context::ContextManager;
 
@@ -768,6 +769,14 @@ pub struct ChatArgs {
     /// Maximum number of conversation turns
     #[arg(long, default_value = "50")]
     pub max_turns: usize,
+
+    /// Force code generation regardless of detected intent (session-wide)
+    #[arg(long)]
+    pub force_generate: bool,
+
+    /// Disable code generation (session-wide)
+    #[arg(long)]
+    pub no_codegen: bool,
 }
 
 #[derive(Subcommand)]
@@ -841,15 +850,15 @@ pub enum PluginCommands {
     Search {
         /// Search query
         query: Option<String>,
-        
+
         /// Plugin category to filter by
         #[arg(long)]
         category: Option<String>,
-        
+
         /// Show only free plugins
         #[arg(long)]
         free_only: bool,
-        
+
         /// Output format
         #[arg(long, value_enum, default_value = "table")]
         format: OutputFormat,
@@ -865,11 +874,11 @@ pub enum PluginCommands {
     Install {
         /// Plugin ID to install
         plugin_id: String,
-        
+
         /// Specific version to install
         #[arg(long)]
         version: Option<String>,
-        
+
         /// License key for paid plugins
         #[arg(long)]
         license_key: Option<String>,
@@ -1158,6 +1167,7 @@ pub struct CliRunner {
     config_manager: ConfigManager,
     pub(crate) context_manager: Option<ContextManager>,
     agent_system: Option<AgentSystem>,
+    session_manager: SessionManager,
     verbose: bool,
     quiet: bool,
     format: OutputFormat,
@@ -1167,7 +1177,7 @@ pub struct CliRunner {
 
 impl CliRunner {
     /// Create a new CLI runner
-pub fn new(cli: &Cli) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(cli: &Cli) -> Result<Self, Box<dyn std::error::Error>> {
         // Initialize configuration manager with fallback support
         let config_manager = ConfigManager::new_with_smart_defaults(cli.config.clone())?;
 
@@ -1185,11 +1195,12 @@ pub fn new(cli: &Cli) -> Result<Self, Box<dyn std::error::Error>> {
             std::env::set_current_dir(dir)?;
         }
 
-let oc_snapshot = config_manager.config().orchestrator.clone();
+        let oc_snapshot = config_manager.config().orchestrator.clone();
         Ok(Self {
             config_manager,
             context_manager: None,
             agent_system: None,
+            session_manager: SessionManager::new(),
             verbose: cli.verbose,
             quiet: cli.quiet,
             format: cli.format.clone(),
@@ -1206,13 +1217,27 @@ let oc_snapshot = config_manager.config().orchestrator.clone();
                     backoff_max_secs: oc_snapshot.backoff_max_secs,
                 };
                 // Override with CLI when provided
-                if let Some(v) = cli.orchestrator_task_timeout_seconds { args.task_timeout_seconds = Some(v); }
-                if let Some(v) = cli.orchestrator_retry_failed_tasks { args.retry_failed_tasks = Some(v); }
-                if let Some(v) = cli.orchestrator_max_retry_attempts { args.max_retry_attempts = Some(v); }
-                if let Some(v) = &cli.orchestrator_backoff { args.backoff = v.clone(); }
-                if let Some(v) = cli.orchestrator_backoff_base_secs { args.backoff_base_secs = v; }
-                if let Some(v) = cli.orchestrator_backoff_factor { args.backoff_factor = v; }
-                if let Some(v) = cli.orchestrator_backoff_max_secs { args.backoff_max_secs = v; }
+                if let Some(v) = cli.orchestrator_task_timeout_seconds {
+                    args.task_timeout_seconds = Some(v);
+                }
+                if let Some(v) = cli.orchestrator_retry_failed_tasks {
+                    args.retry_failed_tasks = Some(v);
+                }
+                if let Some(v) = cli.orchestrator_max_retry_attempts {
+                    args.max_retry_attempts = Some(v);
+                }
+                if let Some(v) = &cli.orchestrator_backoff {
+                    args.backoff = v.clone();
+                }
+                if let Some(v) = cli.orchestrator_backoff_base_secs {
+                    args.backoff_base_secs = v;
+                }
+                if let Some(v) = cli.orchestrator_backoff_factor {
+                    args.backoff_factor = v;
+                }
+                if let Some(v) = cli.orchestrator_backoff_max_secs {
+                    args.backoff_max_secs = v;
+                }
                 args
             },
         })
@@ -1252,10 +1277,14 @@ let oc_snapshot = config_manager.config().orchestrator.clone();
         if !self.quiet {
             let mut stdout = io::stdout();
 
-            if self.color_enabled && color.is_some() {
-                let _ = stdout.execute(SetForegroundColor(color.unwrap()));
-                let _ = stdout.execute(Print(content));
-                let _ = stdout.execute(ResetColor);
+            if self.color_enabled {
+                if let Some(c) = color {
+                    let _ = stdout.execute(SetForegroundColor(c));
+                    let _ = stdout.execute(Print(content));
+                    let _ = stdout.execute(ResetColor);
+                } else {
+                    print!("{}", content);
+                }
             } else {
                 print!("{}", content);
             }
@@ -1370,20 +1399,48 @@ let oc_snapshot = config_manager.config().orchestrator.clone();
         &mut self.config_manager
     }
 
+    /// Get session manager (mutable)
+    pub fn session_manager_mut(&mut self) -> &mut SessionManager {
+        &mut self.session_manager
+    }
+
+    /// Get session manager (immutable)
+    pub fn session_manager(&self) -> &SessionManager {
+        &self.session_manager
+    }
+
     /// Initialize agent system if not already done
-pub async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.agent_system.is_none() {
             self.ensure_context_manager().await?;
 
             // Build AgentSystem from global orchestrator defaults
             let mut sys_cfg = crate::agents::system::AgentSystemConfig::default();
-            if let Some(t) = self.orchestrator_defaults.task_timeout_seconds { sys_cfg.task_timeout_seconds = t; }
-            if let Some(r) = self.orchestrator_defaults.retry_failed_tasks { sys_cfg.retry_failed_tasks = r; }
-            if let Some(m) = self.orchestrator_defaults.max_retry_attempts { sys_cfg.max_retry_attempts = m; }
+            if let Some(t) = self.orchestrator_defaults.task_timeout_seconds {
+                sys_cfg.task_timeout_seconds = t;
+            }
+            if let Some(r) = self.orchestrator_defaults.retry_failed_tasks {
+                sys_cfg.retry_failed_tasks = r;
+            }
+            if let Some(m) = self.orchestrator_defaults.max_retry_attempts {
+                sys_cfg.max_retry_attempts = m;
+            }
 
             let retry_policy = match self.orchestrator_defaults.backoff.to_lowercase().as_str() {
-                "fixed" => crate::agents::orchestrator::RetryPolicy { max_retries: sys_cfg.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Fixed { delay_secs: self.orchestrator_defaults.backoff_base_secs } },
-                _ => crate::agents::orchestrator::RetryPolicy { max_retries: sys_cfg.max_retry_attempts, strategy: crate::agents::orchestrator::BackoffStrategy::Exponential { base_secs: self.orchestrator_defaults.backoff_base_secs, factor: self.orchestrator_defaults.backoff_factor, max_secs: self.orchestrator_defaults.backoff_max_secs } },
+                "fixed" => crate::agents::orchestrator::RetryPolicy {
+                    max_retries: sys_cfg.max_retry_attempts,
+                    strategy: crate::agents::orchestrator::BackoffStrategy::Fixed {
+                        delay_secs: self.orchestrator_defaults.backoff_base_secs,
+                    },
+                },
+                _ => crate::agents::orchestrator::RetryPolicy {
+                    max_retries: sys_cfg.max_retry_attempts,
+                    strategy: crate::agents::orchestrator::BackoffStrategy::Exponential {
+                        base_secs: self.orchestrator_defaults.backoff_base_secs,
+                        factor: self.orchestrator_defaults.backoff_factor,
+                        max_secs: self.orchestrator_defaults.backoff_max_secs,
+                    },
+                },
             };
 
             let system = AgentSystem::with_config_and_policy(sys_cfg, retry_policy);
@@ -1484,135 +1541,77 @@ pub async fn ensure_agent_system(&mut self) -> Result<(), Box<dyn std::error::Er
     }
 
     // New command implementations (stubs for now)
-    async fn run_session(&mut self, command: SessionCommands) -> Result<(), Box<dyn std::error::Error>> {
-        self.print_info("Session management functionality coming soon!");
-        match command {
-            SessionCommands::List { .. } => {
-                self.print_output("📋 Available Sessions:\n", None);
-                self.print_output("  (No sessions found - feature in development)\n", None);
-            }
-            SessionCommands::Create { name, description } => {
-                self.print_info(&format!("Would create session '{}'", name));
-                if let Some(desc) = description {
-                    self.print_info(&format!("Description: {}", desc));
-                }
-            }
-            SessionCommands::Switch { name } => {
-                self.print_info(&format!("Would switch to session '{}'", name));
-            }
-            SessionCommands::Branch { .. } => {
-                self.print_info("Session branching feature in development");
-            }
-            SessionCommands::Analytics { .. } => {
-                self.print_info("Session analytics feature in development");
-            }
-        }
-        Ok(())
+    async fn run_session(
+        &mut self,
+        command: SessionCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        commands::session::run(self, command).await
     }
 
-    async fn run_visualize(&mut self, args: VisualizeArgs) -> Result<(), Box<dyn std::error::Error>> {
-        self.print_info(&format!("🎨 Opening {} visualization...", args.view));
-        self.print_info("Visualization dashboard feature coming soon!");
-        self.print_info(&format!("Would refresh every {} seconds", args.refresh));
-        Ok(())
+    async fn run_visualize(
+        &mut self,
+        args: VisualizeArgs,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        commands::visualize::run(self, args).await
     }
 
-    async fn run_dashboard(&mut self, args: DashboardArgs) -> Result<(), Box<dyn std::error::Error>> {
-        self.print_info(&format!("🖥️ Starting dashboard on {}:{}", args.host, args.port));
-        self.print_info("Web dashboard feature coming soon!");
-        if args.open {
-            self.print_info("Would open browser automatically");
-        }
-        Ok(())
+    async fn run_dashboard(
+        &mut self,
+        args: DashboardArgs,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        commands::visualize::run_dashboard(self, args).await
     }
 
-    async fn run_analytics(&mut self, command: AnalyticsCommands) -> Result<(), Box<dyn std::error::Error>> {
-        self.print_info("📊 Analytics system functionality coming soon!");
-        match command {
-            AnalyticsCommands::Report { format, output } => {
-                self.print_info(&format!("Would generate report in {:?} format", format));
-                if let Some(path) = output {
-                    self.print_info(&format!("Would save to: {}", path.display()));
-                }
-            }
-        }
-        Ok(())
+    async fn run_analytics(
+        &mut self,
+        command: AnalyticsCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        commands::analytics_cmd::run(self, command).await
     }
 
     async fn run_monitor(&mut self, args: MonitorArgs) -> Result<(), Box<dyn std::error::Error>> {
-        self.print_info(&format!("🔍 Monitoring {} system...", args.target));
-        self.print_info("Real-time monitoring feature coming soon!");
-        if args.real_time {
-            self.print_info(&format!("Would refresh every {} seconds", args.interval));
-        }
-        Ok(())
+        commands::monitor::run(self, args).await
     }
 
     async fn run_export(&mut self, args: ExportArgs) -> Result<(), Box<dyn std::error::Error>> {
-        self.print_info("📤 Export functionality coming soon!");
-        if let Some(session) = args.session {
-            self.print_info(&format!("Would export session: {}", session));
-        }
-        self.print_info(&format!("Format: {:?}", args.format));
-        if let Some(output) = args.output {
-            self.print_info(&format!("Would save to: {}", output.display()));
-        }
-        Ok(())
+        commands::export::run(self, args).await
     }
 
-    async fn run_behavior(&mut self, command: BehaviorCommands) -> Result<(), Box<dyn std::error::Error>> {
-        self.print_info("🎭 Agent behavior customization coming soon!");
-        match command {
-            BehaviorCommands::Edit => {
-                self.print_info("Would open behavior editor");
-            }
-            BehaviorCommands::Load { profile } => {
-                self.print_info(&format!("Would load behavior profile: {}", profile));
-            }
-            BehaviorCommands::Create { name, interactive } => {
-                self.print_info(&format!("Would create behavior profile: {}", name));
-                if interactive {
-                    self.print_info("Would use interactive mode");
-                }
-            }
-            BehaviorCommands::List => {
-                self.print_output("📋 Available Behavior Profiles:\n", None);
-                self.print_output("  - default (built-in)\n", None);
-                self.print_output("  - conservative-coder (placeholder)\n", None);
-                self.print_output("  (Custom profiles feature in development)\n", None);
-            }
-        }
-        Ok(())
+    async fn run_behavior(
+        &mut self,
+        command: BehaviorCommands,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        commands::behavior::run(self, command).await
     }
 
     async fn run_diagnose(&mut self, args: DiagnoseArgs) -> Result<(), Box<dyn std::error::Error>> {
         self.print_info(&format!("🔧 Running {} diagnostics...", args.check));
-        
+
         // Run basic diagnostics as a placeholder
         self.print_output("\n🔍 System Diagnostics:\n", None);
         self.print_output("═══════════════════════\n", None);
-        
+
         // Check configuration
         self.print_success("Configuration system is working");
-        
+
         // Check build info
         let version = env!("CARGO_PKG_VERSION");
         let git_hash = env!("BUILD_GIT_HASH");
         self.print_info(&format!("Version: {} (git:{})", version, git_hash));
-        
+
         if args.check == "all" || args.check == "config" {
             let config_path = self.config_manager.config_path();
             self.print_info(&format!("Config loaded from: {}", config_path.display()));
         }
-        
+
         if args.fix {
             self.print_info("Auto-fix functionality coming soon!");
         }
-        
+
         if args.verbose {
             self.print_info("Detailed diagnostic information coming soon!");
         }
-        
+
         self.print_output("\n✅ Basic diagnostics completed\n", None);
         Ok(())
     }

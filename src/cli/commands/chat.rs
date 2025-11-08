@@ -8,7 +8,7 @@
 use crate::cli::{ChatArgs, CliRunner};
 use crate::codegen::stubs;
 use crossterm::style::Color;
-use std::io::{self, Write, Read, IsTerminal};
+use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -19,6 +19,9 @@ struct ConversationState {
     project_context: Option<PathBuf>,
     last_generated_files: Vec<PathBuf>,
     conversation_history: Vec<(String, String)>, // (user, assistant) pairs
+    // Session toggles
+    force_generate: bool,
+    no_codegen: bool,
 }
 
 impl ConversationState {
@@ -28,28 +31,31 @@ impl ConversationState {
             project_context,
             last_generated_files: Vec::new(),
             conversation_history: Vec::new(),
+            force_generate: false,
+            no_codegen: false,
         }
     }
 
     fn add_turn(&mut self, user_input: &str, assistant_response: &str) {
-        self.conversation_history.push((user_input.to_string(), assistant_response.to_string()));
+        self.conversation_history
+            .push((user_input.to_string(), assistant_response.to_string()));
         self.turn_count += 1;
     }
 
     fn get_context_summary(&self) -> String {
         let mut context = String::new();
-        
+
         if let Some(project) = &self.project_context {
             context.push_str(&format!("Project: {}\n", project.display()));
         }
-        
+
         if !self.last_generated_files.is_empty() {
             context.push_str("Recently generated files:\n");
             for file in &self.last_generated_files {
                 context.push_str(&format!("- {}\n", file.display()));
             }
         }
-        
+
         if self.conversation_history.len() > 2 {
             context.push_str("\nRecent conversation context:\n");
             for (user, assistant) in self.conversation_history.iter().rev().take(2).rev() {
@@ -57,7 +63,7 @@ impl ConversationState {
                 context.push_str(&format!("Assistant: {}\n", assistant));
             }
         }
-        
+
         context
     }
 }
@@ -65,24 +71,42 @@ impl ConversationState {
 /// Run the chat project manager
 pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn std::error::Error>> {
     let mut state = ConversationState::new(args.project.clone());
-    
+    // Initialize session toggles from CLI flags
+    state.force_generate = args.force_generate;
+    state.no_codegen = args.no_codegen;
+
     // Check if we're in interactive mode (stdin is a terminal)
     let is_interactive = std::io::stdin().is_terminal();
-    
+
+    // Validate mutually exclusive flags
+    if args.force_generate && args.no_codegen {
+        runner.print_error("--force-generate and --no-codegen cannot be used together");
+        return Ok(());
+    }
+
     if is_interactive {
         // Print welcome message only in interactive mode
         runner.print_info("🤖 DevKit AI Project Manager");
         if args.onboarding {
             runner.print_output("\nQuickstart (30s):\n", Some(Color::Cyan));
-            runner.print_output("  • Ask for code: 'Generate a Rust Axum API with /health'\n", None);
+            runner.print_output(
+                "  • Ask for code: 'Generate a Rust Axum API with /health'\n",
+                None,
+            );
             runner.print_output("  • Scaffold: devkit generate \"todo api\" --language rust --stack rust-axum --root ./api\n", None);
-            runner.print_output("  • Key commands: help | status | stacks | quickstart | clear | exit\n", None);
-            runner.print_output("  • Tip: type 'stacks' here to see presets (CLI flag is --list-stacks)\n", Some(Color::DarkGrey));
+            runner.print_output(
+                "  • Key commands: help | status | stacks | quickstart | clear | exit\n",
+                None,
+            );
+            runner.print_output(
+                "  • Tip: type 'stacks' here to see presets (CLI flag is --list-stacks)\n",
+                Some(Color::DarkGrey),
+            );
         } else {
             runner.print_info("Type 'help' for commands, 'exit' or 'quit' to end the session");
         }
     }
-    
+
     // Handle initial message if provided
     if let Some(initial_message) = &args.message {
         println!("\nYou: {}", initial_message);
@@ -91,7 +115,7 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             return Ok(()); // Exit after processing initial message in non-interactive mode
         }
     }
-    
+
     // In non-interactive mode, read from stdin until EOF
     if !is_interactive {
         let mut buffer = String::new();
@@ -106,26 +130,29 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
         }
         return Ok(());
     }
-    
+
     // Main conversation loop (interactive mode only)
     loop {
         if state.turn_count >= args.max_turns {
-            runner.print_warning(&format!("Reached maximum conversation turns ({})", args.max_turns));
+            runner.print_warning(&format!(
+                "Reached maximum conversation turns ({})",
+                args.max_turns
+            ));
             break;
         }
-        
+
         // Get user input
         print!("\nYou: ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(0) => break, // EOF
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => break, // Error reading
         }
         let input = input.trim();
-        
+
         // Handle special commands
         match input.to_lowercase().as_str() {
             "exit" | "quit" | "q" => {
@@ -144,6 +171,42 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
                 show_status(runner, &state);
                 continue;
             }
+            // Toggle generation modes
+            "force on" | "force enable" => {
+                if state.no_codegen {
+                    runner.print_warning("Disabling --no-codegen to enable force mode");
+                    state.no_codegen = false;
+                }
+                state.force_generate = true;
+                runner.print_success("Force-generate mode enabled");
+                continue;
+            }
+            "force off" | "force disable" => {
+                state.force_generate = false;
+                runner.print_info("Force-generate mode disabled");
+                continue;
+            }
+            "no-codegen on" | "nocodegen on" | "no codegen on" | "no-codegen enable" => {
+                if state.force_generate {
+                    runner.print_warning("Disabling force-generate to enable no-codegen mode");
+                    state.force_generate = false;
+                }
+                state.no_codegen = true;
+                runner.print_success("No-codegen mode enabled");
+                continue;
+            }
+            "no-codegen off" | "nocodegen off" | "no codegen off" | "no-codegen disable" => {
+                state.no_codegen = false;
+                runner.print_info("No-codegen mode disabled");
+                continue;
+            }
+            "mode" | "modes" | "settings" => {
+                runner.print_info(&format!(
+                    "Modes: force-generate={}, no-codegen={}",
+                    state.force_generate, state.no_codegen
+                ));
+                continue;
+            }
             "stacks" | "list stacks" | "stack presets" => {
                 show_stacks(runner);
                 continue;
@@ -158,8 +221,8 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             "" => continue, // Empty input, skip
             _ => {}
         }
-        
-    // Handle user input
+
+        // Handle user input
         // If user typed CLI flags, guide them
         if input.starts_with('-') {
             runner.print_output("\nTip: Flags like --list-stacks are for CLI. In chat, type 'stacks' to see presets or 'quickstart'.\n", Some(Color::DarkGrey));
@@ -170,7 +233,7 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             runner.print_error(&format!("Error processing request: {}", e));
         }
     }
-    
+
     Ok(())
 }
 
@@ -182,10 +245,19 @@ async fn handle_user_input(
     args: &ChatArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("🤔 Analyzing your request...");
-    
+
     // Analyze the user input to determine if it's a code generation request
-    let analysis = analyze_user_intent(input, state);
-    
+    let settings = load_intent_settings(runner);
+    let mut analysis = analyze_user_intent(input, state, &settings);
+
+    // Apply overrides (CLI flags or toggles)
+    if args.force_generate || state.force_generate {
+        analysis.intent = UserIntent::CodeGeneration;
+        analysis.confidence = 1.0;
+    } else if (args.no_codegen || state.no_codegen) && matches!(analysis.intent, UserIntent::CodeGeneration) {
+        analysis.intent = UserIntent::Clarification;
+    }
+
     match analysis.intent {
         UserIntent::CodeGeneration => {
             let assistant_response = format!(
@@ -193,15 +265,15 @@ async fn handle_user_input(
                 analysis.inferred_language.as_deref().unwrap_or("code"),
                 input
             );
-            
+
             runner.print_output(
                 &format!("\nAssistant: {}\n", assistant_response),
                 Some(Color::Green),
             );
-            
+
             // Execute code generation
             execute_generate_command(runner, state, &analysis, input, args).await?;
-            
+
             state.add_turn(input, &assistant_response);
         }
         UserIntent::Question => {
@@ -215,12 +287,18 @@ async fn handle_user_input(
             state.add_turn(input, &response);
         }
         UserIntent::Clarification => {
-            let response = request_clarification(input);
+            let mut response = request_clarification(input);
+            if args.no_codegen || state.no_codegen {
+                response = format!(
+                    "{}\n\n(Note: Code generation is disabled for this session --no-codegen.)",
+                    response
+                );
+            }
             runner.print_output(&format!("\nAssistant: {}\n", response), Some(Color::Yellow));
             state.add_turn(input, &response);
         }
     }
-    
+
     Ok(())
 }
 
@@ -241,74 +319,176 @@ enum UserIntent {
     Clarification,
 }
 
+/// Settings used by the chat intent detector (loaded from config)
+#[derive(Debug, Clone)]
+struct ChatIntentSettings {
+    require_action_keyword: bool,
+    min_code_score: f32,
+    min_margin: f32,
+    entity_weight: f32,
+    language_hint_weight: f32,
+}
+
+fn load_intent_settings(runner: &CliRunner) -> ChatIntentSettings {
+    let cfg = runner.config_manager().config().clone();
+    ChatIntentSettings {
+        require_action_keyword: cfg.chat.require_action_keyword,
+        min_code_score: cfg.chat.min_code_score,
+        min_margin: cfg.chat.min_margin,
+        entity_weight: cfg.chat.entity_weight,
+        language_hint_weight: cfg.chat.language_hint_weight,
+    }
+}
+
 /// Analyze user intent from their input
-fn analyze_user_intent(input: &str, state: &ConversationState) -> IntentAnalysis {
+fn analyze_user_intent(input: &str, state: &ConversationState, settings: &ChatIntentSettings) -> IntentAnalysis {
     let input_lower = input.to_lowercase();
-    
-    // Code generation keywords
+
+    // Code generation keywords (action-oriented)
     let code_keywords = [
-        "create", "generate", "write", "build", "make", "implement", "add",
-        "function", "class", "method", "struct", "interface", "component",
-        "script", "program", "module", "library", "api", "endpoint",
-        "test", "tests", "unittest", "integration", "benchmark"
+        "create",
+        "generate",
+        "write",
+        "build",
+        "make",
+        "implement",
+        "add",
+        "scaffold",
+        "compose",
+        "produce",
     ];
-    
+
+    // Entities that often appear in code requests but shouldn't by themselves trigger generation
+    let code_entities = [
+        "function",
+        "class",
+        "method",
+        "struct",
+        "interface",
+        "component",
+        "script",
+        "program",
+        "module",
+        "library",
+        "api",
+        "endpoint",
+        "test",
+        "tests",
+        "unittest",
+        "integration",
+        "benchmark",
+        "file",
+        "directory",
+    ];
+
     // Question keywords
     let question_keywords = [
-        "what", "how", "why", "where", "when", "which", "who",
-        "explain", "describe", "tell me", "show me", "help me understand"
+        "what",
+        "how",
+        "why",
+        "where",
+        "when",
+        "which",
+        "who",
+        "explain",
+        "describe",
+        "tell me",
+        "show me",
+        "help me understand",
     ];
-    
+
     // Project management keywords
     let project_keywords = [
-        "refactor", "clean", "organize", "restructure", "optimize",
-        "fix", "debug", "update", "upgrade", "migrate"
+        "refactor",
+        "clean",
+        "organize",
+        "restructure",
+        "optimize",
+        "fix",
+        "debug",
+        "update",
+        "upgrade",
+        "migrate",
     ];
-    
-    // Language detection
+
+    // Language detection (hints should not alone force codegen)
     let language_hints = vec![
-        ("rust", vec!["rust", "rs", "cargo", "struct", "impl", "trait", "fn", "mut"]),
-        ("python", vec!["python", "py", "def", "class", "import", "pip"]),
-        ("javascript", vec!["javascript", "js", "node", "npm", "const", "let", "function"]),
-        ("typescript", vec!["typescript", "ts", "interface", "type", "declare"]),
+        (
+            "rust",
+            vec![
+                "rust", "rs", "cargo", "struct", "impl", "trait", "fn", "mut",
+            ],
+        ),
+        (
+            "python",
+            vec!["python", "py", "def", "class", "import", "pip"],
+        ),
+        (
+            "javascript",
+            vec![
+                "javascript",
+                "js",
+                "node",
+                "npm",
+                "const",
+                "let",
+                "function",
+            ],
+        ),
+        (
+            "typescript",
+            vec!["typescript", "ts", "interface", "type", "declare"],
+        ),
         ("go", vec!["go", "golang", "func", "package", "import"]),
         ("java", vec!["java", "class", "public", "private", "static"]),
         ("cpp", vec!["c++", "cpp", "class", "namespace", "template"]),
         ("c", vec!["c", "stdio", "malloc", "struct"]),
     ];
-    
+
     let mut code_score: f32 = 0.0;
     let mut question_score: f32 = 0.0;
     let mut project_score: f32 = 0.0;
     let mut detected_language = None;
-    
-    // Score for code generation
+
+    let mut code_action_hits = 0u32;
+    let mut _code_entity_hits = 0u32;
+
+    // Score for code generation (actions)
     for keyword in &code_keywords {
         if input_lower.contains(keyword) {
             code_score += 1.0;
+            code_action_hits += 1;
         }
     }
-    
+
+    // Entities (low weight)
+    for ent in &code_entities {
+        if input_lower.contains(ent) {
+            code_score += settings.entity_weight; // very small boost
+            _code_entity_hits += 1;
+        }
+    }
+
     // Score for questions
     for keyword in &question_keywords {
         if input_lower.contains(keyword) {
             question_score += 1.0;
         }
     }
-    
+
     // Score for project management
     for keyword in &project_keywords {
         if input_lower.contains(keyword) {
             project_score += 1.0;
         }
     }
-    
-    // Detect programming language
+
+    // Detect programming language (tiny hint)
     for (lang, hints) in &language_hints {
         for hint in hints {
             if input_lower.contains(hint) {
                 detected_language = Some(lang.to_string());
-                code_score += 0.5; // Language hints boost code generation score
+                code_score += settings.language_hint_weight; // language hints should not dominate
                 break;
             }
         }
@@ -316,40 +496,56 @@ fn analyze_user_intent(input: &str, state: &ConversationState) -> IntentAnalysis
             break;
         }
     }
-    
+
     // Adjust scores based on context
     if input.ends_with('?') {
         question_score += 1.0;
     }
-    
-    if input_lower.contains("file") || input_lower.contains("directory") {
-        code_score += 0.5;
-    }
-    
-    // Determine intent based on highest score
-    let max_score = code_score.max(question_score).max(project_score);
-    let intent = if max_score == 0.0 {
-        UserIntent::Clarification
-    } else if code_score == max_score {
+
+    // Gate: require at least one action keyword to consider codegen
+    let has_action_keyword = code_action_hits > 0;
+
+    // Determine intent using thresholds and margins (configurable)
+    let codegen_eligible = (!settings.require_action_keyword || has_action_keyword)
+        && code_score >= settings.min_code_score
+        && code_score >= question_score + settings.min_margin
+        && code_score >= project_score + settings.min_margin;
+
+    let intent = if codegen_eligible {
         UserIntent::CodeGeneration
-    } else if question_score == max_score {
+    } else if question_score > 0.0 && question_score >= code_score && question_score >= project_score {
         UserIntent::Question
-    } else {
+    } else if project_score > 0.0 && project_score >= code_score {
         UserIntent::ProjectManagement
+    } else {
+        UserIntent::Clarification
     };
-    
+
     // Infer output path if possible
     let output_path = if let Some(project) = &state.project_context {
         Some(project.clone())
     } else {
         None
     };
-    
+
+    // Confidence: relative dominance of chosen intent
+    let total = code_score + question_score + project_score;
+    let confidence = if total > 0.0 {
+        match intent {
+            UserIntent::CodeGeneration => code_score / total,
+            UserIntent::Question => question_score / total,
+            UserIntent::ProjectManagement => project_score / total,
+            UserIntent::Clarification => 0.0,
+        }
+    } else {
+        0.0
+    };
+
     IntentAnalysis {
         intent,
         inferred_language: detected_language,
         inferred_output_path: output_path,
-        confidence: max_score / (code_keywords.len() as f32),
+        confidence,
     }
 }
 
@@ -362,34 +558,36 @@ async fn execute_generate_command(
     _args: &ChatArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_verbose("Analyzing generation request...");
-    
+
     // Try real code generation; fall back to stub if unavailable
     let generated_code = match generate_real_code(runner, analysis, prompt).await {
         Ok(code) => code,
         Err(_) => simulate_code_generation(analysis, prompt),
     };
     let output_path = determine_output_path(analysis, prompt, state);
-    
+
     // Show what we're generating
     runner.print_output(
-        &format!("\n🔄 Generating {} code for: {}\n", 
-                analysis.inferred_language.as_deref().unwrap_or("generic"),
-                prompt.chars().take(50).collect::<String>()),
-        Some(Color::Blue)
+        &format!(
+            "\n🔄 Generating {} code for: {}\n",
+            analysis.inferred_language.as_deref().unwrap_or("generic"),
+            prompt.chars().take(50).collect::<String>()
+        ),
+        Some(Color::Blue),
     );
-    
+
     // Simulate some processing time
     tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
-    
+
     // Display the generated code
     runner.print_success("✅ Code generated successfully!");
     runner.print_output("\n📝 Generated Code:\n", Some(Color::Green));
     runner.print_code(&generated_code);
-    
+
     // Show where it would be saved
     if let Some(path) = &output_path {
         runner.print_info(&format!("💾 Would save to: {}", path.display()));
-        
+
         // Update conversation state
         state.last_generated_files.push(path.clone());
         // Keep only the last 5 files for context
@@ -400,17 +598,17 @@ async fn execute_generate_command(
         let filename = stubs::suggest_filename(prompt, analysis.inferred_language.as_deref());
         runner.print_info(&format!("💾 Would save to: {}", filename));
     }
-    
+
     // Provide helpful next steps
     suggest_next_steps(runner, analysis, prompt);
-    
+
     Ok(())
 }
 
 /// Handle questions about the project or general programming topics
 fn handle_question(input: &str, state: &ConversationState) -> String {
     let input_lower = input.to_lowercase();
-    
+
     if input_lower.contains("project") || input_lower.contains("codebase") {
         if let Some(project) = &state.project_context {
             format!(
@@ -430,7 +628,7 @@ fn handle_question(input: &str, state: &ConversationState) -> String {
 /// Handle project management requests
 fn handle_project_management(input: &str, _state: &ConversationState) -> String {
     let input_lower = input.to_lowercase();
-    
+
     if input_lower.contains("refactor") {
         "I can help you refactor code! Please describe what you'd like to refactor - for example:\n• 'Refactor this function to use better error handling'\n• 'Clean up the structure of my module'\n• 'Optimize this algorithm for performance'\n\nWhat specific refactoring would you like me to help with?".to_string()
     } else if input_lower.contains("fix") || input_lower.contains("debug") {
@@ -457,25 +655,77 @@ fn request_clarification(input: &str) -> String {
 /// Show help information
 fn show_help(runner: &CliRunner) {
     runner.print_info("DevKit Chat Liaison Agent Commands:");
-    runner.print_output("  help, h       - Show this help message\n", Some(Color::Cyan));
-    runner.print_output("  status        - Show current session status\n", Some(Color::Cyan));
-    runner.print_output("  clear         - Clear conversation history\n", Some(Color::Cyan));
-    runner.print_output("  exit, quit, q - End the chat session\n", Some(Color::Cyan));
-    runner.print_output("\nFor code generation, just describe what you want to create:\n", None);
-    runner.print_output("  'Create a function to calculate fibonacci numbers'\n", Some(Color::Green));
-    runner.print_output("  'Generate a REST API endpoint for user management'\n", Some(Color::Green));
-    runner.print_output("  'Write unit tests for my parser module'\n", Some(Color::Green));
-    runner.print_output("\nType 'quickstart' for a short guided intro.\n", Some(Color::DarkGrey));
+    runner.print_output(
+        "  help, h       - Show this help message\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  status        - Show current session status\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  clear         - Clear conversation history\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  status        - Show toggles and recent files\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  mode|settings - Show current chat mode toggles\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  force on|off  - Enable/disable forced code generation\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  no-codegen on|off - Enable/disable code generation\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  exit, quit, q - End the chat session\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "\nFor code generation, just describe what you want to create:\n",
+        None,
+    );
+    runner.print_output(
+        "  'Create a function to calculate fibonacci numbers'\n",
+        Some(Color::Green),
+    );
+    runner.print_output(
+        "  'Generate a REST API endpoint for user management'\n",
+        Some(Color::Green),
+    );
+    runner.print_output(
+        "  'Write unit tests for my parser module'\n",
+        Some(Color::Green),
+    );
+    runner.print_output(
+        "\nType 'quickstart' for a short guided intro.\n",
+        Some(Color::DarkGrey),
+    );
 }
 
 fn show_quickstart(runner: &CliRunner) {
     runner.print_output("\n🚀 Quickstart\n", Some(Color::Cyan));
     runner.print_output("1) Ask for code in plain English.\n", None);
-    runner.print_output("   e.g., 'Create a Next.js app with / and /about'\n", Some(Color::DarkGrey));
+    runner.print_output(
+        "   e.g., 'Create a Next.js app with / and /about'\n",
+        Some(Color::DarkGrey),
+    );
     runner.print_output("2) See scaffolds (in chat): type 'stacks'\n", None);
     runner.print_output("3) Generate/scaffold via CLI when needed.\n", None);
-    runner.print_output("   devkit generate \"web app\" --language typescript --stack nextjs --root ./web\n", Some(Color::DarkGrey));
-    runner.print_output("4) Useful commands: help, status, stacks, quickstart, clear, exit.\n", None);
+    runner.print_output(
+        "   devkit generate \"web app\" --language typescript --stack nextjs --root ./web\n",
+        Some(Color::DarkGrey),
+    );
+    runner.print_output(
+        "4) Useful commands: help, status, stacks, quickstart, clear, exit.\n",
+        None,
+    );
 }
 
 fn show_stacks(runner: &CliRunner) {
@@ -490,27 +740,52 @@ fn show_stacks(runner: &CliRunner) {
         "python-fastapi",
         "python-fastapi-sqlalchemy",
     ];
-    for s in stacks { runner.print_output(&format!("  • {}\n", s), None); }
-    runner.print_output("Use `devkit generate \"...\" --language <lang> --stack <preset> --root <dir>`\n", Some(Color::DarkGrey));
+    for s in stacks {
+        runner.print_output(&format!("  • {}\n", s), None);
+    }
+    runner.print_output(
+        "Use `devkit generate \"...\" --language <lang> --stack <preset> --root <dir>`\n",
+        Some(Color::DarkGrey),
+    );
 }
 
 /// Show current session status
 fn show_status(runner: &CliRunner, state: &ConversationState) {
     runner.print_info("Current Session Status:");
-    runner.print_output(&format!("  Conversation turns: {}\n", state.turn_count), None);
-    
+    runner.print_output(
+        &format!("  Conversation turns: {}\n", state.turn_count),
+        None,
+    );
+
     if let Some(project) = &state.project_context {
-        runner.print_output(&format!("  Project directory: {}\n", project.display()), None);
+        runner.print_output(
+            &format!("  Project directory: {}\n", project.display()),
+            None,
+        );
     } else {
         runner.print_output("  Project directory: Not specified\n", None);
     }
-    
-    runner.print_output(&format!("  Generated files: {}\n", state.last_generated_files.len()), None);
-    
+
+    runner.print_output(
+        &format!("  Generated files: {}\n", state.last_generated_files.len()),
+        None,
+    );
+
+    runner.print_output(
+        &format!(
+            "  Modes: force-generate={}, no-codegen={}\n",
+            state.force_generate, state.no_codegen
+        ),
+        None,
+    );
+
     if !state.last_generated_files.is_empty() {
         runner.print_output("  Recent files:\n", None);
         for file in &state.last_generated_files {
-            runner.print_output(&format!("    - {}\n", file.display()), Some(Color::DarkGrey));
+            runner.print_output(
+                &format!("    - {}\n", file.display()),
+                Some(Color::DarkGrey),
+            );
         }
     }
 }
@@ -553,17 +828,12 @@ async fn generate_real_code(
     Ok(result.generated_code)
 }
 
-
-
-
-
-
-
-
-
-
 /// Determine the appropriate output path for generated code
-fn determine_output_path(analysis: &IntentAnalysis, prompt: &str, state: &ConversationState) -> Option<PathBuf> {
+fn determine_output_path(
+    analysis: &IntentAnalysis,
+    prompt: &str,
+    state: &ConversationState,
+) -> Option<PathBuf> {
     if let Some(project_path) = &state.project_context {
         let filename = stubs::suggest_filename(prompt, analysis.inferred_language.as_deref());
         Some(project_path.join("src").join(filename))
@@ -572,11 +842,61 @@ fn determine_output_path(analysis: &IntentAnalysis, prompt: &str, state: &Conver
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_settings() -> ChatIntentSettings {
+        ChatIntentSettings {
+            require_action_keyword: true,
+            min_code_score: 2.0,
+            min_margin: 1.0,
+            entity_weight: 0.25,
+            language_hint_weight: 0.25,
+        }
+    }
+
+    #[test]
+    fn test_question_no_codegen() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent("How are you?", &state, &settings);
+        assert_eq!(a.intent, UserIntent::Question);
+    }
+
+    #[test]
+    fn test_project_management_no_codegen() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent("Refactor the parser module", &state, &settings);
+        assert_eq!(a.intent, UserIntent::ProjectManagement);
+    }
+
+    #[test]
+    fn test_codegen_with_action_keyword() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent(
+            "Create a Rust function that reads a file and returns a String",
+            &state,
+            &settings,
+        );
+        assert_eq!(a.intent, UserIntent::CodeGeneration);
+    }
+
+    #[test]
+    fn test_ambiguous_clarification() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent("function file class", &state, &settings);
+        assert_eq!(a.intent, UserIntent::Clarification);
+    }
+}
 
 /// Suggest helpful next steps after code generation
 fn suggest_next_steps(runner: &CliRunner, analysis: &IntentAnalysis, prompt: &str) {
     runner.print_output("\n💡 Suggested next steps:", Some(Color::Cyan));
-    
+
     match analysis.inferred_language.as_deref() {
         Some("rust") => {
             runner.print_output("  • Run: cargo check (to verify syntax)", None);
@@ -599,6 +919,9 @@ fn suggest_next_steps(runner: &CliRunner, analysis: &IntentAnalysis, prompt: &st
             runner.print_output("  • Consider adding unit tests", None);
         }
     }
-    
-    runner.print_output("  • Type 'help' to see more chat commands", Some(Color::DarkGrey));
+
+    runner.print_output(
+        "  • Type 'help' to see more chat commands",
+        Some(Color::DarkGrey),
+    );
 }
