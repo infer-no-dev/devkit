@@ -11,6 +11,8 @@ use crossterm::style::Color;
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use crate::shell::ShellManager;
+use is_terminal::IsTerminal;
 
 /// Conversation state for the chat project manager
 #[derive(Debug, Clone)]
@@ -22,6 +24,8 @@ struct ConversationState {
     // Session toggles
     force_generate: bool,
     no_codegen: bool,
+    current_role: AssistantRole,
+    execute_enabled: bool,
 }
 
 impl ConversationState {
@@ -33,6 +37,8 @@ impl ConversationState {
             conversation_history: Vec::new(),
             force_generate: false,
             no_codegen: false,
+            current_role: AssistantRole::Sysadmin,
+            execute_enabled: false,
         }
     }
 
@@ -74,6 +80,14 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
     // Initialize session toggles from CLI flags
     state.force_generate = args.force_generate;
     state.no_codegen = args.no_codegen;
+    // Initialize role and execute from config/CLI
+    let cfg = runner.config_manager().config().assistant.clone();
+    state.current_role = match args.role.as_deref().unwrap_or(&cfg.default_role).to_lowercase().as_str() {
+        "developer" => AssistantRole::Developer,
+        "general" => AssistantRole::General,
+        _ => AssistantRole::Sysadmin,
+    };
+    state.execute_enabled = args.execute || cfg.execute_default;
 
     // Check if we're in interactive mode (stdin is a terminal)
     let is_interactive = std::io::stdin().is_terminal();
@@ -171,6 +185,18 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
                 show_status(runner, &state);
                 continue;
             }
+            // Role switches
+            cmd if cmd.starts_with("role ") => {
+                let role = cmd.trim_start_matches("role ").trim();
+                match role {
+                    "developer" => state.current_role = AssistantRole::Developer,
+                    "general" => state.current_role = AssistantRole::General,
+                    "sysadmin" => state.current_role = AssistantRole::Sysadmin,
+                    _ => runner.print_warning("Unknown role. Use: role developer|sysadmin|general"),
+                }
+                runner.print_info(&format!("Role set to {:?}", state.current_role));
+                continue;
+            }
             // Toggle generation modes
             "force on" | "force enable" => {
                 if state.no_codegen {
@@ -202,11 +228,14 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             }
             "mode" | "modes" | "settings" => {
                 runner.print_info(&format!(
-                    "Modes: force-generate={}, no-codegen={}",
-                    state.force_generate, state.no_codegen
+                    "Modes: force-generate={}, no-codegen={}, role={:?}, execute={}",
+                    state.force_generate, state.no_codegen, state.current_role, state.execute_enabled
                 ));
                 continue;
             }
+            // Execute toggle
+            "execute on" => { state.execute_enabled = true; runner.print_success("Execute mode enabled (use with caution)"); continue; }
+            "execute off" => { state.execute_enabled = false; runner.print_info("Execute mode disabled"); continue; }
             "stacks" | "list stacks" | "stack presets" => {
                 show_stacks(runner);
                 continue;
@@ -286,6 +315,31 @@ async fn handle_user_input(
             runner.print_output(&format!("\nAssistant: {}\n", response), Some(Color::Green));
             state.add_turn(input, &response);
         }
+        UserIntent::SystemAdmin => {
+            let response = handle_sysadmin(input, state);
+            runner.print_output(&format!("\nAssistant (sysadmin plan):\n{}\n", response), Some(Color::Cyan));
+            if state.execute_enabled {
+                if std::io::stdin().is_terminal() {
+                    runner.print_warning("Execute is ON. These commands may change your system.");
+                    print!("Proceed to execute for your distro? [y/N]: ");
+                    let _ = std::io::stdout().flush();
+                    let mut ans = String::new();
+                    let _ = std::io::stdin().read_line(&mut ans);
+                    if matches!(ans.trim().to_lowercase().as_str(), "y" | "yes") {
+                        if let Err(e) = execute_linux_plan(runner, &response).await {
+                            runner.print_error(&format!("Execution error: {}", e));
+                        }
+                    } else {
+                        runner.print_info("Skipped execution.");
+                    }
+                } else {
+                    runner.print_warning("Non-interactive session: skipping execution. Use explicit commands.");
+                }
+            } else {
+                runner.print_info("Plan only. Type 'execute on' to enable execution.");
+            }
+            state.add_turn(input, &response);
+        }
         UserIntent::Clarification => {
             let mut response = request_clarification(input);
             if args.no_codegen || state.no_codegen {
@@ -316,6 +370,7 @@ enum UserIntent {
     CodeGeneration,
     Question,
     ProjectManagement,
+    SystemAdmin,
     Clarification,
 }
 
@@ -448,6 +503,7 @@ fn analyze_user_intent(input: &str, state: &ConversationState, settings: &ChatIn
     let mut code_score: f32 = 0.0;
     let mut question_score: f32 = 0.0;
     let mut project_score: f32 = 0.0;
+    let mut sysadmin_score: f32 = 0.0;
     let mut detected_language = None;
 
     let mut code_action_hits = 0u32;
@@ -483,6 +539,22 @@ fn analyze_user_intent(input: &str, state: &ConversationState, settings: &ChatIn
         }
     }
 
+    // Sysadmin keywords
+    let sysadmin_keywords = [
+        "install", "update", "upgrade", "uninstall", "remove",
+        "apt", "dnf", "yum", "pacman", "brew", "choco", "winget",
+        "systemctl", "service", "ufw", "iptables", "firewall",
+        "docker", "podman", "kubectl", "minikube",
+        "nvidia", "driver",
+        // NFS related
+        "nfs", "nfs-kernel-server", "nfs-utils", "showmount", "mount",
+    ];
+    for keyword in &sysadmin_keywords {
+        if input_lower.contains(keyword) {
+            sysadmin_score += 1.0;
+        }
+    }
+
     // Detect programming language (tiny hint)
     for (lang, hints) in &language_hints {
         for hint in hints {
@@ -505,21 +577,35 @@ fn analyze_user_intent(input: &str, state: &ConversationState, settings: &ChatIn
     // Gate: require at least one action keyword to consider codegen
     let has_action_keyword = code_action_hits > 0;
 
+    // Role bias
+    if matches!(state.current_role, AssistantRole::Sysadmin) {
+        sysadmin_score += 0.5;
+    }
+
     // Determine intent using thresholds and margins (configurable)
     let codegen_eligible = (!settings.require_action_keyword || has_action_keyword)
         && code_score >= settings.min_code_score
         && code_score >= question_score + settings.min_margin
-        && code_score >= project_score + settings.min_margin;
+        && code_score >= project_score + settings.min_margin
+        && code_score >= sysadmin_score + settings.min_margin;
 
-    let intent = if codegen_eligible {
-        UserIntent::CodeGeneration
-    } else if question_score > 0.0 && question_score >= code_score && question_score >= project_score {
-        UserIntent::Question
-    } else if project_score > 0.0 && project_score >= code_score {
-        UserIntent::ProjectManagement
-    } else {
-        UserIntent::Clarification
-    };
+    let mut intent = UserIntent::Clarification;
+    let mut max_score = 0.0f32;
+    for (kind, score) in [
+        (UserIntent::CodeGeneration, code_score),
+        (UserIntent::Question, question_score),
+        (UserIntent::ProjectManagement, project_score),
+        (UserIntent::SystemAdmin, sysadmin_score),
+    ] {
+        if score >= max_score {
+            max_score = score;
+            intent = kind;
+        }
+    }
+    if !codegen_eligible && matches!(intent, UserIntent::CodeGeneration) {
+        // Demote to clarification if codegen not eligible
+        intent = UserIntent::Clarification;
+    }
 
     // Infer output path if possible
     let output_path = if let Some(project) = &state.project_context {
@@ -529,12 +615,13 @@ fn analyze_user_intent(input: &str, state: &ConversationState, settings: &ChatIn
     };
 
     // Confidence: relative dominance of chosen intent
-    let total = code_score + question_score + project_score;
+    let total = code_score + question_score + project_score + sysadmin_score;
     let confidence = if total > 0.0 {
         match intent {
             UserIntent::CodeGeneration => code_score / total,
             UserIntent::Question => question_score / total,
             UserIntent::ProjectManagement => project_score / total,
+            UserIntent::SystemAdmin => sysadmin_score / total,
             UserIntent::Clarification => 0.0,
         }
     } else {
@@ -652,6 +739,169 @@ fn request_clarification(input: &str) -> String {
     )
 }
 
+#[derive(Debug, Clone, Copy)]
+enum AssistantRole { Developer, Sysadmin, General }
+
+/// Simple sysadmin planner (Linux-first)
+fn handle_sysadmin(input: &str, _state: &ConversationState) -> String {
+    let q = input.to_lowercase();
+    let mut plan = String::new();
+    plan.push_str("Plan (review before executing):\n");
+    if q.contains("docker") && (q.contains("install") || q.contains("setup")) {
+        plan.push_str("- Precheck: docker --version || true\n");
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y docker.io\n  sudo systemctl enable --now docker\n  sudo usermod -aG docker $USER\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y docker\n  sudo systemctl enable --now docker\n");
+        plan.push_str("- Postcheck: systemctl is-active docker && docker --version\n");
+    } else if q.contains("docker compose") || q.contains("compose plugin") {
+        plan.push_str("- Precheck: docker compose version || true\n");
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y docker-compose-plugin\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y docker-compose\n");
+        plan.push_str("- Postcheck: docker compose version\n");
+    } else if q.contains("open port") || q.contains("ufw") {
+        // naive extraction
+        let port = q.split_whitespace().find(|t| t.chars().all(|c| c.is_ascii_digit())).unwrap_or("8080");
+        plan.push_str(&format!("- Debian/Ubuntu (ufw):\n  sudo apt-get install -y ufw\n  sudo ufw allow {}/tcp\n  sudo ufw status\n", port));
+        plan.push_str("- RHEL/Fedora (firewalld):\n  sudo firewall-cmd --add-port=8080/tcp --permanent\n  sudo firewall-cmd --reload\n");
+    } else if q.contains("enable ufw") || (q.contains("ufw") && q.contains("enable")) {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get install -y ufw\n  sudo ufw enable\n  sudo ufw status\n");
+    } else if q.contains("fail2ban") {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y fail2ban\n  sudo systemctl enable --now fail2ban\n  sudo systemctl status fail2ban --no-pager\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y fail2ban\n  sudo systemctl enable --now fail2ban\n  sudo systemctl status fail2ban --no-pager\n");
+    } else if (q.contains("update") && q.contains("system")) || q == "update" || q.contains("upgrade") {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get upgrade -y\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf upgrade -y\n");
+    } else if q.contains("build-essential") || q.contains("dev tools") || q.contains("gcc") || q.contains("make") {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y build-essential pkg-config\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf groupinstall -y 'Development Tools'\n  sudo dnf install -y pkgconf-pkg-config\n");
+    } else if q.contains("python dev") || q.contains("python headers") || (q.contains("python") && q.contains("venv")) {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y python3-venv python3-dev\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y python3-venv python3-devel\n");
+    } else if q.contains("node") || q.contains("nvm") {
+        plan.push_str("- Precheck: node --version || true\n");
+        plan.push_str("- Debian/Ubuntu:\n  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm install --lts\n");
+        plan.push_str("- RHEL/Fedora:\n  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm install --lts\n");
+        plan.push_str("- Postcheck: node --version && npm --version\n");
+    } else if q.contains("golang") || q.contains("go lang") || q == "go" {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y golang\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y golang\n");
+    } else if q.contains("flatpak") && (q.contains("install") || q.contains("setup") || q.contains("enable")) {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y flatpak\n  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y flatpak\n  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo\n");
+    } else if q.contains("kubectl") || q.contains("kubernetes client") {
+        plan.push_str("- Debian/Ubuntu (simple):\n  sudo apt-get update\n  sudo apt-get install -y kubectl || echo 'Consider installing from Kubernetes repo for latest'\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y kubernetes-client || echo 'Package name may vary (kubectl)'\n");
+    } else if q.contains("minikube") {
+        plan.push_str("- Debian/Ubuntu:\n  curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64\n  sudo install minikube-linux-amd64 /usr/local/bin/minikube\n");
+        plan.push_str("- RHEL/Fedora:\n  curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64\n  sudo install minikube-linux-amd64 /usr/local/bin/minikube\n");
+    } else if q.contains("nfs") {
+        let wants_server = q.contains("server") || q.contains("export") || q.contains("share");
+        let wants_client = q.contains("client") || q.contains("mount") || q.contains("fstab");
+        if wants_server && !wants_client {
+            plan.push_str("- Precheck: rpcinfo -p || true\n");
+            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-kernel-server\n  sudo mkdir -p /srv/nfs/share\n  sudo chown nobody:nogroup /srv/nfs/share\n  echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo exportfs -ra\n  sudo systemctl enable --now nfs-server || sudo systemctl enable --now nfs-kernel-server\n  sudo ufw allow 2049/tcp || true\n");
+            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo mkdir -p /srv/nfs/share\n  echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo systemctl enable --now nfs-server\n  sudo exportfs -ra\n");
+            plan.push_str("- Postcheck: showmount -e localhost\n");
+        } else if wants_client && !wants_server {
+            plan.push_str("- Precheck: getent hosts nfs-server.local || true\n");
+            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-common\n  sudo mkdir -p /mnt/nfs/share\n  sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
+            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo mkdir -p /mnt/nfs/share\n  sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
+            plan.push_str("- Postcheck: mount | grep /mnt/nfs/share || true\n");
+        } else {
+            plan.push_str("- NFS setup detected. Specify 'server' to configure exports or 'client' to mount a share.\n");
+            plan.push_str("- Example server (Debian/Ubuntu):\n  sudo apt-get install -y nfs-kernel-server\n  sudo mkdir -p /srv/nfs/share && echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo exportfs -ra && sudo systemctl enable --now nfs-server\n");
+            plan.push_str("- Example client (Debian/Ubuntu):\n  sudo apt-get install -y nfs-common\n  sudo mkdir -p /mnt/nfs/share && sudo mount -t nfs <server>:/srv/nfs/share /mnt/nfs/share\n");
+        }
+    } else if q.contains("install ") {
+        // naive package extraction: word after 'install'
+        let mut pkg = "";
+        if let Some(idx) = q.find("install ") {
+            let rest = &q[idx + 8..];
+            pkg = rest.split_whitespace().next().unwrap_or("");
+        }
+        if !pkg.is_empty() {
+            plan.push_str(&format!("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y {}\n", pkg));
+            plan.push_str(&format!("- RHEL/Fedora:\n  sudo dnf install -y {}\n", pkg));
+        } else {
+            plan.push_str("- Could not determine package name to install. Please specify.\n");
+        }
+    } else if q.contains("nvidia container toolkit") {
+        plan.push_str("- NOTE: NVIDIA container toolkit setup varies by driver/distro; review official docs before executing.\n");
+        plan.push_str("- Debian/Ubuntu (sketch):\n  distribution=$(. /etc/os-release;echo $ID$VERSION_ID)\n  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg\n  curl -fsSL https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \n    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \n    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list\n  sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit\n  sudo nvidia-ctk runtime configure --runtime=docker\n  sudo systemctl restart docker\n");
+    } else {
+        plan.push_str("- Analyze request and choose OS-appropriate steps\n");
+        plan.push_str("- Provide precheck/postcheck and safe defaults\n");
+    }
+    plan
+}
+
+async fn execute_linux_plan(runner: &CliRunner, plan: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let shell = ShellManager::new().map_err(|e| format!("shell init: {:?}", e))?;
+    // Sudo policy
+    let sudo_mode = runner.config_manager().config().assistant.sudo_mode.to_lowercase();
+    // If not root and sudo_mode requires elevation, ensure passwordless or pre-auth cached
+    let id = shell.execute_command("id -u", None).await.ok();
+    let is_root = id.as_ref().map(|r| r.stdout.trim() == "0").unwrap_or(false);
+    if !is_root && (sudo_mode == "auto" || sudo_mode == "always") {
+        // Try non-interactive sudo check
+        if let Ok(check) = shell.execute_command("sudo -n true", None).await {
+            if check.exit_code != 0 {
+                runner.print_warning("Sudo requires a password. Please run 'sudo -v' in this terminal to cache credentials, then retry execution.");
+                return Ok(()); // do not proceed
+            }
+        } else {
+            runner.print_warning("Unable to verify sudo. Skipping execution. Run 'sudo -v' and retry.");
+            return Ok(());
+        }
+    }
+    // Detect package manager preference
+    let apt = shell.command_exists("apt-get").await;
+    let dnf = shell.command_exists("dnf").await || shell.command_exists("yum").await;
+
+    // Extract commands for target section
+    let target = if apt { "Debian/Ubuntu:" } else if dnf { "RHEL/Fedora:" } else { "" };
+    let mut cmds: Vec<String> = Vec::new();
+    let mut capture = target.is_empty();
+    for line in plan.lines() {
+        let l = line.trim_end();
+        if l.starts_with("- Debian/Ubuntu:") { capture = target == "Debian/Ubuntu:"; continue; }
+        if l.starts_with("- Fedora/RHEL:") || l.starts_with("- RHEL/Fedora:") { capture = target == "RHEL/Fedora:"; continue; }
+        if l.starts_with("- Precheck") || l.starts_with("- Postcheck") { continue; }
+        if capture {
+            if l.starts_with("  ") {
+                let cmd = l.trim();
+                if !cmd.is_empty() {
+                    cmds.push(cmd.to_string());
+                }
+            }
+        }
+    }
+    if cmds.is_empty() {
+        runner.print_warning("No executable commands detected for current distro. Printing plan only.");
+        return Ok(());
+    }
+
+    runner.print_info("Executing plan (Linux)...");
+    for cmd in cmds {
+        runner.print_output(&format!("$ {}\n", cmd), Some(Color::Cyan));
+        let res = shell.execute_command(&cmd, None).await;
+        match res {
+            Ok(r) => {
+                if r.exit_code == 0 {
+                    if !r.stdout.trim().is_empty() { runner.print_output(&format!("{}\n", r.stdout), None); }
+                    runner.print_success(&format!("ok ({} ms)", r.execution_time_ms));
+                } else {
+                    runner.print_warning(&format!("exit {}\n{}", r.exit_code, r.stderr));
+                    return Err(format!("Command failed: {}", cmd).into());
+                }
+            }
+            Err(e) => {
+                return Err(format!("Shell error: {:?}", e).into());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Show help information
 fn show_help(runner: &CliRunner) {
     runner.print_info("DevKit Chat Liaison Agent Commands:");
@@ -681,6 +931,14 @@ fn show_help(runner: &CliRunner) {
     );
     runner.print_output(
         "  no-codegen on|off - Enable/disable code generation\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  role <developer|sysadmin|general> - Switch assistant role\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  execute on|off - Enable/disable command execution (sysadmin)\n",
         Some(Color::Cyan),
     );
     runner.print_output(
@@ -773,8 +1031,8 @@ fn show_status(runner: &CliRunner, state: &ConversationState) {
 
     runner.print_output(
         &format!(
-            "  Modes: force-generate={}, no-codegen={}\n",
-            state.force_generate, state.no_codegen
+            "  Modes: force-generate={}, no-codegen={}, role={:?}, execute={}\n",
+            state.force_generate, state.no_codegen, state.current_role, state.execute_enabled
         ),
         None,
     );

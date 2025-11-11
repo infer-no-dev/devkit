@@ -443,17 +443,36 @@ devkit export --session <name>    # Export session data
  devkit behavior edit              # Open behavior editor
  devkit behavior list              # List behavior profiles
 
-# Chat flags and in-chat commands
-# Flags
-#   --force-generate    always treat input as codegen
-#   --no-codegen        disable code generation
-# Examples
-#   devkit chat --force-generate
-#   devkit chat --no-codegen
-# In-chat toggles
-#   force on/off
-#   no-codegen on/off
-#   mode (show toggles)
+ # Chat flags and in-chat commands
+ # Flags
+ #   --force-generate                 always treat input as codegen
+ #   --no-codegen                     disable code generation
+ #   --role <developer|sysadmin|general>  set assistant role
+ #   --execute                        execute sysadmin plans (use with caution)
+ # Examples
+ #   devkit chat --force-generate
+ #   devkit chat --no-codegen
+ #   devkit chat --role sysadmin --execute
+ # In-chat toggles
+ #   force on/off
+ #   no-codegen on/off
+ #   role developer|sysadmin|general
+ #   execute on/off
+ #   mode (show toggles)
+ #   status (show current settings)
+
+ # Sysadmin quick examples
+ #   # Plan then execute Docker install
+ #   devkit chat --role sysadmin --execute
+ #   # (in chat) setup docker
+ #
+ #   # NFS server setup (now supported)
+ #   devkit chat --role sysadmin --execute
+ #   # (in chat) setup nfs server
+ #
+ # Supported sysadmin tasks (partial): docker, docker compose, ufw open/enable,
+ # fail2ban, system update/upgrade, build tools, python dev, nvm/node, golang,
+ # flatpak, kubectl, minikube, generic package install, NFS server/client.
 
 # Plugin System
 devkit plugin search <query>      # Search plugin marketplace

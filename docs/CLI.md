@@ -851,6 +851,10 @@ Options:
           Enable debug output
   -m, --message <MESSAGE>
           Initial message or question to start the conversation
+      --role <ROLE>
+          Assistant role (developer|sysadmin|general)
+      --execute
+          Execute sysadmin plans automatically (dangerous; default false)
       --persist
           Keep conversation history persistent across sessions
       --resume
@@ -895,8 +899,11 @@ In-chat commands:
 
 - force on | force off — enable/disable forced code generation
 - no-codegen on | no-codegen off — disable/enable code generation
-- mode | settings — show current toggle state
+- role developer|sysadmin|general — switch assistant role
+- execute on | execute off — enable/disable execution (sysadmin)
+- stacks — list scaffolding presets
 - status — shows toggles and recent files
+- quickstart — short guided intro
 
 ### devkit session
 ```text
