@@ -12,7 +12,7 @@ use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use crate::shell::ShellManager;
-use is_terminal::IsTerminal;
+//use is_terminal::IsTerminal;
 
 /// Conversation state for the chat project manager
 #[derive(Debug, Clone)]
@@ -749,21 +749,21 @@ fn handle_sysadmin(input: &str, _state: &ConversationState) -> String {
     plan.push_str("Plan (review before executing):\n");
     if q.contains("docker") && (q.contains("install") || q.contains("setup")) {
         plan.push_str("- Precheck: docker --version || true\n");
-        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y docker.io\n  sudo systemctl enable --now docker\n  sudo usermod -aG docker $USER\n");
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y docker.io\n  sudo systemctl enable --now docker\n  id -nG \"$USER\" | grep -qw docker || sudo usermod -aG docker $USER\n");
         plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y docker\n  sudo systemctl enable --now docker\n");
         plan.push_str("- Postcheck: systemctl is-active docker && docker --version\n");
     } else if q.contains("docker compose") || q.contains("compose plugin") {
         plan.push_str("- Precheck: docker compose version || true\n");
-        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y docker-compose-plugin\n");
-        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y docker-compose\n");
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  docker compose version >/dev/null 2>&1 || sudo apt-get install -y docker-compose-plugin\n");
+        plan.push_str("- RHEL/Fedora:\n  docker compose version >/dev/null 2>&1 || sudo dnf install -y docker-compose\n");
         plan.push_str("- Postcheck: docker compose version\n");
     } else if q.contains("open port") || q.contains("ufw") {
         // naive extraction
         let port = q.split_whitespace().find(|t| t.chars().all(|c| c.is_ascii_digit())).unwrap_or("8080");
-        plan.push_str(&format!("- Debian/Ubuntu (ufw):\n  sudo apt-get install -y ufw\n  sudo ufw allow {}/tcp\n  sudo ufw status\n", port));
-        plan.push_str("- RHEL/Fedora (firewalld):\n  sudo firewall-cmd --add-port=8080/tcp --permanent\n  sudo firewall-cmd --reload\n");
+        plan.push_str(&format!("- Debian/Ubuntu (ufw):\n  sudo apt-get install -y ufw\n  (command -v ufw >/dev/null 2>&1 && ! sudo ufw status | grep -q '{}/tcp') && sudo ufw allow {}/tcp || true\n  sudo ufw status\n", port, port));
+        plan.push_str(&format!("- RHEL/Fedora (firewalld):\n  sudo firewall-cmd --list-ports | grep -q '{}/tcp' || sudo firewall-cmd --add-port={}/tcp --permanent\n  sudo firewall-cmd --reload\n", port, port));
     } else if q.contains("enable ufw") || (q.contains("ufw") && q.contains("enable")) {
-        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get install -y ufw\n  sudo ufw enable\n  sudo ufw status\n");
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get install -y ufw\n  sudo ufw status | grep -q 'Status: active' || sudo ufw enable\n  sudo ufw status\n");
     } else if q.contains("fail2ban") {
         plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y fail2ban\n  sudo systemctl enable --now fail2ban\n  sudo systemctl status fail2ban --no-pager\n");
         plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y fail2ban\n  sudo systemctl enable --now fail2ban\n  sudo systemctl status fail2ban --no-pager\n");
@@ -778,8 +778,8 @@ fn handle_sysadmin(input: &str, _state: &ConversationState) -> String {
         plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y python3-venv python3-devel\n");
     } else if q.contains("node") || q.contains("nvm") {
         plan.push_str("- Precheck: node --version || true\n");
-        plan.push_str("- Debian/Ubuntu:\n  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm install --lts\n");
-        plan.push_str("- RHEL/Fedora:\n  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm install --lts\n");
+        plan.push_str("- Debian/Ubuntu:\n  [ -d \"$HOME/.nvm\" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && (command -v node >/dev/null 2>&1 || nvm install --lts)\n");
+        plan.push_str("- RHEL/Fedora:\n  [ -d \"$HOME/.nvm\" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && (command -v node >/dev/null 2>&1 || nvm install --lts)\n");
         plan.push_str("- Postcheck: node --version && npm --version\n");
     } else if q.contains("golang") || q.contains("go lang") || q == "go" {
         plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y golang\n");
@@ -788,23 +788,23 @@ fn handle_sysadmin(input: &str, _state: &ConversationState) -> String {
         plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y flatpak\n  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo\n");
         plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y flatpak\n  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo\n");
     } else if q.contains("kubectl") || q.contains("kubernetes client") {
-        plan.push_str("- Debian/Ubuntu (simple):\n  sudo apt-get update\n  sudo apt-get install -y kubectl || echo 'Consider installing from Kubernetes repo for latest'\n");
-        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y kubernetes-client || echo 'Package name may vary (kubectl)'\n");
+        plan.push_str("- Debian/Ubuntu (simple):\n  sudo apt-get update\n  command -v kubectl >/dev/null 2>&1 || sudo apt-get install -y kubectl || echo 'Consider installing from Kubernetes repo for latest'\n");
+        plan.push_str("- RHEL/Fedora:\n  command -v kubectl >/dev/null 2>&1 || sudo dnf install -y kubernetes-client || echo 'Package name may vary (kubectl)'\n");
     } else if q.contains("minikube") {
-        plan.push_str("- Debian/Ubuntu:\n  curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64\n  sudo install minikube-linux-amd64 /usr/local/bin/minikube\n");
-        plan.push_str("- RHEL/Fedora:\n  curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64\n  sudo install minikube-linux-amd64 /usr/local/bin/minikube\n");
+        plan.push_str("- Debian/Ubuntu:\n  command -v minikube >/dev/null 2>&1 || (curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 && sudo install minikube-linux-amd64 /usr/local/bin/minikube)\n");
+        plan.push_str("- RHEL/Fedora:\n  command -v minikube >/dev/null 2>&1 || (curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 && sudo install minikube-linux-amd64 /usr/local/bin/minikube)\n");
     } else if q.contains("nfs") {
         let wants_server = q.contains("server") || q.contains("export") || q.contains("share");
         let wants_client = q.contains("client") || q.contains("mount") || q.contains("fstab");
         if wants_server && !wants_client {
             plan.push_str("- Precheck: rpcinfo -p || true\n");
-            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-kernel-server\n  sudo mkdir -p /srv/nfs/share\n  sudo chown nobody:nogroup /srv/nfs/share\n  echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo exportfs -ra\n  sudo systemctl enable --now nfs-server || sudo systemctl enable --now nfs-kernel-server\n  sudo ufw allow 2049/tcp || true\n");
-            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo mkdir -p /srv/nfs/share\n  echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo systemctl enable --now nfs-server\n  sudo exportfs -ra\n");
+            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-kernel-server\n  sudo install -d -m 0775 /srv/nfs/share\n  sudo chown nobody:nogroup /srv/nfs/share\n  grep -qF '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' /etc/exports || echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo exportfs -ra\n  sudo systemctl enable --now nfs-server || sudo systemctl enable --now nfs-kernel-server\n  (command -v ufw >/dev/null 2>&1 && ! sudo ufw status | grep -q '2049/tcp') && sudo ufw allow 2049/tcp || true\n");
+            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo install -d -m 0775 /srv/nfs/share\n  grep -qF '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' /etc/exports || echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo systemctl enable --now nfs-server\n  sudo exportfs -ra\n");
             plan.push_str("- Postcheck: showmount -e localhost\n");
         } else if wants_client && !wants_server {
             plan.push_str("- Precheck: getent hosts nfs-server.local || true\n");
-            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-common\n  sudo mkdir -p /mnt/nfs/share\n  sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
-            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo mkdir -p /mnt/nfs/share\n  sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
+            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-common\n  sudo mkdir -p /mnt/nfs/share\n  grep -qs '/mnt/nfs/share ' /proc/mounts || sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  grep -qF 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs ' /etc/fstab || echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
+            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo mkdir -p /mnt/nfs/share\n  grep -qs '/mnt/nfs/share ' /proc/mounts || sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  grep -qF 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs ' /etc/fstab || echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
             plan.push_str("- Postcheck: mount | grep /mnt/nfs/share || true\n");
         } else {
             plan.push_str("- NFS setup detected. Specify 'server' to configure exports or 'client' to mount a share.\n");
