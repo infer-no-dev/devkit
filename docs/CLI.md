@@ -114,18 +114,44 @@ Arguments:
   <NAME>  Project directory name
 
 Options:
-  -t, --template <TEMPLATE>    Project template to use
-  -l, --language <LANGUAGE>    Programming language
-      --no-interactive         Skip interactive prompts
-      --force                  Force overwrite existing directory
-      --git                    Initialize git repository
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -t, --template <TEMPLATE>
+          Project template to use
+  -l, --language <LANGUAGE>
+          Programming language
+      --no-interactive
+          Skip interactive prompts
+      --force
+          Force overwrite existing directory
+      --git
+          Initialize git repository
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit interactive
@@ -135,19 +161,46 @@ Start the interactive development mode
 Usage: devkit interactive [OPTIONS]
 
 Options:
-  -V, --view <VIEW>            Start with specific view (agents, context, config, logs)
-      --auto-start             Auto-start agents
-  -m, --monitor                Monitor mode (read-only)
-  -w, --web                    Enable web dashboard
-      --web-port <WEB_PORT>    Web dashboard port (default: 8080)
-      --web-host <WEB_HOST>    Web dashboard host (default: 127.0.0.1)
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -V, --view <VIEW>
+          Start with specific view (agents, context, config, logs)
+      --auto-start
+          Auto-start agents
+  -m, --monitor
+          Monitor mode (read-only)
+  -w, --web
+          Enable web dashboard
+      --web-port <WEB_PORT>
+          Web dashboard port (default: 8080)
+      --web-host <WEB_HOST>
+          Web dashboard host (default: 127.0.0.1)
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit analyze
@@ -182,6 +235,20 @@ Options:
           Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
       --color <COLOR>
           Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
   -h, --help
           Print help
 ```
@@ -256,11 +323,11 @@ Options:
       --export-plan <EXPORT_PLAN>
           Export planned file map to JSON (planning only)
 
-  -v, --verbose
-          Enable verbose output
-
       --apply-plan <APPLY_PLAN>
           Apply a previously exported plan JSON instead of generating
+
+  -v, --verbose
+          Enable verbose output
 
   -q, --quiet
           Quiet mode - minimal output
@@ -282,6 +349,29 @@ Options:
           
           [default: auto]
 
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator)
+          
+          [possible values: true, false]
+
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+
   -h, --help
           Print help (see a summary with '-h')
 ```
@@ -293,25 +383,47 @@ Manage AI agents
 Usage: devkit agent [OPTIONS] <COMMAND>
 
 Commands:
-  list         List available agents
-  status       Show agent status
-  start        Start specific agents
-  stop         Stop specific agents
-  create       Create custom agent
-  remove       Remove custom agent
-  logs         Show agent logs
-  cancel-task  Cancel a running or queued task by ID
-  resume       Resume pending/running tasks from snapshots
-  help         Print this message or the help of the given subcommand(s)
+  list          List available agents
+  status        Show agent status
+  start         Start specific agents
+  stop          Stop specific agents
+  create        Create custom agent
+  remove        Remove custom agent
+  logs          Show agent logs
+  cancel-task   Cancel a running or queued task by ID
+  resume        Resume pending/running tasks from snapshots
+  orchestrator  Configure or view orchestrator settings (timeouts, retries, backoff)
+  help          Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit config
@@ -334,13 +446,34 @@ Commands:
   help          Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit inspect
@@ -358,13 +491,34 @@ Commands:
   help           Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit profile
@@ -382,13 +536,34 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit template
@@ -407,13 +582,34 @@ Commands:
   help    Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit status
@@ -474,13 +670,34 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit demo
@@ -490,16 +707,40 @@ Run end-to-end demo workflow
 Usage: devkit demo [OPTIONS]
 
 Options:
-  -s, --step <STEP>            Run specific demo step (analyze, generate, interactive, all)
-      --yes                    Skip confirmation prompts
-      --cleanup                Clean up demo artifacts after completion
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -s, --step <STEP>
+          Run specific demo step (analyze, generate, interactive, all)
+      --yes
+          Skip confirmation prompts
+      --cleanup
+          Clean up demo artifacts after completion
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit blueprint
@@ -519,13 +760,34 @@ Commands:
   help       Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit plugin
@@ -544,13 +806,34 @@ Commands:
   help     Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -c, --config <CONFIG>        Configuration file path
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -c, --config <CONFIG>
+          Configuration file path
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
 
 ### devkit chat
@@ -560,21 +843,67 @@ AI-powered project manager agent
 Usage: devkit chat [OPTIONS]
 
 Options:
-  -p, --project <PROJECT>      Project root directory
-  -c, --config <CONFIG>        Configuration file
-      --debug                  Enable debug output
-  -m, --message <MESSAGE>      Initial message or question to start the conversation
-      --persist                Keep conversation history persistent across sessions
-      --resume                 Continue from previous conversation session
-      --onboarding             Show onboarding greeting (disable with --no-onboarding)
-      --max-turns <MAX_TURNS>  Maximum number of conversation turns [default: 50]
-  -v, --verbose                Enable verbose output
-  -q, --quiet                  Quiet mode - minimal output
-  -C, --directory <DIRECTORY>  Working directory
-      --format <FORMAT>        Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
-      --color <COLOR>          Enable colored output [default: auto]
-  -h, --help                   Print help
+  -p, --project <PROJECT>
+          Project root directory
+  -c, --config <CONFIG>
+          Configuration file
+      --debug
+          Enable debug output
+  -m, --message <MESSAGE>
+          Initial message or question to start the conversation
+      --role <ROLE>
+          Assistant role (developer|sysadmin|general)
+      --execute
+          Execute sysadmin plans automatically (dangerous; default false)
+      --persist
+          Keep conversation history persistent across sessions
+      --resume
+          Continue from previous conversation session
+      --onboarding
+          Show onboarding greeting (disable with --no-onboarding)
+      --max-turns <MAX_TURNS>
+          Maximum number of conversation turns [default: 50]
+      --force-generate
+          Force code generation regardless of detected intent (session-wide)
+      --no-codegen
+          Disable code generation (session-wide)
+  -v, --verbose
+          Enable verbose output
+  -q, --quiet
+          Quiet mode - minimal output
+  -C, --directory <DIRECTORY>
+          Working directory
+      --format <FORMAT>
+          Output format (text, json, yaml) [default: text] [possible values: text, json, yaml, table]
+      --color <COLOR>
+          Enable colored output [default: auto]
+      --orchestrator-task-timeout-seconds <ORCHESTRATOR_TASK_TIMEOUT_SECONDS>
+          Task timeout in seconds (orchestrator)
+      --orchestrator-retry-failed-tasks <ORCHESTRATOR_RETRY_FAILED_TASKS>
+          Enable retries (orchestrator) [possible values: true, false]
+      --orchestrator-max-retry-attempts <ORCHESTRATOR_MAX_RETRY_ATTEMPTS>
+          Max retry attempts (orchestrator)
+      --orchestrator-backoff <ORCHESTRATOR_BACKOFF>
+          Backoff strategy: fixed|exponential (orchestrator)
+      --orchestrator-backoff-base-secs <ORCHESTRATOR_BACKOFF_BASE_SECS>
+          Base/backoff seconds (orchestrator)
+      --orchestrator-backoff-factor <ORCHESTRATOR_BACKOFF_FACTOR>
+          Backoff factor (orchestrator, exponential only)
+      --orchestrator-backoff-max-secs <ORCHESTRATOR_BACKOFF_MAX_SECS>
+          Backoff max seconds (orchestrator, exponential only)
+  -h, --help
+          Print help
 ```
+
+In-chat commands:
+
+- force on | force off — enable/disable forced code generation
+- no-codegen on | no-codegen off — disable/enable code generation
+- role developer|sysadmin|general — switch assistant role
+- execute on | execute off — enable/disable execution (sysadmin)
+- stacks — list scaffolding presets
+- status — shows toggles and recent files
+- quickstart — short guided intro
 
 ### devkit session
 ```text

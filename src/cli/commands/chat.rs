@@ -8,9 +8,11 @@
 use crate::cli::{ChatArgs, CliRunner};
 use crate::codegen::stubs;
 use crossterm::style::Color;
-use std::io::{self, Write, Read, IsTerminal};
+use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use crate::shell::ShellManager;
+//use is_terminal::IsTerminal;
 
 /// Conversation state for the chat project manager
 #[derive(Debug, Clone)]
@@ -19,6 +21,11 @@ struct ConversationState {
     project_context: Option<PathBuf>,
     last_generated_files: Vec<PathBuf>,
     conversation_history: Vec<(String, String)>, // (user, assistant) pairs
+    // Session toggles
+    force_generate: bool,
+    no_codegen: bool,
+    current_role: AssistantRole,
+    execute_enabled: bool,
 }
 
 impl ConversationState {
@@ -28,28 +35,33 @@ impl ConversationState {
             project_context,
             last_generated_files: Vec::new(),
             conversation_history: Vec::new(),
+            force_generate: false,
+            no_codegen: false,
+            current_role: AssistantRole::Sysadmin,
+            execute_enabled: false,
         }
     }
 
     fn add_turn(&mut self, user_input: &str, assistant_response: &str) {
-        self.conversation_history.push((user_input.to_string(), assistant_response.to_string()));
+        self.conversation_history
+            .push((user_input.to_string(), assistant_response.to_string()));
         self.turn_count += 1;
     }
 
     fn get_context_summary(&self) -> String {
         let mut context = String::new();
-        
+
         if let Some(project) = &self.project_context {
             context.push_str(&format!("Project: {}\n", project.display()));
         }
-        
+
         if !self.last_generated_files.is_empty() {
             context.push_str("Recently generated files:\n");
             for file in &self.last_generated_files {
                 context.push_str(&format!("- {}\n", file.display()));
             }
         }
-        
+
         if self.conversation_history.len() > 2 {
             context.push_str("\nRecent conversation context:\n");
             for (user, assistant) in self.conversation_history.iter().rev().take(2).rev() {
@@ -57,7 +69,7 @@ impl ConversationState {
                 context.push_str(&format!("Assistant: {}\n", assistant));
             }
         }
-        
+
         context
     }
 }
@@ -65,24 +77,50 @@ impl ConversationState {
 /// Run the chat project manager
 pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn std::error::Error>> {
     let mut state = ConversationState::new(args.project.clone());
-    
+    // Initialize session toggles from CLI flags
+    state.force_generate = args.force_generate;
+    state.no_codegen = args.no_codegen;
+    // Initialize role and execute from config/CLI
+    let cfg = runner.config_manager().config().assistant.clone();
+    state.current_role = match args.role.as_deref().unwrap_or(&cfg.default_role).to_lowercase().as_str() {
+        "developer" => AssistantRole::Developer,
+        "general" => AssistantRole::General,
+        _ => AssistantRole::Sysadmin,
+    };
+    state.execute_enabled = args.execute || cfg.execute_default;
+
     // Check if we're in interactive mode (stdin is a terminal)
     let is_interactive = std::io::stdin().is_terminal();
-    
+
+    // Validate mutually exclusive flags
+    if args.force_generate && args.no_codegen {
+        runner.print_error("--force-generate and --no-codegen cannot be used together");
+        return Ok(());
+    }
+
     if is_interactive {
         // Print welcome message only in interactive mode
         runner.print_info("🤖 DevKit AI Project Manager");
         if args.onboarding {
             runner.print_output("\nQuickstart (30s):\n", Some(Color::Cyan));
-            runner.print_output("  • Ask for code: 'Generate a Rust Axum API with /health'\n", None);
+            runner.print_output(
+                "  • Ask for code: 'Generate a Rust Axum API with /health'\n",
+                None,
+            );
             runner.print_output("  • Scaffold: devkit generate \"todo api\" --language rust --stack rust-axum --root ./api\n", None);
-            runner.print_output("  • Key commands: help | status | stacks | quickstart | clear | exit\n", None);
-            runner.print_output("  • Tip: type 'stacks' here to see presets (CLI flag is --list-stacks)\n", Some(Color::DarkGrey));
+            runner.print_output(
+                "  • Key commands: help | status | stacks | quickstart | clear | exit\n",
+                None,
+            );
+            runner.print_output(
+                "  • Tip: type 'stacks' here to see presets (CLI flag is --list-stacks)\n",
+                Some(Color::DarkGrey),
+            );
         } else {
             runner.print_info("Type 'help' for commands, 'exit' or 'quit' to end the session");
         }
     }
-    
+
     // Handle initial message if provided
     if let Some(initial_message) = &args.message {
         println!("\nYou: {}", initial_message);
@@ -91,7 +129,7 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             return Ok(()); // Exit after processing initial message in non-interactive mode
         }
     }
-    
+
     // In non-interactive mode, read from stdin until EOF
     if !is_interactive {
         let mut buffer = String::new();
@@ -106,26 +144,29 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
         }
         return Ok(());
     }
-    
+
     // Main conversation loop (interactive mode only)
     loop {
         if state.turn_count >= args.max_turns {
-            runner.print_warning(&format!("Reached maximum conversation turns ({})", args.max_turns));
+            runner.print_warning(&format!(
+                "Reached maximum conversation turns ({})",
+                args.max_turns
+            ));
             break;
         }
-        
+
         // Get user input
         print!("\nYou: ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(0) => break, // EOF
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => break, // Error reading
         }
         let input = input.trim();
-        
+
         // Handle special commands
         match input.to_lowercase().as_str() {
             "exit" | "quit" | "q" => {
@@ -144,6 +185,57 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
                 show_status(runner, &state);
                 continue;
             }
+            // Role switches
+            cmd if cmd.starts_with("role ") => {
+                let role = cmd.trim_start_matches("role ").trim();
+                match role {
+                    "developer" => state.current_role = AssistantRole::Developer,
+                    "general" => state.current_role = AssistantRole::General,
+                    "sysadmin" => state.current_role = AssistantRole::Sysadmin,
+                    _ => runner.print_warning("Unknown role. Use: role developer|sysadmin|general"),
+                }
+                runner.print_info(&format!("Role set to {:?}", state.current_role));
+                continue;
+            }
+            // Toggle generation modes
+            "force on" | "force enable" => {
+                if state.no_codegen {
+                    runner.print_warning("Disabling --no-codegen to enable force mode");
+                    state.no_codegen = false;
+                }
+                state.force_generate = true;
+                runner.print_success("Force-generate mode enabled");
+                continue;
+            }
+            "force off" | "force disable" => {
+                state.force_generate = false;
+                runner.print_info("Force-generate mode disabled");
+                continue;
+            }
+            "no-codegen on" | "nocodegen on" | "no codegen on" | "no-codegen enable" => {
+                if state.force_generate {
+                    runner.print_warning("Disabling force-generate to enable no-codegen mode");
+                    state.force_generate = false;
+                }
+                state.no_codegen = true;
+                runner.print_success("No-codegen mode enabled");
+                continue;
+            }
+            "no-codegen off" | "nocodegen off" | "no codegen off" | "no-codegen disable" => {
+                state.no_codegen = false;
+                runner.print_info("No-codegen mode disabled");
+                continue;
+            }
+            "mode" | "modes" | "settings" => {
+                runner.print_info(&format!(
+                    "Modes: force-generate={}, no-codegen={}, role={:?}, execute={}",
+                    state.force_generate, state.no_codegen, state.current_role, state.execute_enabled
+                ));
+                continue;
+            }
+            // Execute toggle
+            "execute on" => { state.execute_enabled = true; runner.print_success("Execute mode enabled (use with caution)"); continue; }
+            "execute off" => { state.execute_enabled = false; runner.print_info("Execute mode disabled"); continue; }
             "stacks" | "list stacks" | "stack presets" => {
                 show_stacks(runner);
                 continue;
@@ -158,8 +250,8 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             "" => continue, // Empty input, skip
             _ => {}
         }
-        
-    // Handle user input
+
+        // Handle user input
         // If user typed CLI flags, guide them
         if input.starts_with('-') {
             runner.print_output("\nTip: Flags like --list-stacks are for CLI. In chat, type 'stacks' to see presets or 'quickstart'.\n", Some(Color::DarkGrey));
@@ -170,7 +262,7 @@ pub async fn run(runner: &mut CliRunner, args: ChatArgs) -> Result<(), Box<dyn s
             runner.print_error(&format!("Error processing request: {}", e));
         }
     }
-    
+
     Ok(())
 }
 
@@ -182,10 +274,19 @@ async fn handle_user_input(
     args: &ChatArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_info("🤔 Analyzing your request...");
-    
+
     // Analyze the user input to determine if it's a code generation request
-    let analysis = analyze_user_intent(input, state);
-    
+    let settings = load_intent_settings(runner);
+    let mut analysis = analyze_user_intent(input, state, &settings);
+
+    // Apply overrides (CLI flags or toggles)
+    if args.force_generate || state.force_generate {
+        analysis.intent = UserIntent::CodeGeneration;
+        analysis.confidence = 1.0;
+    } else if (args.no_codegen || state.no_codegen) && matches!(analysis.intent, UserIntent::CodeGeneration) {
+        analysis.intent = UserIntent::Clarification;
+    }
+
     match analysis.intent {
         UserIntent::CodeGeneration => {
             let assistant_response = format!(
@@ -193,15 +294,15 @@ async fn handle_user_input(
                 analysis.inferred_language.as_deref().unwrap_or("code"),
                 input
             );
-            
+
             runner.print_output(
                 &format!("\nAssistant: {}\n", assistant_response),
                 Some(Color::Green),
             );
-            
+
             // Execute code generation
             execute_generate_command(runner, state, &analysis, input, args).await?;
-            
+
             state.add_turn(input, &assistant_response);
         }
         UserIntent::Question => {
@@ -214,13 +315,44 @@ async fn handle_user_input(
             runner.print_output(&format!("\nAssistant: {}\n", response), Some(Color::Green));
             state.add_turn(input, &response);
         }
+        UserIntent::SystemAdmin => {
+            let response = handle_sysadmin(input, state);
+            runner.print_output(&format!("\nAssistant (sysadmin plan):\n{}\n", response), Some(Color::Cyan));
+            if state.execute_enabled {
+                if std::io::stdin().is_terminal() {
+                    runner.print_warning("Execute is ON. These commands may change your system.");
+                    print!("Proceed to execute for your distro? [y/N]: ");
+                    let _ = std::io::stdout().flush();
+                    let mut ans = String::new();
+                    let _ = std::io::stdin().read_line(&mut ans);
+                    if matches!(ans.trim().to_lowercase().as_str(), "y" | "yes") {
+                        if let Err(e) = execute_linux_plan(runner, &response).await {
+                            runner.print_error(&format!("Execution error: {}", e));
+                        }
+                    } else {
+                        runner.print_info("Skipped execution.");
+                    }
+                } else {
+                    runner.print_warning("Non-interactive session: skipping execution. Use explicit commands.");
+                }
+            } else {
+                runner.print_info("Plan only. Type 'execute on' to enable execution.");
+            }
+            state.add_turn(input, &response);
+        }
         UserIntent::Clarification => {
-            let response = request_clarification(input);
+            let mut response = request_clarification(input);
+            if args.no_codegen || state.no_codegen {
+                response = format!(
+                    "{}\n\n(Note: Code generation is disabled for this session --no-codegen.)",
+                    response
+                );
+            }
             runner.print_output(&format!("\nAssistant: {}\n", response), Some(Color::Yellow));
             state.add_turn(input, &response);
         }
     }
-    
+
     Ok(())
 }
 
@@ -238,77 +370,197 @@ enum UserIntent {
     CodeGeneration,
     Question,
     ProjectManagement,
+    SystemAdmin,
     Clarification,
 }
 
+/// Settings used by the chat intent detector (loaded from config)
+#[derive(Debug, Clone)]
+struct ChatIntentSettings {
+    require_action_keyword: bool,
+    min_code_score: f32,
+    min_margin: f32,
+    entity_weight: f32,
+    language_hint_weight: f32,
+}
+
+fn load_intent_settings(runner: &CliRunner) -> ChatIntentSettings {
+    let cfg = runner.config_manager().config().clone();
+    ChatIntentSettings {
+        require_action_keyword: cfg.chat.require_action_keyword,
+        min_code_score: cfg.chat.min_code_score,
+        min_margin: cfg.chat.min_margin,
+        entity_weight: cfg.chat.entity_weight,
+        language_hint_weight: cfg.chat.language_hint_weight,
+    }
+}
+
 /// Analyze user intent from their input
-fn analyze_user_intent(input: &str, state: &ConversationState) -> IntentAnalysis {
+fn analyze_user_intent(input: &str, state: &ConversationState, settings: &ChatIntentSettings) -> IntentAnalysis {
     let input_lower = input.to_lowercase();
-    
-    // Code generation keywords
+
+    // Code generation keywords (action-oriented)
     let code_keywords = [
-        "create", "generate", "write", "build", "make", "implement", "add",
-        "function", "class", "method", "struct", "interface", "component",
-        "script", "program", "module", "library", "api", "endpoint",
-        "test", "tests", "unittest", "integration", "benchmark"
+        "create",
+        "generate",
+        "write",
+        "build",
+        "make",
+        "implement",
+        "add",
+        "scaffold",
+        "compose",
+        "produce",
     ];
-    
+
+    // Entities that often appear in code requests but shouldn't by themselves trigger generation
+    let code_entities = [
+        "function",
+        "class",
+        "method",
+        "struct",
+        "interface",
+        "component",
+        "script",
+        "program",
+        "module",
+        "library",
+        "api",
+        "endpoint",
+        "test",
+        "tests",
+        "unittest",
+        "integration",
+        "benchmark",
+        "file",
+        "directory",
+    ];
+
     // Question keywords
     let question_keywords = [
-        "what", "how", "why", "where", "when", "which", "who",
-        "explain", "describe", "tell me", "show me", "help me understand"
+        "what",
+        "how",
+        "why",
+        "where",
+        "when",
+        "which",
+        "who",
+        "explain",
+        "describe",
+        "tell me",
+        "show me",
+        "help me understand",
     ];
-    
+
     // Project management keywords
     let project_keywords = [
-        "refactor", "clean", "organize", "restructure", "optimize",
-        "fix", "debug", "update", "upgrade", "migrate"
+        "refactor",
+        "clean",
+        "organize",
+        "restructure",
+        "optimize",
+        "fix",
+        "debug",
+        "update",
+        "upgrade",
+        "migrate",
     ];
-    
-    // Language detection
+
+    // Language detection (hints should not alone force codegen)
     let language_hints = vec![
-        ("rust", vec!["rust", "rs", "cargo", "struct", "impl", "trait", "fn", "mut"]),
-        ("python", vec!["python", "py", "def", "class", "import", "pip"]),
-        ("javascript", vec!["javascript", "js", "node", "npm", "const", "let", "function"]),
-        ("typescript", vec!["typescript", "ts", "interface", "type", "declare"]),
+        (
+            "rust",
+            vec![
+                "rust", "rs", "cargo", "struct", "impl", "trait", "fn", "mut",
+            ],
+        ),
+        (
+            "python",
+            vec!["python", "py", "def", "class", "import", "pip"],
+        ),
+        (
+            "javascript",
+            vec![
+                "javascript",
+                "js",
+                "node",
+                "npm",
+                "const",
+                "let",
+                "function",
+            ],
+        ),
+        (
+            "typescript",
+            vec!["typescript", "ts", "interface", "type", "declare"],
+        ),
         ("go", vec!["go", "golang", "func", "package", "import"]),
         ("java", vec!["java", "class", "public", "private", "static"]),
         ("cpp", vec!["c++", "cpp", "class", "namespace", "template"]),
         ("c", vec!["c", "stdio", "malloc", "struct"]),
     ];
-    
+
     let mut code_score: f32 = 0.0;
     let mut question_score: f32 = 0.0;
     let mut project_score: f32 = 0.0;
+    let mut sysadmin_score: f32 = 0.0;
     let mut detected_language = None;
-    
-    // Score for code generation
+
+    let mut code_action_hits = 0u32;
+    let mut _code_entity_hits = 0u32;
+
+    // Score for code generation (actions)
     for keyword in &code_keywords {
         if input_lower.contains(keyword) {
             code_score += 1.0;
+            code_action_hits += 1;
         }
     }
-    
+
+    // Entities (low weight)
+    for ent in &code_entities {
+        if input_lower.contains(ent) {
+            code_score += settings.entity_weight; // very small boost
+            _code_entity_hits += 1;
+        }
+    }
+
     // Score for questions
     for keyword in &question_keywords {
         if input_lower.contains(keyword) {
             question_score += 1.0;
         }
     }
-    
+
     // Score for project management
     for keyword in &project_keywords {
         if input_lower.contains(keyword) {
             project_score += 1.0;
         }
     }
-    
-    // Detect programming language
+
+    // Sysadmin keywords
+    let sysadmin_keywords = [
+        "install", "update", "upgrade", "uninstall", "remove",
+        "apt", "dnf", "yum", "pacman", "brew", "choco", "winget",
+        "systemctl", "service", "ufw", "iptables", "firewall",
+        "docker", "podman", "kubectl", "minikube",
+        "nvidia", "driver",
+        // NFS related
+        "nfs", "nfs-kernel-server", "nfs-utils", "showmount", "mount",
+    ];
+    for keyword in &sysadmin_keywords {
+        if input_lower.contains(keyword) {
+            sysadmin_score += 1.0;
+        }
+    }
+
+    // Detect programming language (tiny hint)
     for (lang, hints) in &language_hints {
         for hint in hints {
             if input_lower.contains(hint) {
                 detected_language = Some(lang.to_string());
-                code_score += 0.5; // Language hints boost code generation score
+                code_score += settings.language_hint_weight; // language hints should not dominate
                 break;
             }
         }
@@ -316,40 +568,71 @@ fn analyze_user_intent(input: &str, state: &ConversationState) -> IntentAnalysis
             break;
         }
     }
-    
+
     // Adjust scores based on context
     if input.ends_with('?') {
         question_score += 1.0;
     }
-    
-    if input_lower.contains("file") || input_lower.contains("directory") {
-        code_score += 0.5;
+
+    // Gate: require at least one action keyword to consider codegen
+    let has_action_keyword = code_action_hits > 0;
+
+    // Role bias
+    if matches!(state.current_role, AssistantRole::Sysadmin) {
+        sysadmin_score += 0.5;
     }
-    
-    // Determine intent based on highest score
-    let max_score = code_score.max(question_score).max(project_score);
-    let intent = if max_score == 0.0 {
-        UserIntent::Clarification
-    } else if code_score == max_score {
-        UserIntent::CodeGeneration
-    } else if question_score == max_score {
-        UserIntent::Question
-    } else {
-        UserIntent::ProjectManagement
-    };
-    
+
+    // Determine intent using thresholds and margins (configurable)
+    let codegen_eligible = (!settings.require_action_keyword || has_action_keyword)
+        && code_score >= settings.min_code_score
+        && code_score >= question_score + settings.min_margin
+        && code_score >= project_score + settings.min_margin
+        && code_score >= sysadmin_score + settings.min_margin;
+
+    let mut intent = UserIntent::Clarification;
+    let mut max_score = 0.0f32;
+    for (kind, score) in [
+        (UserIntent::CodeGeneration, code_score),
+        (UserIntent::Question, question_score),
+        (UserIntent::ProjectManagement, project_score),
+        (UserIntent::SystemAdmin, sysadmin_score),
+    ] {
+        if score >= max_score {
+            max_score = score;
+            intent = kind;
+        }
+    }
+    if !codegen_eligible && matches!(intent, UserIntent::CodeGeneration) {
+        // Demote to clarification if codegen not eligible
+        intent = UserIntent::Clarification;
+    }
+
     // Infer output path if possible
     let output_path = if let Some(project) = &state.project_context {
         Some(project.clone())
     } else {
         None
     };
-    
+
+    // Confidence: relative dominance of chosen intent
+    let total = code_score + question_score + project_score + sysadmin_score;
+    let confidence = if total > 0.0 {
+        match intent {
+            UserIntent::CodeGeneration => code_score / total,
+            UserIntent::Question => question_score / total,
+            UserIntent::ProjectManagement => project_score / total,
+            UserIntent::SystemAdmin => sysadmin_score / total,
+            UserIntent::Clarification => 0.0,
+        }
+    } else {
+        0.0
+    };
+
     IntentAnalysis {
         intent,
         inferred_language: detected_language,
         inferred_output_path: output_path,
-        confidence: max_score / (code_keywords.len() as f32),
+        confidence,
     }
 }
 
@@ -362,34 +645,36 @@ async fn execute_generate_command(
     _args: &ChatArgs,
 ) -> Result<(), Box<dyn std::error::Error>> {
     runner.print_verbose("Analyzing generation request...");
-    
+
     // Try real code generation; fall back to stub if unavailable
     let generated_code = match generate_real_code(runner, analysis, prompt).await {
         Ok(code) => code,
         Err(_) => simulate_code_generation(analysis, prompt),
     };
     let output_path = determine_output_path(analysis, prompt, state);
-    
+
     // Show what we're generating
     runner.print_output(
-        &format!("\n🔄 Generating {} code for: {}\n", 
-                analysis.inferred_language.as_deref().unwrap_or("generic"),
-                prompt.chars().take(50).collect::<String>()),
-        Some(Color::Blue)
+        &format!(
+            "\n🔄 Generating {} code for: {}\n",
+            analysis.inferred_language.as_deref().unwrap_or("generic"),
+            prompt.chars().take(50).collect::<String>()
+        ),
+        Some(Color::Blue),
     );
-    
+
     // Simulate some processing time
     tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
-    
+
     // Display the generated code
     runner.print_success("✅ Code generated successfully!");
     runner.print_output("\n📝 Generated Code:\n", Some(Color::Green));
     runner.print_code(&generated_code);
-    
+
     // Show where it would be saved
     if let Some(path) = &output_path {
         runner.print_info(&format!("💾 Would save to: {}", path.display()));
-        
+
         // Update conversation state
         state.last_generated_files.push(path.clone());
         // Keep only the last 5 files for context
@@ -400,17 +685,17 @@ async fn execute_generate_command(
         let filename = stubs::suggest_filename(prompt, analysis.inferred_language.as_deref());
         runner.print_info(&format!("💾 Would save to: {}", filename));
     }
-    
+
     // Provide helpful next steps
     suggest_next_steps(runner, analysis, prompt);
-    
+
     Ok(())
 }
 
 /// Handle questions about the project or general programming topics
 fn handle_question(input: &str, state: &ConversationState) -> String {
     let input_lower = input.to_lowercase();
-    
+
     if input_lower.contains("project") || input_lower.contains("codebase") {
         if let Some(project) = &state.project_context {
             format!(
@@ -430,7 +715,7 @@ fn handle_question(input: &str, state: &ConversationState) -> String {
 /// Handle project management requests
 fn handle_project_management(input: &str, _state: &ConversationState) -> String {
     let input_lower = input.to_lowercase();
-    
+
     if input_lower.contains("refactor") {
         "I can help you refactor code! Please describe what you'd like to refactor - for example:\n• 'Refactor this function to use better error handling'\n• 'Clean up the structure of my module'\n• 'Optimize this algorithm for performance'\n\nWhat specific refactoring would you like me to help with?".to_string()
     } else if input_lower.contains("fix") || input_lower.contains("debug") {
@@ -454,28 +739,251 @@ fn request_clarification(input: &str) -> String {
     )
 }
 
+#[derive(Debug, Clone, Copy)]
+enum AssistantRole { Developer, Sysadmin, General }
+
+/// Simple sysadmin planner (Linux-first)
+fn handle_sysadmin(input: &str, _state: &ConversationState) -> String {
+    let q = input.to_lowercase();
+    let mut plan = String::new();
+    plan.push_str("Plan (review before executing):\n");
+    if q.contains("docker") && (q.contains("install") || q.contains("setup")) {
+        plan.push_str("- Precheck: docker --version || true\n");
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y docker.io\n  sudo systemctl enable --now docker\n  id -nG \"$USER\" | grep -qw docker || sudo usermod -aG docker $USER\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y docker\n  sudo systemctl enable --now docker\n");
+        plan.push_str("- Postcheck: systemctl is-active docker && docker --version\n");
+    } else if q.contains("docker compose") || q.contains("compose plugin") {
+        plan.push_str("- Precheck: docker compose version || true\n");
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  docker compose version >/dev/null 2>&1 || sudo apt-get install -y docker-compose-plugin\n");
+        plan.push_str("- RHEL/Fedora:\n  docker compose version >/dev/null 2>&1 || sudo dnf install -y docker-compose\n");
+        plan.push_str("- Postcheck: docker compose version\n");
+    } else if q.contains("open port") || q.contains("ufw") {
+        // naive extraction
+        let port = q.split_whitespace().find(|t| t.chars().all(|c| c.is_ascii_digit())).unwrap_or("8080");
+        plan.push_str(&format!("- Debian/Ubuntu (ufw):\n  sudo apt-get install -y ufw\n  (command -v ufw >/dev/null 2>&1 && ! sudo ufw status | grep -q '{}/tcp') && sudo ufw allow {}/tcp || true\n  sudo ufw status\n", port, port));
+        plan.push_str(&format!("- RHEL/Fedora (firewalld):\n  sudo firewall-cmd --list-ports | grep -q '{}/tcp' || sudo firewall-cmd --add-port={}/tcp --permanent\n  sudo firewall-cmd --reload\n", port, port));
+    } else if q.contains("enable ufw") || (q.contains("ufw") && q.contains("enable")) {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get install -y ufw\n  sudo ufw status | grep -q 'Status: active' || sudo ufw enable\n  sudo ufw status\n");
+    } else if q.contains("fail2ban") {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y fail2ban\n  sudo systemctl enable --now fail2ban\n  sudo systemctl status fail2ban --no-pager\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y fail2ban\n  sudo systemctl enable --now fail2ban\n  sudo systemctl status fail2ban --no-pager\n");
+    } else if (q.contains("update") && q.contains("system")) || q == "update" || q.contains("upgrade") {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get upgrade -y\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf upgrade -y\n");
+    } else if q.contains("build-essential") || q.contains("dev tools") || q.contains("gcc") || q.contains("make") {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y build-essential pkg-config\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf groupinstall -y 'Development Tools'\n  sudo dnf install -y pkgconf-pkg-config\n");
+    } else if q.contains("python dev") || q.contains("python headers") || (q.contains("python") && q.contains("venv")) {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y python3-venv python3-dev\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y python3-venv python3-devel\n");
+    } else if q.contains("node") || q.contains("nvm") {
+        plan.push_str("- Precheck: node --version || true\n");
+        plan.push_str("- Debian/Ubuntu:\n  [ -d \"$HOME/.nvm\" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && (command -v node >/dev/null 2>&1 || nvm install --lts)\n");
+        plan.push_str("- RHEL/Fedora:\n  [ -d \"$HOME/.nvm\" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n  export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && (command -v node >/dev/null 2>&1 || nvm install --lts)\n");
+        plan.push_str("- Postcheck: node --version && npm --version\n");
+    } else if q.contains("golang") || q.contains("go lang") || q == "go" {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y golang\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y golang\n");
+    } else if q.contains("flatpak") && (q.contains("install") || q.contains("setup") || q.contains("enable")) {
+        plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y flatpak\n  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo\n");
+        plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y flatpak\n  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo\n");
+    } else if q.contains("kubectl") || q.contains("kubernetes client") {
+        plan.push_str("- Debian/Ubuntu (simple):\n  sudo apt-get update\n  command -v kubectl >/dev/null 2>&1 || sudo apt-get install -y kubectl || echo 'Consider installing from Kubernetes repo for latest'\n");
+        plan.push_str("- RHEL/Fedora:\n  command -v kubectl >/dev/null 2>&1 || sudo dnf install -y kubernetes-client || echo 'Package name may vary (kubectl)'\n");
+    } else if q.contains("minikube") {
+        plan.push_str("- Debian/Ubuntu:\n  command -v minikube >/dev/null 2>&1 || (curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 && sudo install minikube-linux-amd64 /usr/local/bin/minikube)\n");
+        plan.push_str("- RHEL/Fedora:\n  command -v minikube >/dev/null 2>&1 || (curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 && sudo install minikube-linux-amd64 /usr/local/bin/minikube)\n");
+    } else if q.contains("nfs") {
+        let wants_server = q.contains("server") || q.contains("export") || q.contains("share");
+        let wants_client = q.contains("client") || q.contains("mount") || q.contains("fstab");
+        if wants_server && !wants_client {
+            plan.push_str("- Precheck: rpcinfo -p || true\n");
+            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-kernel-server\n  sudo install -d -m 0775 /srv/nfs/share\n  sudo chown nobody:nogroup /srv/nfs/share\n  grep -qF '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' /etc/exports || echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo exportfs -ra\n  sudo systemctl enable --now nfs-server || sudo systemctl enable --now nfs-kernel-server\n  (command -v ufw >/dev/null 2>&1 && ! sudo ufw status | grep -q '2049/tcp') && sudo ufw allow 2049/tcp || true\n");
+            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo install -d -m 0775 /srv/nfs/share\n  grep -qF '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' /etc/exports || echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo systemctl enable --now nfs-server\n  sudo exportfs -ra\n");
+            plan.push_str("- Postcheck: showmount -e localhost\n");
+        } else if wants_client && !wants_server {
+            plan.push_str("- Precheck: getent hosts nfs-server.local || true\n");
+            plan.push_str("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y nfs-common\n  sudo mkdir -p /mnt/nfs/share\n  grep -qs '/mnt/nfs/share ' /proc/mounts || sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  grep -qF 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs ' /etc/fstab || echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
+            plan.push_str("- RHEL/Fedora:\n  sudo dnf install -y nfs-utils\n  sudo mkdir -p /mnt/nfs/share\n  grep -qs '/mnt/nfs/share ' /proc/mounts || sudo mount -t nfs nfs-server.local:/srv/nfs/share /mnt/nfs/share\n  grep -qF 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs ' /etc/fstab || echo 'nfs-server.local:/srv/nfs/share /mnt/nfs/share nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab\n");
+            plan.push_str("- Postcheck: mount | grep /mnt/nfs/share || true\n");
+        } else {
+            plan.push_str("- NFS setup detected. Specify 'server' to configure exports or 'client' to mount a share.\n");
+            plan.push_str("- Example server (Debian/Ubuntu):\n  sudo apt-get install -y nfs-kernel-server\n  sudo mkdir -p /srv/nfs/share && echo '/srv/nfs/share 192.168.0.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports\n  sudo exportfs -ra && sudo systemctl enable --now nfs-server\n");
+            plan.push_str("- Example client (Debian/Ubuntu):\n  sudo apt-get install -y nfs-common\n  sudo mkdir -p /mnt/nfs/share && sudo mount -t nfs <server>:/srv/nfs/share /mnt/nfs/share\n");
+        }
+    } else if q.contains("install ") {
+        // naive package extraction: word after 'install'
+        let mut pkg = "";
+        if let Some(idx) = q.find("install ") {
+            let rest = &q[idx + 8..];
+            pkg = rest.split_whitespace().next().unwrap_or("");
+        }
+        if !pkg.is_empty() {
+            plan.push_str(&format!("- Debian/Ubuntu:\n  sudo apt-get update\n  sudo apt-get install -y {}\n", pkg));
+            plan.push_str(&format!("- RHEL/Fedora:\n  sudo dnf install -y {}\n", pkg));
+        } else {
+            plan.push_str("- Could not determine package name to install. Please specify.\n");
+        }
+    } else if q.contains("nvidia container toolkit") {
+        plan.push_str("- NOTE: NVIDIA container toolkit setup varies by driver/distro; review official docs before executing.\n");
+        plan.push_str("- Debian/Ubuntu (sketch):\n  distribution=$(. /etc/os-release;echo $ID$VERSION_ID)\n  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg\n  curl -fsSL https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \n    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \n    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list\n  sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit\n  sudo nvidia-ctk runtime configure --runtime=docker\n  sudo systemctl restart docker\n");
+    } else {
+        plan.push_str("- Analyze request and choose OS-appropriate steps\n");
+        plan.push_str("- Provide precheck/postcheck and safe defaults\n");
+    }
+    plan
+}
+
+async fn execute_linux_plan(runner: &CliRunner, plan: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let shell = ShellManager::new().map_err(|e| format!("shell init: {:?}", e))?;
+    // Sudo policy
+    let sudo_mode = runner.config_manager().config().assistant.sudo_mode.to_lowercase();
+    // If not root and sudo_mode requires elevation, ensure passwordless or pre-auth cached
+    let id = shell.execute_command("id -u", None).await.ok();
+    let is_root = id.as_ref().map(|r| r.stdout.trim() == "0").unwrap_or(false);
+    if !is_root && (sudo_mode == "auto" || sudo_mode == "always") {
+        // Try non-interactive sudo check
+        if let Ok(check) = shell.execute_command("sudo -n true", None).await {
+            if check.exit_code != 0 {
+                runner.print_warning("Sudo requires a password. Please run 'sudo -v' in this terminal to cache credentials, then retry execution.");
+                return Ok(()); // do not proceed
+            }
+        } else {
+            runner.print_warning("Unable to verify sudo. Skipping execution. Run 'sudo -v' and retry.");
+            return Ok(());
+        }
+    }
+    // Detect package manager preference
+    let apt = shell.command_exists("apt-get").await;
+    let dnf = shell.command_exists("dnf").await || shell.command_exists("yum").await;
+
+    // Extract commands for target section
+    let target = if apt { "Debian/Ubuntu:" } else if dnf { "RHEL/Fedora:" } else { "" };
+    let mut cmds: Vec<String> = Vec::new();
+    let mut capture = target.is_empty();
+    for line in plan.lines() {
+        let l = line.trim_end();
+        if l.starts_with("- Debian/Ubuntu:") { capture = target == "Debian/Ubuntu:"; continue; }
+        if l.starts_with("- Fedora/RHEL:") || l.starts_with("- RHEL/Fedora:") { capture = target == "RHEL/Fedora:"; continue; }
+        if l.starts_with("- Precheck") || l.starts_with("- Postcheck") { continue; }
+        if capture {
+            if l.starts_with("  ") {
+                let cmd = l.trim();
+                if !cmd.is_empty() {
+                    cmds.push(cmd.to_string());
+                }
+            }
+        }
+    }
+    if cmds.is_empty() {
+        runner.print_warning("No executable commands detected for current distro. Printing plan only.");
+        return Ok(());
+    }
+
+    runner.print_info("Executing plan (Linux)...");
+    for cmd in cmds {
+        runner.print_output(&format!("$ {}\n", cmd), Some(Color::Cyan));
+        let res = shell.execute_command(&cmd, None).await;
+        match res {
+            Ok(r) => {
+                if r.exit_code == 0 {
+                    if !r.stdout.trim().is_empty() { runner.print_output(&format!("{}\n", r.stdout), None); }
+                    runner.print_success(&format!("ok ({} ms)", r.execution_time_ms));
+                } else {
+                    runner.print_warning(&format!("exit {}\n{}", r.exit_code, r.stderr));
+                    return Err(format!("Command failed: {}", cmd).into());
+                }
+            }
+            Err(e) => {
+                return Err(format!("Shell error: {:?}", e).into());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Show help information
 fn show_help(runner: &CliRunner) {
     runner.print_info("DevKit Chat Liaison Agent Commands:");
-    runner.print_output("  help, h       - Show this help message\n", Some(Color::Cyan));
-    runner.print_output("  status        - Show current session status\n", Some(Color::Cyan));
-    runner.print_output("  clear         - Clear conversation history\n", Some(Color::Cyan));
-    runner.print_output("  exit, quit, q - End the chat session\n", Some(Color::Cyan));
-    runner.print_output("\nFor code generation, just describe what you want to create:\n", None);
-    runner.print_output("  'Create a function to calculate fibonacci numbers'\n", Some(Color::Green));
-    runner.print_output("  'Generate a REST API endpoint for user management'\n", Some(Color::Green));
-    runner.print_output("  'Write unit tests for my parser module'\n", Some(Color::Green));
-    runner.print_output("\nType 'quickstart' for a short guided intro.\n", Some(Color::DarkGrey));
+    runner.print_output(
+        "  help, h       - Show this help message\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  status        - Show current session status\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  clear         - Clear conversation history\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  status        - Show toggles and recent files\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  mode|settings - Show current chat mode toggles\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  force on|off  - Enable/disable forced code generation\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  no-codegen on|off - Enable/disable code generation\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  role <developer|sysadmin|general> - Switch assistant role\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  execute on|off - Enable/disable command execution (sysadmin)\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "  exit, quit, q - End the chat session\n",
+        Some(Color::Cyan),
+    );
+    runner.print_output(
+        "\nFor code generation, just describe what you want to create:\n",
+        None,
+    );
+    runner.print_output(
+        "  'Create a function to calculate fibonacci numbers'\n",
+        Some(Color::Green),
+    );
+    runner.print_output(
+        "  'Generate a REST API endpoint for user management'\n",
+        Some(Color::Green),
+    );
+    runner.print_output(
+        "  'Write unit tests for my parser module'\n",
+        Some(Color::Green),
+    );
+    runner.print_output(
+        "\nType 'quickstart' for a short guided intro.\n",
+        Some(Color::DarkGrey),
+    );
 }
 
 fn show_quickstart(runner: &CliRunner) {
     runner.print_output("\n🚀 Quickstart\n", Some(Color::Cyan));
     runner.print_output("1) Ask for code in plain English.\n", None);
-    runner.print_output("   e.g., 'Create a Next.js app with / and /about'\n", Some(Color::DarkGrey));
+    runner.print_output(
+        "   e.g., 'Create a Next.js app with / and /about'\n",
+        Some(Color::DarkGrey),
+    );
     runner.print_output("2) See scaffolds (in chat): type 'stacks'\n", None);
     runner.print_output("3) Generate/scaffold via CLI when needed.\n", None);
-    runner.print_output("   devkit generate \"web app\" --language typescript --stack nextjs --root ./web\n", Some(Color::DarkGrey));
-    runner.print_output("4) Useful commands: help, status, stacks, quickstart, clear, exit.\n", None);
+    runner.print_output(
+        "   devkit generate \"web app\" --language typescript --stack nextjs --root ./web\n",
+        Some(Color::DarkGrey),
+    );
+    runner.print_output(
+        "4) Useful commands: help, status, stacks, quickstart, clear, exit.\n",
+        None,
+    );
 }
 
 fn show_stacks(runner: &CliRunner) {
@@ -490,27 +998,52 @@ fn show_stacks(runner: &CliRunner) {
         "python-fastapi",
         "python-fastapi-sqlalchemy",
     ];
-    for s in stacks { runner.print_output(&format!("  • {}\n", s), None); }
-    runner.print_output("Use `devkit generate \"...\" --language <lang> --stack <preset> --root <dir>`\n", Some(Color::DarkGrey));
+    for s in stacks {
+        runner.print_output(&format!("  • {}\n", s), None);
+    }
+    runner.print_output(
+        "Use `devkit generate \"...\" --language <lang> --stack <preset> --root <dir>`\n",
+        Some(Color::DarkGrey),
+    );
 }
 
 /// Show current session status
 fn show_status(runner: &CliRunner, state: &ConversationState) {
     runner.print_info("Current Session Status:");
-    runner.print_output(&format!("  Conversation turns: {}\n", state.turn_count), None);
-    
+    runner.print_output(
+        &format!("  Conversation turns: {}\n", state.turn_count),
+        None,
+    );
+
     if let Some(project) = &state.project_context {
-        runner.print_output(&format!("  Project directory: {}\n", project.display()), None);
+        runner.print_output(
+            &format!("  Project directory: {}\n", project.display()),
+            None,
+        );
     } else {
         runner.print_output("  Project directory: Not specified\n", None);
     }
-    
-    runner.print_output(&format!("  Generated files: {}\n", state.last_generated_files.len()), None);
-    
+
+    runner.print_output(
+        &format!("  Generated files: {}\n", state.last_generated_files.len()),
+        None,
+    );
+
+    runner.print_output(
+        &format!(
+            "  Modes: force-generate={}, no-codegen={}, role={:?}, execute={}\n",
+            state.force_generate, state.no_codegen, state.current_role, state.execute_enabled
+        ),
+        None,
+    );
+
     if !state.last_generated_files.is_empty() {
         runner.print_output("  Recent files:\n", None);
         for file in &state.last_generated_files {
-            runner.print_output(&format!("    - {}\n", file.display()), Some(Color::DarkGrey));
+            runner.print_output(
+                &format!("    - {}\n", file.display()),
+                Some(Color::DarkGrey),
+            );
         }
     }
 }
@@ -553,17 +1086,12 @@ async fn generate_real_code(
     Ok(result.generated_code)
 }
 
-
-
-
-
-
-
-
-
-
 /// Determine the appropriate output path for generated code
-fn determine_output_path(analysis: &IntentAnalysis, prompt: &str, state: &ConversationState) -> Option<PathBuf> {
+fn determine_output_path(
+    analysis: &IntentAnalysis,
+    prompt: &str,
+    state: &ConversationState,
+) -> Option<PathBuf> {
     if let Some(project_path) = &state.project_context {
         let filename = stubs::suggest_filename(prompt, analysis.inferred_language.as_deref());
         Some(project_path.join("src").join(filename))
@@ -572,11 +1100,61 @@ fn determine_output_path(analysis: &IntentAnalysis, prompt: &str, state: &Conver
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_settings() -> ChatIntentSettings {
+        ChatIntentSettings {
+            require_action_keyword: true,
+            min_code_score: 2.0,
+            min_margin: 1.0,
+            entity_weight: 0.25,
+            language_hint_weight: 0.25,
+        }
+    }
+
+    #[test]
+    fn test_question_no_codegen() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent("How are you?", &state, &settings);
+        assert_eq!(a.intent, UserIntent::Question);
+    }
+
+    #[test]
+    fn test_project_management_no_codegen() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent("Refactor the parser module", &state, &settings);
+        assert_eq!(a.intent, UserIntent::ProjectManagement);
+    }
+
+    #[test]
+    fn test_codegen_with_action_keyword() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent(
+            "Create a Rust function that reads a file and returns a String",
+            &state,
+            &settings,
+        );
+        assert_eq!(a.intent, UserIntent::CodeGeneration);
+    }
+
+    #[test]
+    fn test_ambiguous_clarification() {
+        let state = ConversationState::new(None);
+        let settings = default_settings();
+        let a = analyze_user_intent("function file class", &state, &settings);
+        assert_eq!(a.intent, UserIntent::Clarification);
+    }
+}
 
 /// Suggest helpful next steps after code generation
 fn suggest_next_steps(runner: &CliRunner, analysis: &IntentAnalysis, prompt: &str) {
     runner.print_output("\n💡 Suggested next steps:", Some(Color::Cyan));
-    
+
     match analysis.inferred_language.as_deref() {
         Some("rust") => {
             runner.print_output("  • Run: cargo check (to verify syntax)", None);
@@ -599,6 +1177,9 @@ fn suggest_next_steps(runner: &CliRunner, analysis: &IntentAnalysis, prompt: &st
             runner.print_output("  • Consider adding unit tests", None);
         }
     }
-    
-    runner.print_output("  • Type 'help' to see more chat commands", Some(Color::DarkGrey));
+
+    runner.print_output(
+        "  • Type 'help' to see more chat commands",
+        Some(Color::DarkGrey),
+    );
 }

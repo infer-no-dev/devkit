@@ -326,6 +326,7 @@ impl MockDataFactory {
                     max_tokens: 1000,
                 },
             },
+            chat: crate::config::ChatConfig::default(),
             shell: crate::config::ShellConfig {
                 preferred_shell: Some("bash".to_string()),
                 environment_variables: HashMap::new(),

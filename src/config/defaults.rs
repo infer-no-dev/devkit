@@ -39,16 +39,21 @@ impl SystemDefaults {
 
     /// Generate a complete default configuration based on detected system capabilities
     pub fn generate_config(&self) -> Config {
-Config {
+        Config {
             general: self.generate_general_config(),
             agents: self.generate_agent_config(),
             codegen: self.generate_codegen_config(),
+            chat: ChatConfig::default(),
             shell: self.generate_shell_config(),
             ui: self.generate_ui_config(),
             web: WebConfig::default(),
             logging: self.generate_logging_config(),
             orchestrator: OrchestratorConfig {
-                task_timeout_seconds: if self.available_memory_gb >= 8 { 300 } else { 180 },
+                task_timeout_seconds: if self.available_memory_gb >= 8 {
+                    300
+                } else {
+                    180
+                },
                 retry_failed_tasks: true,
                 max_retry_attempts: 3,
                 backoff: "exponential".to_string(),

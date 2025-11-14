@@ -439,9 +439,40 @@ devkit monitor agents             # Monitor agent performance
 devkit export --session <name>    # Export session data
 
 # AI Chat & Behavior
-devkit chat                       # AI-powered project manager
-devkit behavior edit              # Open behavior editor
-devkit behavior list              # List behavior profiles
+ devkit chat                       # AI-powered project manager
+ devkit behavior edit              # Open behavior editor
+ devkit behavior list              # List behavior profiles
+
+ # Chat flags and in-chat commands
+ # Flags
+ #   --force-generate                 always treat input as codegen
+ #   --no-codegen                     disable code generation
+ #   --role <developer|sysadmin|general>  set assistant role
+ #   --execute                        execute sysadmin plans (use with caution)
+ # Examples
+ #   devkit chat --force-generate
+ #   devkit chat --no-codegen
+ #   devkit chat --role sysadmin --execute
+ # In-chat toggles
+ #   force on/off
+ #   no-codegen on/off
+ #   role developer|sysadmin|general
+ #   execute on/off
+ #   mode (show toggles)
+ #   status (show current settings)
+
+ # Sysadmin quick examples
+ #   # Plan then execute Docker install
+ #   devkit chat --role sysadmin --execute
+ #   # (in chat) setup docker
+ #
+ #   # NFS server setup (now supported)
+ #   devkit chat --role sysadmin --execute
+ #   # (in chat) setup nfs server
+ #
+ # Supported sysadmin tasks (partial): docker, docker compose, ufw open/enable,
+ # fail2ban, system update/upgrade, build tools, python dev, nvm/node, golang,
+ # flatpak, kubectl, minikube, generic package install, NFS server/client.
 
 # Plugin System
 devkit plugin search <query>      # Search plugin marketplace
@@ -556,7 +587,7 @@ dk-status            # Quick status check
 - **✅ Secrets Management**: Secure credential storage with encryption and access control
 - **🚀 Live Demo**: `devkit generate "create a hello world function" --language rust` works out of the box!
 
-**Recent Achievements (November 2024):**
+**Recent Achievements:**
 - **🔧 Complete Compilation Fix**: Resolved all build errors across 15+ complex modules
 - **🏗️ Advanced Tool Ecosystem**: Implemented MCP protocol support, tool providers, and execution framework
 - **🔐 Secrets Management**: Added secure credential storage with vault integration

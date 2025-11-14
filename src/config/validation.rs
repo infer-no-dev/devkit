@@ -10,7 +10,8 @@ fn validate_openai_provider_config(config: &Config) -> Result<(), ConfigError> {
         && config.codegen.ai_model_settings.openai.is_none()
     {
         return Err(ConfigError::ValidationError(
-            "OpenAI is set as the default provider but no OpenAI configuration is provided".to_string()
+            "OpenAI is set as the default provider but no OpenAI configuration is provided"
+                .to_string(),
         ));
     }
     Ok(())
@@ -22,7 +23,8 @@ fn validate_anthropic_provider_config(config: &Config) -> Result<(), ConfigError
         && config.codegen.ai_model_settings.anthropic.is_none()
     {
         return Err(ConfigError::ValidationError(
-            "Anthropic is set as the default provider but no Anthropic configuration is provided".to_string()
+            "Anthropic is set as the default provider but no Anthropic configuration is provided"
+                .to_string(),
         ));
     }
     Ok(())
@@ -33,47 +35,33 @@ fn validate_default_model_consistency(config: &Config) -> Result<(), ConfigError
     match config.codegen.ai_model_settings.default_provider.as_str() {
         "openai" => {
             if let Some(openai_config) = &config.codegen.ai_model_settings.openai {
-                if config.codegen.ai_model_settings.default_model
-                    != openai_config.default_model
-                {
-                    return Err(ConfigError::ValidationError(
-                        format!(
-                            "The default_model '{}' doesn't match the OpenAI default_model '{}'",
-                            config.codegen.ai_model_settings.default_model,
-                            openai_config.default_model
-                        )
-                    ));
+                if config.codegen.ai_model_settings.default_model != openai_config.default_model {
+                    return Err(ConfigError::ValidationError(format!(
+                        "The default_model '{}' doesn't match the OpenAI default_model '{}'",
+                        config.codegen.ai_model_settings.default_model, openai_config.default_model
+                    )));
                 }
             }
         }
         "anthropic" => {
-            if let Some(anthropic_config) = &config.codegen.ai_model_settings.anthropic
-            {
-                if config.codegen.ai_model_settings.default_model
-                    != anthropic_config.default_model
+            if let Some(anthropic_config) = &config.codegen.ai_model_settings.anthropic {
+                if config.codegen.ai_model_settings.default_model != anthropic_config.default_model
                 {
-                    return Err(ConfigError::ValidationError(
-                        format!(
-                            "The default_model '{}' doesn't match the Anthropic default_model '{}'",
-                            config.codegen.ai_model_settings.default_model,
-                            anthropic_config.default_model
-                        )
-                    ));
+                    return Err(ConfigError::ValidationError(format!(
+                        "The default_model '{}' doesn't match the Anthropic default_model '{}'",
+                        config.codegen.ai_model_settings.default_model,
+                        anthropic_config.default_model
+                    )));
                 }
             }
         }
         "ollama" => {
-            if let Some(ollama_model) =
-                &config.codegen.ai_model_settings.ollama.default_model
-            {
+            if let Some(ollama_model) = &config.codegen.ai_model_settings.ollama.default_model {
                 if config.codegen.ai_model_settings.default_model != *ollama_model {
-                    return Err(ConfigError::ValidationError(
-                        format!(
-                            "The default_model '{}' doesn't match the Ollama default_model '{}'",
-                            config.codegen.ai_model_settings.default_model,
-                            ollama_model
-                        )
-                    ));
+                    return Err(ConfigError::ValidationError(format!(
+                        "The default_model '{}' doesn't match the Ollama default_model '{}'",
+                        config.codegen.ai_model_settings.default_model, ollama_model
+                    )));
                 }
             }
         }
@@ -184,6 +172,7 @@ impl ConfigValidator {
         self.validate_shell(&config.shell)?;
         self.validate_ui(&config.ui)?;
         self.validate_keybindings(&config.keybindings)?;
+        self.validate_chat(&config.chat)?;
 
         // Then run interdependent validations that work across sections
         for validation in &self.interdependent_validations {
@@ -457,6 +446,31 @@ impl ConfigValidator {
             }
         }
 
+        Ok(())
+    }
+
+    /// Validate chat configuration
+    fn validate_chat(&self, chat: &crate::config::ChatConfig) -> Result<(), ConfigError> {
+        if chat.min_code_score < 0.0 || chat.min_code_score > 100.0 {
+            return Err(ConfigError::ValidationError(
+                "chat.min_code_score must be between 0.0 and 100.0".to_string(),
+            ));
+        }
+        if chat.min_margin < 0.0 || chat.min_margin > 100.0 {
+            return Err(ConfigError::ValidationError(
+                "chat.min_margin must be between 0.0 and 100.0".to_string(),
+            ));
+        }
+        if chat.entity_weight < 0.0 || chat.entity_weight > 10.0 {
+            return Err(ConfigError::ValidationError(
+                "chat.entity_weight must be between 0.0 and 10.0".to_string(),
+            ));
+        }
+        if chat.language_hint_weight < 0.0 || chat.language_hint_weight > 10.0 {
+            return Err(ConfigError::ValidationError(
+                "chat.language_hint_weight must be between 0.0 and 10.0".to_string(),
+            ));
+        }
         Ok(())
     }
 
